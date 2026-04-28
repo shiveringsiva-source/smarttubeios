@@ -144,6 +144,8 @@ public final class AuthService {
     /// Cancels any stale (possibly iOS-suspended) poll task and immediately fires
     /// a new poll so the user is signed in the moment they switch back from Chrome.
     public func handleForeground() {
+        // Already signed in (concurrent task may have succeeded) — nothing to do.
+        guard !isSignedIn, accessToken == nil else { return }
         guard let pending = pendingActivation, pending.expiresAt > Date() else { return }
         guard let deviceCode = currentDeviceCode, let creds = currentCreds else { return }
         authLog.notice("handleForeground() — restarting poll immediately")
@@ -303,6 +305,11 @@ public final class AuthService {
                 continue
             } catch {
                 authLog.error("❌ Poll error: \(String(describing: error))")
+                // If a concurrent poll (e.g. the original suspended task) already signed
+                // us in between the HTTP request being sent and the response arriving,
+                // the device code will have returned invalid_grant. Silently discard the
+                // error rather than flashing a "Failed to exchange code" alert.
+                if isSignedIn { return }
                 self.error = error
                 pendingActivation = nil
                 pollTask = nil

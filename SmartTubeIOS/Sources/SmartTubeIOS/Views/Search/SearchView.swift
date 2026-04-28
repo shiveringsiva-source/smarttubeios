@@ -49,7 +49,7 @@ public struct SearchView: View {
         .navigationDestination(item: $selectedVideo) { video in
             PlayerView(video: video)
         }
-        #else
+        #elseif os(iOS)
         .toolbar(.hidden, for: .navigationBar)
         .fullScreenCover(item: $selectedVideo) { video in
             PlayerView(video: video)
@@ -310,7 +310,7 @@ struct SearchFilterSheet: View {
                 }
             }
             .navigationTitle("Search filters")
-            #if !os(tvOS)
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
@@ -323,7 +323,7 @@ struct SearchFilterSheet: View {
                         dismiss()
                     }
                 }
-                #if !os(tvOS)
+                #if os(iOS)
                 ToolbarItem(placement: .bottomBar) {
                     Button("Reset") { draft = .default }
                         .disabled(draft.isDefault)

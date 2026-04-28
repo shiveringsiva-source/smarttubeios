@@ -37,9 +37,11 @@ public struct ChannelView: View {
         }
         .navigationTitle(vm.channel?.title ?? "Channel")
         .onAppear { vm.load(channelId: channelId) }
+        #if !os(macOS)
         .fullScreenCover(item: $selectedVideo) { video in
             PlayerView(video: video)
         }
+        #endif
         .navigationDestination(item: $channelDestination) { dest in
             ChannelView(channelId: dest.channelId)
         }
@@ -47,9 +49,11 @@ public struct ChannelView: View {
             guard let channelId = note.userInfo?["channelId"] as? String, !channelId.isEmpty else { return }
             channelDestination = ChannelDestination(channelId: channelId)
         }
+        #if !os(macOS)
         .fullScreenCover(item: $shortsPresentation) { target in
             ShortsPlayerView(videos: target.videos, startIndex: target.startIndex)
         }
+        #endif
         .alert("Error", isPresented: .constant(vm.error != nil), presenting: vm.error) { _ in
             Button("Retry") { vm.load(channelId: channelId) }
             Button("Dismiss", role: .cancel) {}
@@ -58,6 +62,19 @@ public struct ChannelView: View {
         }
         .toolbar {
             if let channel = vm.channel {
+                #if os(macOS)
+                ToolbarItem(placement: .automatic) {
+                    let isExcluded = store.settings.sponsorBlockExcludedChannels[channel.id] != nil
+                    Button {
+                        toggleSponsorBlockExclusion(for: channel)
+                    } label: {
+                        Label(
+                            isExcluded ? "Remove SponsorBlock Exclusion" : "Exclude from SponsorBlock",
+                            systemImage: isExcluded ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.minus"
+                        )
+                    }
+                }
+                #else
                 ToolbarItem(placement: .topBarTrailing) {
                     let isExcluded = store.settings.sponsorBlockExcludedChannels[channel.id] != nil
                     Button {
@@ -69,6 +86,7 @@ public struct ChannelView: View {
                         )
                     }
                 }
+                #endif
             }
         }
     }

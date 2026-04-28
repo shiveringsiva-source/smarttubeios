@@ -45,6 +45,7 @@ public struct ShortsPlayerView: View {
             if ProcessInfo.processInfo.arguments.contains("--uitesting") {
                 Color.black.ignoresSafeArea()
             } else {
+                #if os(iOS) || os(tvOS)
                 // AVPlayerLayerView instead of VideoPlayer/AVPlayerViewController.
                 // Using AVPlayerViewController (VideoPlayer) causes it to dominate
                 // the entire UIKit accessibility tree, hiding all overlaid SwiftUI
@@ -53,6 +54,9 @@ public struct ShortsPlayerView: View {
                 AVPlayerLayerView(player: vm.player)
                     .ignoresSafeArea()
                     .accessibilityHidden(true)
+                #else
+                Color.black.ignoresSafeArea()
+                #endif
             }
 
             // Gesture capture layer — a UIViewRepresentable that installs a

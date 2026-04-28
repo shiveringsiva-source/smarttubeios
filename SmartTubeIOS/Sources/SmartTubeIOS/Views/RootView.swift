@@ -29,11 +29,13 @@ public struct RootView: View {
             // can still browse without being signed in.
             SignInView()
         }
+        #if !os(macOS)
         .fullScreenCover(item: $browseVM.deepLinkedVideo) { video in
             PlayerView(video: video)
                 .environment(store)
                 .environment(auth)
         }
+        #endif
     }
 
     private var requiresAuth: Bool { false }   // guest browsing is allowed
