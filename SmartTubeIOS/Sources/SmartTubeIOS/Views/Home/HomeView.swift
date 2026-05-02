@@ -97,15 +97,6 @@ public struct HomeView: View {
 
     // MARK: - Chip bar
 
-    /// Card width for shelf rows — wider on tvOS for 10-foot viewing.
-    private var tvOSCardWidth: CGFloat {
-        #if os(tvOS)
-        return 400
-        #else
-        return 240
-        #endif
-    }
-
     private var chipBar: some View {
         #if os(tvOS)
         HStack(spacing: 8) {
@@ -242,14 +233,13 @@ public struct HomeView: View {
 
     private var homeShelves: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
+            LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(homeVM.sections) { state in
                     if state.isLoading || !state.videos.isEmpty {
-                        shelfView(state: state)
+                        sectionView(state: state)
                     }
                 }
             }
-            .padding(.vertical, 8)
         }
         .refreshable { homeVM.load() }
         #if os(tvOS)
@@ -258,8 +248,10 @@ public struct HomeView: View {
     }
 
     @ViewBuilder
-    private func shelfView(state: HomeViewModel.SectionState) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private func sectionView(state: HomeViewModel.SectionState) -> some View {
+        let hideShorts = store.settings.hideShorts
+        let videos: [Video] = hideShorts ? state.videos.filter { !$0.isShort } : state.videos
+        VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
                 Text(state.section.title)
                     #if os(tvOS)
@@ -267,6 +259,9 @@ public struct HomeView: View {
                     #else
                     .font(.title3.bold())
                     #endif
+                    .padding(.horizontal)
+                    .padding(.top, 20)
+                    .padding(.bottom, 8)
                 Spacer()
                 if !state.videos.isEmpty && state.section.type != .home {
                     Button("See all") {
@@ -280,78 +275,24 @@ public struct HomeView: View {
                     #else
                     .font(.subheadline)
                     #endif
+                    .padding(.trailing)
+                    .padding(.top, 20)
                 }
             }
-            .padding(.horizontal)
-
             if state.isLoading {
-                shelfPlaceholder
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
             } else {
-                let videos: [Video] = store.settings.hideShorts ? state.videos.filter { !$0.isShort } : state.videos
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(alignment: .top, spacing: 16) {
-                        ForEach(videos) { video in
-                            #if os(tvOS)
-                            Button { selectVideo(video, from: videos) } label: {
-                                VideoCardView(video: video)
-                                    .frame(width: tvOSCardWidth)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("video.card.\(video.id)")
-                            .onAppear {
-                                if videos.last?.id == video.id {
-                                    homeVM.loadMore(sectionId: state.section.id)
-                                }
-                            }
-                            #else
-                            VideoCardView(video: video)
-                                .frame(width: tvOSCardWidth)
-                                .accessibilityIdentifier("video.card.\(video.id)")
-                                .onTapGesture { selectVideo(video, from: videos) }
-                                .onAppear {
-                                    if videos.last?.id == video.id {
-                                        homeVM.loadMore(sectionId: state.section.id)
-                                    }
-                                }
-                            #endif
-                        }
-                        if state.isLoadingMore {
-                            ProgressView()
-                                .frame(width: 80)
-                                .padding(.trailing, 8)
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.vertical, 4)
-                }
-                #if os(tvOS)
-                .focusSection()
-                #endif
-            }
-        }
-    }
-
-    private var shelfPlaceholder: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 16) {
-                ForEach(0..<5, id: \.self) { _ in
-                    VStack(alignment: .leading, spacing: 6) {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.secondary.opacity(0.18))
-                            .aspectRatio(16 / 9, contentMode: .fit)
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.secondary.opacity(0.13))
-                            .frame(height: 13)
-                            .padding(.horizontal, 4)
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.secondary.opacity(0.09))
-                            .frame(width: 140, height: 11)
-                            .padding(.horizontal, 4)
-                    }
-                    .frame(width: tvOSCardWidth)
+                VideoGridSection(
+                    videos: videos,
+                    onSelect: { selectVideo($0, from: videos) },
+                    loadMore: { homeVM.loadMore(sectionId: state.section.id) }
+                )
+                if state.isLoadingMore {
+                    ProgressView().frame(maxWidth: .infinity).padding()
                 }
             }
-            .padding(.horizontal)
         }
     }
 
