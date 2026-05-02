@@ -17,6 +17,7 @@ public struct HomeView: View {
     @Environment(SettingsStore.self) private var store
     @Environment(\.innerTubeAPI) private var api
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
 
     // "Home" is always first; its type is .home.
     @State private var selectedSection: BrowseSection = BrowseSection.allSections[0]

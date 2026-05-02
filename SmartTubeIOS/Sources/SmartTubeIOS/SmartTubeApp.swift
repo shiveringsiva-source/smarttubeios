@@ -24,7 +24,7 @@ struct SmartTubeApp: App {
                 .environment(browseViewModel)
                 .environment(settingsStore)
                 .environment(\.innerTubeAPI, api)
-                .onChange(of: authService.accessToken) { _, newToken in
+                .onChange(of: authService.accessToken, initial: true) { _, newToken in
                     Task {
                         await api.setAuthToken(newToken)
                         await browseViewModel.updateAuthToken(newToken)

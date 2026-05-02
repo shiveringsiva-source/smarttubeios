@@ -146,6 +146,9 @@ public struct VideoCardView: View {
                     let dur = video.formattedDuration
                     if !dur.isEmpty { durationBadge(dur) }
                 }
+                .overlay(alignment: .bottomLeading) {
+                    if let label = uploadDateLabel { durationBadge(label) }
+                }
                 .overlay(alignment: .topLeading) {
                     if video.isLive { liveBadge }
                 }
@@ -169,9 +172,6 @@ public struct VideoCardView: View {
                 HStack(spacing: 4) {
                     let vc = video.formattedViewCount
                     if !vc.isEmpty { Text(vc) }
-                    if let date = video.publishedAt {
-                        Text("· \(date, style: .relative) ago")
-                    }
                 }
                 #if os(tvOS)
                 .font(.caption)
@@ -199,6 +199,9 @@ public struct VideoCardView: View {
                 .overlay(alignment: .bottomTrailing) {
                     let dur = video.formattedDuration
                     if !dur.isEmpty { durationBadge(dur) }
+                }
+                .overlay(alignment: .bottomLeading) {
+                    if let label = uploadDateLabel { durationBadge(label) }
                 }
             VStack(alignment: .leading, spacing: 3) {
                 Text(video.title)
@@ -252,10 +255,10 @@ public struct VideoCardView: View {
     private var systemPlaylistThumbnail: some View {
         let icon = video.id == "WL" ? "clock.fill" : "hand.thumbsup.fill"
         return ZStack {
-            Rectangle().fill(Color(.systemGray5))
+            Rectangle().fill(Color.secondary.opacity(0.15))
             Image(systemName: icon)
                 .font(.system(size: 36, weight: .light))
-                .foregroundStyle(Color(.systemGray2))
+                .foregroundStyle(Color.secondary)
         }
     }
 
@@ -286,6 +289,19 @@ public struct VideoCardView: View {
             .foregroundStyle(.white)
             .clipShape(RoundedRectangle(cornerRadius: 3))
             .padding(4)
+    }
+
+    private var uploadDateLabel: String? {
+        guard let date = video.publishedAt, !video.isLive, !video.isUpcoming else { return nil }
+        let now = Date()
+        let elapsed = now.timeIntervalSince(date)
+        if elapsed < 86_400 { return "Today" }
+        let days = Int(elapsed / 86_400)
+        if days < 7 { return days == 1 ? "1 day ago" : "\(days) days ago" }
+        let sameYear = Calendar.current.component(.year, from: date) == Calendar.current.component(.year, from: now)
+        return sameYear
+            ? date.formatted(.dateTime.month(.abbreviated).day())
+            : date.formatted(.dateTime.month(.abbreviated).year())
     }
 
     private var liveBadge: some View {

@@ -165,7 +165,6 @@ public actor InnerTubeAPI {
     }
 
     /// Fetches watch history (requires auth).
-    /// Uses TVHTML5 client on youtubei.googleapis.com.
     public func fetchHistory(continuationToken: String? = nil) async throws -> VideoGroup {
         var body = makeBody(client: tvClientContext, continuationToken: continuationToken)
         if continuationToken == nil {
@@ -946,11 +945,14 @@ public actor InnerTubeAPI {
         return json
     }
 
-    private func post(endpoint: String, body: [String: Any]) async throws -> [String: Any] {
+    private func post(endpoint: String, body: [String: Any], useAuth: Bool = false) async throws -> [String: Any] {
         guard var comps = URLComponents(url: baseURL.appendingPathComponent(endpoint), resolvingAgainstBaseURL: false) else {
             throw APIError.invalidURL(endpoint)
         }
-        comps.queryItems = [URLQueryItem(name: "key", value: apiKey)]
+        let resolvedToken = useAuth ? authToken : nil
+        if resolvedToken == nil {
+            comps.queryItems = [URLQueryItem(name: "key", value: apiKey)]
+        }
         guard let url = comps.url else { throw APIError.invalidURL(endpoint) }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -958,8 +960,12 @@ public actor InnerTubeAPI {
         request.setValue("https://www.youtube.com", forHTTPHeaderField: "Origin")
         request.setValue(InnerTubeClients.Web.nameID, forHTTPHeaderField: "X-YouTube-Client-Name")
         request.setValue(InnerTubeClients.Web.version, forHTTPHeaderField: "X-YouTube-Client-Version")
+        if let token = resolvedToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        tubeLog.notice("POST /\(endpoint, privacy: .public) [WEB]")
+        let authLabel = resolvedToken != nil ? "yes" : "no"
+        tubeLog.notice("POST /\(endpoint, privacy: .public) [WEB] auth=\(authLabel, privacy: .public)")
         let (data, response) = try await session.data(for: request)
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
@@ -1095,6 +1101,11 @@ public actor InnerTubeAPI {
         try parsePlaylists(from: json)
     }
 
+    /// Internal accessor so unit tests can exercise the multi-shelf home row parser without a live network.
+    func parseVideoGroupRowsForTesting(_ json: [String: Any]) -> [VideoGroup] {
+        parseVideoGroupRows(from: json)
+    }
+
     // MARK: - Multi-shelf home row parser
 
     /// Walks the JSON looking for `richShelfRenderer` sections (YouTube home feed).
@@ -1128,6 +1139,9 @@ public actor InnerTubeAPI {
                     if let vr = content["videoRenderer"] as? [String: Any],
                        let v = parseVideoRenderer(vr) {
                         videos.append(v)
+                    } else if let reel = content["reelItemRenderer"] as? [String: Any],
+                              let v = parseReelItemRenderer(reel) {
+                        videos.append(v)
                     } else {
                         let contentKeys = content.keys.sorted()
                         let isAd = contentKeys.contains(where: { adRendererKeys.contains($0) })
@@ -1158,6 +1172,14 @@ public actor InnerTubeAPI {
                 if let shelf = dict["richShelfRenderer"] as? [String: Any] {
                     let title = (shelf["title"] as? [String: Any]).flatMap { extractText($0) }
                     let videos = walkShelfContents(shelf["contents"] as Any)
+                    if !videos.isEmpty {
+                        rows.append(VideoGroup(title: title, videos: videos, layout: .row))
+                    }
+                    return
+                }
+                if let shelf = dict["reelShelfRenderer"] as? [String: Any] {
+                    let title = (shelf["title"] as? [String: Any]).flatMap { extractText($0) }
+                    let videos = walkShelfContents(shelf["items"] as Any)
                     if !videos.isEmpty {
                         rows.append(VideoGroup(title: title, videos: videos, layout: .row))
                     }
@@ -1314,6 +1336,11 @@ public actor InnerTubeAPI {
     private func parseVideoGroup(from json: [String: Any], title: String?) throws -> VideoGroup {
         var videos: [Video] = []
         var nextPageToken: String? = nil
+        // Tracks the approximate watched/published date from section group headers.
+        // History (and similar sections) use itemSectionRenderer with a header title
+        // like "Today", "Yesterday", "This week" that is the closest available date
+        // when the tile metadata lines contain no relative date string.
+        var currentSectionDate: Date? = nil
 
         // Walk the renderer tree to find videoRenderers and continuationItemRenderers.
         // Handles WEB (videoRenderer, richItemRenderer, compactVideoRenderer),
@@ -1332,9 +1359,27 @@ public actor InnerTubeAPI {
                     nextPageToken = token
                 }
 
+                // TVHTML5 History groups tiles under itemSectionRenderer with a date
+                // header ("Today", "Yesterday", "This week", …). Capture that header
+                // and apply it as a fallback publishedAt for tiles with no explicit date.
+                if let sectionRenderer = dict["itemSectionRenderer"] as? [String: Any] {
+                    let prevDate = currentSectionDate
+                    if let header = sectionRenderer["header"] as? [String: Any] {
+                        let headerTitle = extractSectionTitle(from: header)
+                        currentSectionDate = headerTitle.flatMap { parseSectionDate($0) }
+                        tubeLog.debug("parseVideoGroup: section '\(headerTitle ?? "nil", privacy: .public)' → date=\(currentSectionDate != nil ? "yes" : "nil", privacy: .public)")
+                    }
+                    walk(sectionRenderer["contents"] as Any)
+                    currentSectionDate = prevDate
+                    return
+                }
+
                 if let renderer = dict["tileRenderer"] as? [String: Any] {
                     // TVHTML5 client (subs, history, home) — Android ItemWrapper.tileRenderer
-                    if let v = parseTileRenderer(renderer) { videos.append(v) }
+                    if var v = parseTileRenderer(renderer) {
+                        if v.publishedAt == nil { v.publishedAt = currentSectionDate }
+                        videos.append(v)
+                    }
                 } else if let renderer = dict["videoRenderer"] as? [String: Any] {
                     if let v = parseVideoRenderer(renderer) { videos.append(v) }
                 } else if let renderer = dict["gridVideoRenderer"] as? [String: Any] {
@@ -1472,6 +1517,21 @@ public actor InnerTubeAPI {
         // isShorts: style == "TILE_STYLE_YTLR_SHORTS" — Android: TileItem.isShorts()
         let isShort = (tile["style"] as? String) == "TILE_STYLE_YTLR_SHORTS"
 
+        // publishedAt: best-effort from tileMetadata lines (second line may contain "2 years ago")
+        let publishedAt: Date? = {
+            guard let lines = tileMetadata?["lines"] as? [[String: Any]], lines.count > 1 else { return nil }
+            for line in lines.dropFirst() {
+                guard let items = (line["lineRenderer"] as? [String: Any])?["items"] as? [[String: Any]] else { continue }
+                for item in items {
+                    guard let text = (item["lineItemRenderer"] as? [String: Any])?["text"] as? [String: Any],
+                          let str = extractText(text)
+                    else { continue }
+                    if let date = parseRelativeDate(str) { return date }
+                }
+            }
+            return nil
+        }()
+
         return Video(
             id: videoId,
             title: title,
@@ -1480,6 +1540,7 @@ public actor InnerTubeAPI {
             thumbnailURL: thumbURL,
             duration: duration,
             viewCount: nil,
+            publishedAt: publishedAt,
             isLive: isLive,
             isShort: isShort,
             watchProgress: watchProgress,
@@ -1746,7 +1807,6 @@ public actor InnerTubeAPI {
                 let height = f["height"] as? Int ?? 0
                 let fps = f["fps"] as? Int ?? 30
                 let bitrate = f["bitrate"] as? Int
-                tubeLog.notice("  fmt itag=\(f["itag"] as? Int ?? 0, privacy: .public) quality=\(quality, privacy: .public) hasURL=\(url != nil, privacy: .public) hasCipher=\(hasCipher, privacy: .public) mime=\(mimeType.prefix(40), privacy: .public)")
                 return VideoFormat(label: quality, width: width, height: height, fps: fps, mimeType: mimeType, url: url, bitrate: bitrate)
             }
         }
@@ -2230,6 +2290,75 @@ public actor InnerTubeAPI {
         case 3: return TimeInterval(parts[0] * 3600 + parts[1] * 60 + parts[2])
         default: return nil
         }
+    }
+
+    /// Extracts the display title from an itemSectionRenderer header dict.
+    private func extractSectionTitle(from header: [String: Any]) -> String? {
+        let rendererKeys = [
+            "tileGroupHeaderRenderer",
+            "itemSectionHeaderRenderer",
+            "richSectionHeaderRenderer",
+            "sectionHeaderRenderer",
+        ]
+        for key in rendererKeys {
+            if let renderer = header[key] as? [String: Any],
+               let titleObj = renderer["title"] as? [String: Any],
+               let text = extractText(titleObj) {
+                return text
+            }
+        }
+        return nil
+    }
+
+    /// Maps a section label ("Today", "Yesterday", …) to an approximate Date.
+    private func parseSectionDate(_ title: String) -> Date? {
+        let cal = Calendar.current
+        let now = Date.now
+        let startOfToday = cal.startOfDay(for: now)
+        switch title.lowercased() {
+        case "today":
+            return startOfToday
+        case "yesterday":
+            return cal.date(byAdding: .day, value: -1, to: startOfToday)
+        case "this week":
+            return cal.date(byAdding: .day, value: -4, to: startOfToday)
+        case "last week":
+            return cal.date(byAdding: .day, value: -10, to: startOfToday)
+        case "earlier this month":
+            return cal.date(byAdding: .day, value: -15, to: startOfToday)
+        case "this month":
+            return cal.date(byAdding: .day, value: -7, to: startOfToday)
+        case "last month":
+            return cal.date(byAdding: .month, value: -1, to: startOfToday)
+        default:
+            return parseRelativeDate(title)
+        }
+    }
+
+    private func parseRelativeDate(_ text: String) -> Date? {
+        let stripped = text
+            .replacingOccurrences(of: #"^(Streamed|Premiered|Started)\s+"#, with: "", options: .regularExpression)
+            .lowercased()
+        let pattern = #"(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: stripped, range: NSRange(stripped.startIndex..., in: stripped)),
+              let valueRange = Range(match.range(at: 1), in: stripped),
+              let unitRange = Range(match.range(at: 2), in: stripped),
+              let value = Int(stripped[valueRange])
+        else { return nil }
+        let unit = String(stripped[unitRange])
+        let seconds: TimeInterval
+        switch unit {
+        case "second": seconds = TimeInterval(value)
+        case "minute": seconds = TimeInterval(value * 60)
+        case "hour":   seconds = TimeInterval(value * 3_600)
+        case "day":    seconds = TimeInterval(value * 86_400)
+        case "week":   seconds = TimeInterval(value * 7 * 86_400)
+        case "month":  seconds = TimeInterval(value * 30 * 86_400)
+        case "year":   seconds = TimeInterval(value * 365 * 86_400)
+        default:       return nil
+        }
+        return Date(timeIntervalSinceNow: -seconds)
     }
 
     private func extractNumber(_ text: String) -> Int? {

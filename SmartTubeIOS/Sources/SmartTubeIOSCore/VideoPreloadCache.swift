@@ -116,27 +116,13 @@ public actor VideoPreloadCache {
     ) {
         // Playlist IDs are not video IDs — skip them to avoid wasted /player calls.
         let isPlaylistId = videoId == "WL" || videoId == "LL" || videoId.hasPrefix("PL")
-        if isPlaylistId {
-            cacheLog.debug("[prefetch] SKIP \(videoId, privacy: .public) — playlist ID, not a video")
-            return
-        }
+        if isPlaylistId { return }
         // Skip if still fresh
-        if let entry = playerInfoCache[videoId], !entry.isExpired {
-            cacheLog.debug("[prefetch] SKIP \(videoId, privacy: .public) — already fresh")
-            return
-        }
+        if let entry = playerInfoCache[videoId], !entry.isExpired { return }
         // Skip if already in-flight
-        if prefetchTasks[videoId] != nil {
-            cacheLog.debug("[prefetch] SKIP \(videoId, privacy: .public) — task already running")
-            return
-        }
+        if prefetchTasks[videoId] != nil { return }
         // Respect concurrency cap
-        guard activePrefetchCount < Self.maxConcurrentPrefetches else {
-            cacheLog.notice("[prefetch] CAP REACHED (\(self.activePrefetchCount, privacy: .public)/\(Self.maxConcurrentPrefetches, privacy: .public)) — dropping \(videoId, privacy: .public)")
-            return
-        }
-
-        cacheLog.notice("[prefetch] START \(videoId, privacy: .public) auth=\(authToken != nil, privacy: .public) active=\(self.activePrefetchCount + 1, privacy: .public)/\(Self.maxConcurrentPrefetches, privacy: .public)")
+        guard activePrefetchCount < Self.maxConcurrentPrefetches else { return }
         activePrefetchCount += 1
         let task = Task(priority: .background) {
             await self.runPrefetch(
@@ -152,7 +138,6 @@ public actor VideoPreloadCache {
     /// Cancels any in-flight prefetch for `videoId` (e.g. when a cell scrolls far off screen).
     public func cancelPrefetch(for videoId: String) {
         guard prefetchTasks[videoId] != nil else { return }
-        cacheLog.notice("[prefetch] CANCEL \(videoId, privacy: .public)")
         prefetchTasks[videoId]?.cancel()
         prefetchTasks.removeValue(forKey: videoId)
     }
@@ -235,12 +220,8 @@ public actor VideoPreloadCache {
         sponsorCategories: Set<SponsorSegment.Category>,
         authToken: String?
     ) async {
-        guard !Task.isCancelled else {
-            cacheLog.notice("[prefetch] CANCELLED before start \(videoId, privacy: .public)")
-            return
-        }
+        guard !Task.isCancelled else { return }
         let startedAt = Date()
-        cacheLog.notice("[prefetch] FETCHING \(videoId, privacy: .public) — all 6 calls in parallel")
 
         // Spawn 5 child tasks immediately so they run in parallel with the tracking fetch below.
         async let playerResult   = (try? await api.fetchPlayerInfo(videoId: videoId))
@@ -262,14 +243,10 @@ public actor VideoPreloadCache {
         let (player, next, cards, sponsor, dearrow) =
             await (playerResult, nextResult, endCardsResult, sponsorResult, deArrowResult)
 
-        guard !Task.isCancelled else {
-            cacheLog.notice("[prefetch] CANCELLED after fetch \(videoId, privacy: .public)")
-            return
-        }
+        guard !Task.isCancelled else { return }
 
         let elapsed = String(format: "%.2fs", Date().timeIntervalSince(startedAt))
-        let summary = "player=\(player != nil) tracking=\(tracking != nil) next=\(next != nil) endCards=\(cards != nil) sponsor=\(sponsor.count)segs deArrow=\(dearrow.title != nil)"
-        cacheLog.notice("[prefetch] DONE \(videoId, privacy: .public) in \(elapsed, privacy: .public) \(summary, privacy: .public)")
+        _ = elapsed
 
         if let player  { store(playerInfo: player,          for: videoId) }
         store(trackingURLs: tracking,                        for: videoId)
@@ -283,7 +260,6 @@ public actor VideoPreloadCache {
 
     private func decrementPrefetchCount() {
         activePrefetchCount = max(0, activePrefetchCount - 1)
-        cacheLog.debug("[prefetch] active count now \(self.activePrefetchCount, privacy: .public)")
     }
 
     // MARK: - Private: LRU helpers

@@ -129,6 +129,7 @@ struct AppEntry: App {
                         if phase == .active {
                             consumePendingVideoID()
                             authService.handleForeground()
+                            browseViewModel.refreshIfStale()
                         }
                     }
                     .onAppear { enableShortsIfNeeded() }

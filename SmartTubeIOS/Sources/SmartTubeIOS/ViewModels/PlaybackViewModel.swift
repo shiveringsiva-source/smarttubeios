@@ -291,7 +291,7 @@ public final class PlaybackViewModel {
         // isPlaying is kept in sync with player.rate via KVO, so this only fires
         // when the player was paused while still intending to play (e.g. background transition).
         if isPlaying && player.rate == 0 {
-            player.play()
+            player.rate = Float(settings.playbackSpeed)
             playerLog.notice("[handleForeground] resumed player after foreground transition")
         }
     }
@@ -337,7 +337,7 @@ public final class PlaybackViewModel {
         }
         playerLog.notice("[resume] resume() called — currentVideo=\(self.currentVideo?.id ?? "nil")")
         wasPlayingBeforeSuspend = false
-        player.play()
+        player.rate = Float(settings.playbackSpeed)
         isPlaying = true
         showControls()
         #if canImport(UIKit)
@@ -976,7 +976,7 @@ public final class PlaybackViewModel {
     private func handlePlaybackEnd() {
         if settings.loopEnabled {
             player.seek(to: .zero)
-            player.play()
+            player.rate = Float(settings.playbackSpeed)
             return
         }
         if settings.shuffleEnabled, !relatedVideos.isEmpty {
@@ -993,7 +993,7 @@ public final class PlaybackViewModel {
     // MARK: - Playback controls
 
     public func togglePlayPause() {
-        if isPlaying { player.pause() } else { player.play() }
+        if isPlaying { player.pause() } else { player.rate = Float(settings.playbackSpeed) }
         isPlaying.toggle()
         showControls()
         #if canImport(UIKit)
@@ -1329,7 +1329,7 @@ private extension PlaybackViewModel {
                         playerLog.error("[interruption] setActive failed: \(error.localizedDescription)")
                     }
                     if options.contains(.shouldResume) && self.isPlaying {
-                        self.player.play()
+                        self.player.rate = Float(self.settings.playbackSpeed)
                     }
                 }
             @unknown default:
@@ -1343,9 +1343,10 @@ private extension PlaybackViewModel {
 
         center.playCommand.addTarget { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.player.play()
-                self?.isPlaying = true
-                self?.updateNowPlayingPlayback()
+                guard let self else { return }
+                player.rate = Float(settings.playbackSpeed)
+                isPlaying = true
+                updateNowPlayingPlayback()
             }
             return .success
         }

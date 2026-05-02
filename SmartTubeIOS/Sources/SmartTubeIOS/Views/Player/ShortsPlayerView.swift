@@ -23,6 +23,7 @@ public struct ShortsPlayerView: View {
     @State private var currentIndex: Int
     @Environment(\.dismiss) private var dismiss
     @Environment(SettingsStore.self) private var store
+    @Environment(AuthService.self) private var authService
     @State private var slideOffset: CGFloat = 0
     @State private var isTransitioning = false
     @State private var isFetchingMore = false
@@ -346,6 +347,20 @@ public struct ShortsPlayerView: View {
         // Pre-fetch more Shorts when within 2 of the end.
         if index >= videos.count - 2 {
             loadMoreIfNeeded()
+        }
+        // Pre-fetch the next 2 shorts so swiping is instant.
+        let lookahead = videos[(index + 1)..<min(index + 3, videos.count)].map(\.id)
+        guard !lookahead.isEmpty else { return }
+        let token = authService.accessToken
+        let cats = store.settings.activeSponsorCategories
+        Task(priority: .background) {
+            for videoId in lookahead {
+                await VideoPreloadCache.shared.prefetch(
+                    videoId: videoId,
+                    sponsorCategories: cats,
+                    authToken: token
+                )
+            }
         }
     }
 

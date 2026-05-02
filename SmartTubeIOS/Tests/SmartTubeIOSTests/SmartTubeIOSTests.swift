@@ -401,7 +401,101 @@ struct HistoryParsingTests {
     }
 }
 
+
+// MARK: - Home Row Parsing Tests
+
+@Suite("Home Row Parsing")
+struct HomeRowParsingTests {
+
+    // reelShelfRenderer at the top level of the home feed response should produce
+    // a VideoGroup containing isShort == true videos.
+    @Test func reelShelfRendererProducesShorts() async {
+        let mockResponse: [String: Any] = [
+            "contents": [
+                "twoColumnBrowseResultsRenderer": [
+                    "tabs": [[
+                        "tabRenderer": [
+                            "content": [
+                                "richGridRenderer": [
+                                    "contents": [
+                                        [
+                                            "richSectionRenderer": [
+                                                "content": [
+                                                    "reelShelfRenderer": [
+                                                        "title": ["simpleText": "Shorts"],
+                                                        "items": [
+                                                            [
+                                                                "reelItemRenderer": [
+                                                                    "videoId": "short1",
+                                                                    "headline": ["simpleText": "A Short"]
+                                                                ]
+                                                            ]
+                                                        ]
+                                                    ]
+                                                ]
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ]]
+                ]
+            ]
+        ]
+        let api = InnerTubeAPI()
+        let rows = await api.parseVideoGroupRowsForTesting(mockResponse)
+        let shortsRow = rows.first { $0.videos.contains { $0.id == "short1" } }
+        #expect(shortsRow != nil, "reelShelfRenderer should produce a row with shorts")
+        #expect(shortsRow?.videos.first?.isShort == true)
+    }
+
+    // richShelfRenderer containing richItemRenderer wrapping a reelItemRenderer
+    // (Shorts embedded inside a regular topic shelf) should surface the short.
+    @Test func richShelfRendererWithEmbeddedReelItem() async {
+        let mockResponse: [String: Any] = [
+            "contents": [
+                "twoColumnBrowseResultsRenderer": [
+                    "tabs": [[
+                        "tabRenderer": [
+                            "content": [
+                                "richGridRenderer": [
+                                    "contents": [
+                                        [
+                                            "richShelfRenderer": [
+                                                "title": ["simpleText": "Trending"],
+                                                "contents": [
+                                                    [
+                                                        "richItemRenderer": [
+                                                            "content": [
+                                                                "reelItemRenderer": [
+                                                                    "videoId": "embeddedShort1",
+                                                                    "headline": ["simpleText": "Embedded Short"]
+                                                                ]
+                                                            ]
+                                                        ]
+                                                    ]
+                                                ]
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ]]
+                ]
+            ]
+        ]
+        let api = InnerTubeAPI()
+        let rows = await api.parseVideoGroupRowsForTesting(mockResponse)
+        let row = rows.first { $0.videos.contains { $0.id == "embeddedShort1" } }
+        #expect(row != nil, "richShelfRenderer with embedded reelItemRenderer should produce a row")
+        #expect(row?.videos.first?.isShort == true)
+    }
+}
+
 // MARK: - Helpers
+
 
 private func makeTileResponse(
     videoId: String,

@@ -30,6 +30,8 @@ public final class HomeViewModel {
 
     public private(set) var sections: [SectionState]
     public private(set) var isRefreshing: Bool = false
+    /// Timestamp of the last successful load. Used for staleness checks.
+    public private(set) var loadedAt: Date? = nil
 
     // MARK: - Shelf definitions (in display order)
 
@@ -52,6 +54,7 @@ public final class HomeViewModel {
 
     public func load() {
         loadTask?.cancel()
+        loadedAt = nil
         isRefreshing = true
         for i in sections.indices {
             sections[i].videos = []
@@ -82,11 +85,24 @@ public final class HomeViewModel {
                 }
             }
             isRefreshing = false
+            loadedAt = Date()
         }
     }
 
     public func updateAuthToken(_ token: String?) async {
+        await api.setAuthToken(token)
         if token != nil { load() }
+    }
+
+    /// Refreshes both shelves if the last successful load was more than
+    /// `threshold` seconds ago (default 15 min). No-op while loading.
+    public func refreshIfStale(threshold: TimeInterval = 15 * 60) {
+        guard !isRefreshing else { return }
+        let age = loadedAt.map { Date().timeIntervalSince($0) } ?? .infinity
+        guard age > threshold else { return }
+        let ageDesc = age.isFinite ? "\(Int(age))s" : "never loaded"
+        homeLog.notice("refreshIfStale: age=\(ageDesc) — reloading shelves")
+        load()
     }
 
     // MARK: - Pagination
@@ -125,6 +141,11 @@ public final class HomeViewModel {
                 let token = rows.last(where: { $0.nextPageToken != nil })?.nextPageToken
                 var seen = Set<String>()
                 let deduped = rows.flatMap(\.videos).filter { seen.insert($0.id).inserted }
+                if deduped.isEmpty {
+                    // Home feed empty (no watch history / feedNudgeRenderer) — fall back to popular
+                    let popular = try await api.search(query: "popular")
+                    return (popular.videos, popular.nextPageToken)
+                }
                 return (Array(deduped.prefix(InnerTubeClients.maxVideoResults)), token)
             default:
                 return ([], nil)

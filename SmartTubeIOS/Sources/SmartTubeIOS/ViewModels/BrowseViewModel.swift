@@ -24,6 +24,9 @@ public final class BrowseViewModel {
     public var error: Error?
     /// True when the current section requires authentication and the user is not signed in.
     public private(set) var isAuthRequired: Bool = false
+    /// Timestamp of the last successful content fetch for the current section.
+    /// Used to detect stale feeds after the app returns from background.
+    public private(set) var loadedAt: Date? = nil
     /// A video to open immediately via deeplink / URL interception.
     /// Cleared by the UI after the player is presented.
     public var deepLinkedVideo: Video?
@@ -83,6 +86,7 @@ public final class BrowseViewModel {
         if refresh {
             videoGroups = []
             subscribedChannels = []
+            loadedAt = nil
             enrichTask?.cancel()
             enrichTask = nil
         }
@@ -101,6 +105,17 @@ public final class BrowseViewModel {
         fetchTask = Task { await fetchNextPage(for: currentSection) }
     }
 
+    /// Refreshes the current section's feed if the last successful fetch was more than
+    /// `threshold` seconds ago (default 15 min). No-op while a fetch is already in flight.
+    public func refreshIfStale(threshold: TimeInterval = 15 * 60) {
+        guard !isLoading else { return }
+        let age = loadedAt.map { Date().timeIntervalSince($0) } ?? .infinity
+        guard age > threshold else { return }
+        let ageDesc = age.isFinite ? "\(Int(age))s" : "never loaded"
+        browseLog.notice("refreshIfStale: age=\(ageDesc) > threshold=\(Int(threshold))s — refreshing \(currentSection.title)")
+        loadContent(refresh: true, source: "refreshIfStale")
+    }
+
     /// Update whether history is enabled. If currently on the history section, reloads it.
     public func updateHistoryEnabled(_ enabled: Bool) {
         guard historyEnabled != enabled else { return }
@@ -113,8 +128,9 @@ public final class BrowseViewModel {
     // MARK: - Auth
 
     /// Triggers a content reload when auth state changes.
-    /// The shared InnerTubeAPI instance already carries the updated token.
+    /// Sets the token on the API first so that the fetch always runs authenticated.
     public func updateAuthToken(_ token: String?) async {
+        await api.setAuthToken(token)
         if token != nil {
             loadContent(refresh: true, source: "updateAuthToken")
         }
@@ -217,6 +233,7 @@ public final class BrowseViewModel {
             case .settings:
                 break
             }
+            if !Task.isCancelled { loadedAt = Date() }
         } catch {
             if !Task.isCancelled {
                 // HTTP 401/403 on an auth-gated section means the user is not signed in
