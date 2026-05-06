@@ -189,8 +189,9 @@ public struct LibraryView: View {
         }
         .onChange(of: selectedVideo) { old, new in
             if old == nil, new != nil {
-                // Read the live KVO value — always accurate, even mid-scroll.
-                savedScrollOffset = scrollStore.currentOffset
+                // Read live UIKit contentOffset on the main actor — always accurate
+                // regardless of how many SwiftUI layout passes have occurred.
+                savedScrollOffset = scrollStore.scrollView?.contentOffset.y ?? 0
             } else if old != nil, new == nil, let saved = savedScrollOffset {
                 restoreOffset = saved
                 savedScrollOffset = nil

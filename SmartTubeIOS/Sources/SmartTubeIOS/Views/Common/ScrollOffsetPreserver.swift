@@ -26,35 +26,33 @@ struct ScrollOffsetPreferenceKey: PreferenceKey {
 /// ```
 // MARK: - ScrollOffsetStore
 
-/// Reference-type container that holds the current vertical scroll offset,
-/// updated via KVO without triggering SwiftUI re-renders on every scroll tick.
-final class ScrollOffsetStore {
-    var currentOffset: CGFloat = 0
+/// Reference-type container that captures a weak reference to the nearest
+/// ancestor `UIScrollView`. All access must happen on the main thread / actor.
+final class ScrollOffsetStore: @unchecked Sendable {
+    weak var scrollView: UIScrollView?
 }
 
 // MARK: - ScrollOffsetReader
 
-/// A zero-size `UIViewRepresentable` that attaches a KVO observer to the
-/// nearest ancestor `UIScrollView` and writes real-time `contentOffset.y`
-/// into a `ScrollOffsetStore`. Using a reference type avoids SwiftUI
-/// re-renders on every scroll frame.
+/// A zero-size `UIViewRepresentable` that finds the nearest ancestor `UIScrollView`
+/// and stores a weak reference in a `ScrollOffsetStore`, deferred to the next
+/// run-loop tick so the UIView is fully inserted into the hierarchy before the
+/// walk-up starts.
 ///
-/// Place unconditionally inside the `ScrollView` content so the view is
-/// always in the hierarchy.
+/// Place unconditionally inside the `ScrollView` content.
 ///
 /// ```swift
 /// @State private var scrollStore = ScrollOffsetStore()
 ///
 /// ScrollView {
 ///     ScrollOffsetReader(store: scrollStore).frame(width: 0, height: 0)
-///     // … content …
 /// }
+/// // In onChange (always on @MainActor):
+/// savedOffset = scrollStore.scrollView?.contentOffset.y ?? 0
 /// ```
 #if os(iOS) || os(tvOS)
 struct ScrollOffsetReader: UIViewRepresentable {
     let store: ScrollOffsetStore
-
-    func makeCoordinator() -> Coordinator { Coordinator(store: store) }
 
     func makeUIView(context: Context) -> UIView {
         let v = UIView()
@@ -63,35 +61,21 @@ struct ScrollOffsetReader: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        context.coordinator.attach(to: uiView)
-    }
-
-    final class Coordinator: NSObject {
-        let store: ScrollOffsetStore
-        private weak var scrollView: UIScrollView?
-        private var observation: NSKeyValueObservation?
-
-        init(store: ScrollOffsetStore) { self.store = store }
-
-        func attach(to view: UIView) {
-            // Re-attach only when scrollView was deallocated or never set.
-            guard scrollView == nil else { return }
-            var cursor: UIView? = view.superview
+        // Short-circuit if we already have a live reference.
+        guard store.scrollView == nil else { return }
+        // Defer to the next run-loop tick so the UIView has been inserted into its
+        // parent hierarchy before we try to walk up to the UIScrollView.
+        DispatchQueue.main.async { [weak uiView] in
+            guard let uiView, store.scrollView == nil else { return }
+            var cursor: UIView? = uiView.superview
             while let current = cursor {
                 if let sv = current as? UIScrollView {
-                    scrollView = sv
-                    observation = sv.observe(\.contentOffset, options: .new) { [weak self] sv, _ in
-                        // Intentionally NOT dispatching to main — contentOffset KVO
-                        // already fires on the main thread during UIKit scroll events.
-                        self?.store.currentOffset = sv.contentOffset.y
-                    }
+                    store.scrollView = sv
                     return
                 }
                 cursor = current.superview
             }
         }
-
-        deinit { observation?.invalidate() }
     }
 }
 #endif
