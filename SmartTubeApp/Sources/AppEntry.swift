@@ -108,7 +108,7 @@ struct AppEntry: App {
         #else
         WindowGroup {
             if isShortsUITesting {
-                ShortsPlayerView(videos: AppEntry.stubShorts, startIndex: 0, api: InnerTubeAPI())
+                ShortsPlayerView(videos: AppEntry.shortsForUITesting(), startIndex: 0, api: InnerTubeAPI())
                     .environment(authService)
                     .environment(settingsStore)
             } else {
@@ -171,6 +171,29 @@ struct AppEntry: App {
     }
 
     // MARK: - Stub data for UI testing
+
+    /// Resolves the `[Video]` list used when launched with `--uitesting-shorts`.
+    ///
+    /// If the launch argument `--uitesting-shorts-ids=ID1,ID2,ID3` is present the
+    /// returned videos use those real YouTube Short video IDs, allowing tests that
+    /// verify actual playback (e.g. no error banner) to load real streams without
+    /// navigating through the full app.
+    ///
+    /// If no custom IDs are provided the default `stubShorts` (fake IDs) are used,
+    /// which is fine for tests that only exercise player UI (index label, swipes,
+    /// controls overlay) and don't care about real video loading.
+    static func shortsForUITesting() -> [Video] {
+        let args = ProcessInfo.processInfo.arguments
+        guard let idsArg = args.first(where: { $0.hasPrefix("--uitesting-shorts-ids=") }) else {
+            return stubShorts
+        }
+        let raw = String(idsArg.dropFirst("--uitesting-shorts-ids=".count))
+        let ids = raw.split(separator: ",").map(String.init).filter { !$0.isEmpty }
+        guard !ids.isEmpty else { return stubShorts }
+        return ids.enumerated().map { idx, id in
+            Video(id: id, title: "Short \(idx + 1)", channelTitle: "Test Channel", isShort: true)
+        }
+    }
 
     static let stubShorts: [Video] = [
         Video(id: "short-1", title: "Short One",   channelTitle: "Channel A", isShort: true),

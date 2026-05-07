@@ -130,6 +130,7 @@ public struct ShortsPlayerView: View {
                     .padding(12)
                     .background(.black.opacity(0.6))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .accessibilityIdentifier("shorts.errorBanner")
             }
 
             // Stats for Nerds overlay (toggled by two-finger tap)

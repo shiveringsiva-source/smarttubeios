@@ -392,14 +392,18 @@ final class ShortsLiveSwipeUITests: XCTestCase {
         }
 
         shortsChip.tap()
+
+        // Wait for the Shorts section feed before querying cards — prevents
+        // the predicate matching stale Home-feed cards still in the tree.
+        let sectionFeed = app.scrollViews["home.sectionFeed"]
+        guard sectionFeed.waitForExistence(timeout: 20) else { return }
     }
 
     /// Waits up to `timeout` seconds for any `video.card.*` element to appear
-    /// and returns the first one.
-    private func waitForFirstVideoCard(timeout: TimeInterval = 20) -> XCUIElement? {
+    /// inside the Shorts section feed and returns the first one.
+    private func waitForFirstVideoCard(timeout: TimeInterval = 10) -> XCUIElement? {
         let predicate = NSPredicate(format: "identifier BEGINSWITH 'video.card.'")
         let cards = app.descendants(matching: .any).matching(predicate)
-        // Poll until at least one card exists.
         let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "count > 0"), object: cards)
         let result = XCTWaiter().wait(for: [expectation], timeout: timeout)
         guard result == .completed else { return nil }

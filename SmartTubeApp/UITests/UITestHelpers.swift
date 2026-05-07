@@ -92,11 +92,18 @@ enum UITestHelpers {
                        "An unexpected 'Error' alert is visible")
     }
 
-    /// Fails the test if `player.errorBanner` is visible.
+    /// Fails the test if `player.errorBanner` is visible in `PlayerView`.
     static func assertNoPlayerErrorBanner(in app: XCUIApplication, videoTitle: String = "") {
         let banner = app.otherElements["player.errorBanner"].firstMatch
         let context = videoTitle.isEmpty ? "" : " during '\(videoTitle)'"
         XCTAssertFalse(banner.exists,
                        "player.errorBanner appeared\(context) — PlaybackViewModel.error was set")
+    }
+
+    /// Fails the test if `shorts.errorBanner` is visible in `ShortsPlayerView`.
+    static func assertNoShortsErrorBanner(in app: XCUIApplication) {
+        let banner = app.staticTexts["shorts.errorBanner"].firstMatch
+        XCTAssertFalse(banner.exists,
+                       "shorts.errorBanner appeared — PlaybackViewModel.error was set for the Short")
     }
 }

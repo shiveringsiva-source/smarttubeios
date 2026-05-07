@@ -2,15 +2,33 @@ import XCTest
 
 // MARK: - ShortsPlayerUITests
 //
-// UI tests for ShortsPlayerView — opened via the Shorts chip on the Home tab.
+// UI tests for ShortsPlayerView, split into two launch modes:
 //
-// Requirements:
-//   • Network access is required.
-//   • The --uitesting-enable-shorts launch argument ensures the Shorts section is
-//     present in enabledSections regardless of user settings.
-//   • Run on an iOS 17+ simulator with the SmartTubeApp scheme selected.
+//   Direct-launch (--uitesting-shorts)
+//   ────────────────────────────────────
+//   AppEntry bypasses navigation and presents ShortsPlayerView directly with
+//   stub videos. `shorts.indexLabel` appears immediately — no warm-up, no
+//   network required. Used for tests that verify player behavior (index badge,
+//   swipes, controls overlay) where the path TO the player is irrelevant.
+//
+//   Direct-launch with real video (--uitesting-shorts-ids=<ID>)
+//   ─────────────────────────────────────────────────────────────
+//   Same direct launch but with a real YouTube Short video ID so
+//   InnerTubeAPI fetches a real stream. Used when verifying network behavior
+//   (e.g. no error banner).
+//
+//   Full-app navigation (--uitesting --uitesting-enable-shorts)
+//   ─────────────────────────────────────────────────────────────
+//   The full app launches. Tests navigate Home → Shorts chip → tap card.
+//   Used only for tests that verify the navigation PATH to the player.
 
 final class ShortsPlayerUITests: XCTestCase {
+
+    // MARK: - Known real YouTube Short video IDs
+    //
+    // Used when a test needs a real stream (e.g. no-error-banner check).
+    // Update this ID if the Short is deleted and the test starts skipping.
+    private static let knownGoodShortID = "To1J1B2IpPA"
 
     private var app: XCUIApplication!
 
@@ -19,12 +37,35 @@ final class ShortsPlayerUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments += ["--uitesting", "--uitesting-enable-shorts"]
-        app.launch()
+        // Do NOT launch here — each test picks its own launch mode.
     }
 
     override func tearDownWithError() throws {
         app = nil
+    }
+
+    // MARK: - Launch helpers
+
+    /// Direct-launch: `ShortsPlayerView` with three stub videos.
+    /// No network required. `shorts.indexLabel` shows "1 / 3" immediately.
+    private func launchWithStubs() {
+        app.launchArguments = ["--uitesting", "--uitesting-shorts"]
+        app.launch()
+    }
+
+    /// Direct-launch: `ShortsPlayerView` with specific real YouTube Short IDs.
+    /// InnerTubeAPI fetches real streams — use when testing playback behavior.
+    private func launchWithRealShorts(ids: [String]) {
+        app.launchArguments = ["--uitesting", "--uitesting-shorts",
+                               "--uitesting-shorts-ids=\(ids.joined(separator: ","))"]
+        app.launch()
+    }
+
+    /// Full-app launch with the complete navigation stack and real Home feed.
+    /// Use only for tests that verify the navigation path to the player.
+    private func launchFullApp() {
+        app.launchArguments = ["--uitesting", "--uitesting-enable-shorts"]
+        app.launch()
     }
 
     // MARK: - Helpers
@@ -33,9 +74,9 @@ final class ShortsPlayerUITests: XCTestCase {
         app.staticTexts["shorts.indexLabel"].firstMatch
     }
 
-    /// Navigates to the Home tab, scrolls to the Shorts chip, taps it, then
-    /// taps the first Short card. Returns when `shorts.indexLabel` is visible.
-    private func openFirstShort() throws {
+    /// Navigates Home → Shorts chip → taps the first Short card.
+    /// Requires `launchFullApp()` to have been called first.
+    private func openFirstShortViaNavigation() throws {
         UITestHelpers.tapTab(named: "Home", in: app)
 
         let chipBar = app.scrollViews["home.chipBar"]
@@ -48,16 +89,14 @@ final class ShortsPlayerUITests: XCTestCase {
         UITestHelpers.scrollChipIntoView(shortsChip, in: chipBar, app: app)
         shortsChip.tap()
 
-        // Wait for the Shorts section feed ScrollView to appear before querying
-        // cards. Without this guard the predicate below can match stale Home-feed
-        // cards that are still in the accessibility tree during the section-switch
-        // animation, causing the test to tap a non-Short video.
+        // Wait for the Shorts section feed ScrollView before querying cards.
+        // Without this guard the predicate below can match stale Home-feed cards
+        // still in the accessibility tree during the section-switch animation.
         let sectionFeed = app.scrollViews["home.sectionFeed"]
         guard sectionFeed.waitForExistence(timeout: 20) else {
             throw XCTSkip("Shorts section feed did not appear within 20 s — network unavailable or Shorts empty")
         }
 
-        // Wait for the Shorts section feed to populate.
         let feedPredicate = NSPredicate(format: "identifier BEGINSWITH 'video.card.'")
         let cards = app.descendants(matching: .any).matching(feedPredicate)
         let feedLoaded = XCTNSPredicateExpectation(predicate: NSPredicate(format: "count > 0"),
@@ -67,7 +106,6 @@ final class ShortsPlayerUITests: XCTestCase {
         }
 
         cards.firstMatch.tap()
-        // ShortsPlayerView is visible when shorts.indexLabel appears.
         XCTAssertTrue(indexLabel.waitForExistence(timeout: 15),
                       "shorts.indexLabel must appear after tapping a Short")
     }
@@ -87,10 +125,7 @@ final class ShortsPlayerUITests: XCTestCase {
     }
 
     /// Taps the Shorts player until `shorts.controlsOverlay` becomes visible.
-    /// Retries up to 5 times with 1.5 s gaps to account for the UIKit
-    /// tap.require(toFail: pan) delay and iOS version timing differences.
     private func showShortsControls() {
-        // Search by identifier across all element types to handle iOS 26 VStack rendering changes.
         let pred = NSPredicate(format: "identifier == 'shorts.controlsOverlay'")
         let overlay = app.descendants(matching: .any).matching(pred).firstMatch
         for _ in 0..<5 {
@@ -102,94 +137,107 @@ final class ShortsPlayerUITests: XCTestCase {
 
     // MARK: - Tests
 
+    // ── Navigation tests ──────────────────────────────────────────────────────
+
+    /// Verifies that tapping a Short card from the Home Shorts chip opens
+    /// ShortsPlayerView. Full-app navigation — requires network.
     func testShortsPlayerOpensFromHomeChip() throws {
-        try openFirstShort()
+        launchFullApp()
+        try openFirstShortViaNavigation()
         XCTAssertTrue(indexLabel.exists,
                       "shorts.indexLabel should be visible when ShortsPlayerView is open")
     }
 
-    func testIndexLabelShowsStartIndex() throws {
-        try openFirstShort()
-        // The label format is "1 / N" where N >= 1.
-        let labelText = indexLabel.label
-        XCTAssertTrue(labelText.hasPrefix("1 /"),
-                      "shorts.indexLabel should start with '1 /' when opening the first Short, got: '\(labelText)'")
-    }
-
-    func testSwipeUpAdvancesShort() throws {
-        try openFirstShort()
-        let beforeLabel = indexLabel.label
-
-        swipeUp()
-        Thread.sleep(forTimeInterval: 1.5) // animation + load time
-
-        let afterLabel = indexLabel.label
-        XCTAssertNotEqual(afterLabel, beforeLabel,
-                          "shorts.indexLabel should change after swiping up — expected next Short to load")
-        XCTAssertTrue(afterLabel.hasPrefix("2 /"),
-                      "After first swipe-up the label should show '2 / N', got: '\(afterLabel)'")
-    }
-
-    func testSwipeDownGoesBackToPreviousShort() throws {
-        try openFirstShort()
-        swipeUp()
-        Thread.sleep(forTimeInterval: 1.5)
-        XCTAssertTrue(indexLabel.label.hasPrefix("2 /"),
-                      "Should be on index 2 after swiping up")
-
-        swipeDown()
-        Thread.sleep(forTimeInterval: 1.5)
-        let afterSwipeDown = indexLabel.label
-        XCTAssertTrue(afterSwipeDown.hasPrefix("1 /"),
-                      "After swiping back down the label should return to '1 / N', got: '\(afterSwipeDown)'")
-    }
-
-    func testNoErrorBannerOnShortsOpen() throws {
-        try openFirstShort()
-        Thread.sleep(forTimeInterval: 5)
-        UITestHelpers.assertNoPlayerErrorBanner(in: app)
-    }
-
+    /// Verifies the back button dismisses the Shorts player and returns to Home.
+    /// Full-app navigation required to assert the return destination.
     func testBackButtonDismissesShortsPlayer() throws {
-        try openFirstShort()
+        launchFullApp()
+        try openFirstShortViaNavigation()
         showShortsControls()
 
-        // On iOS 26 the back button may not be individually accessible within the
-        // controls overlay container even when the overlay is visible. Try via
-        // accessibility first; fall back to tapping its known position (top-left).
         let backPred = NSPredicate(format: "identifier == 'shorts.backButton'")
         let backBtn = app.descendants(matching: .any).matching(backPred).firstMatch
         if backBtn.waitForExistence(timeout: 2) {
             backBtn.tap()
         } else {
-            // Back button is at the top-left of the controls overlay:
-            // HStack with padding(.horizontal, 20).padding(.top, 60)
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.1)).tap()
         }
 
-        // After dismissal the Shorts section feed on the Home tab should still be visible.
         let chipBar = app.scrollViews["home.chipBar"]
         XCTAssertTrue(chipBar.waitForExistence(timeout: 5),
                       "home.chipBar should be visible after dismissing the Shorts player")
     }
 
-    func testControlsOverlayAppearsOnTap() throws {
-        try openFirstShort()
+    // ── Direct-launch (stub) tests — no network, instant ────────────────────
+
+    /// Verifies the index badge shows "1 / 3" when the player opens at index 0.
+    func testIndexLabelShowsStartIndex() {
+        launchWithStubs()
+        XCTAssertTrue(indexLabel.waitForExistence(timeout: 5),
+                      "shorts.indexLabel must appear immediately on direct launch")
+        XCTAssertEqual(indexLabel.label, "1 / 3",
+                       "Index badge should show '1 / 3' on launch with three stub Shorts")
+    }
+
+    /// Verifies swipe-up advances the index from 1 to 2.
+    func testSwipeUpAdvancesShort() {
+        launchWithStubs()
+        XCTAssertTrue(indexLabel.waitForExistence(timeout: 5))
+        XCTAssertEqual(indexLabel.label, "1 / 3")
+
+        swipeUp()
+        Thread.sleep(forTimeInterval: 1.5)
+
+        XCTAssertEqual(indexLabel.label, "2 / 3",
+                       "Swipe up should advance the index from 1 to 2")
+    }
+
+    /// Verifies swipe-down after swipe-up returns to index 1.
+    func testSwipeDownGoesBackToPreviousShort() {
+        launchWithStubs()
+        XCTAssertTrue(indexLabel.waitForExistence(timeout: 5))
+
+        swipeUp()
+        Thread.sleep(forTimeInterval: 1.5)
+        XCTAssertEqual(indexLabel.label, "2 / 3", "Should be on index 2 after swiping up")
+
+        swipeDown()
+        Thread.sleep(forTimeInterval: 1.5)
+        XCTAssertEqual(indexLabel.label, "1 / 3",
+                       "Swipe down should return to index 1")
+    }
+
+    /// Verifies tapping the player shows the controls overlay.
+    func testControlsOverlayAppearsOnTap() {
+        launchWithStubs()
+        XCTAssertTrue(indexLabel.waitForExistence(timeout: 5))
 
         let pred = NSPredicate(format: "identifier == 'shorts.controlsOverlay'")
         let overlay = app.descendants(matching: .any).matching(pred).firstMatch
 
-        // The player shows controls on initial load; wait for the auto-hide timer
-        // to fire so the overlay is definitely hidden before we test the tap.
+        // Wait for the auto-hide timer to fire so the overlay is hidden.
         let hiddenExpectation = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "exists == false"),
             object: overlay
         )
         _ = XCTWaiter().wait(for: [hiddenExpectation], timeout: 10)
 
-        // Tap to show controls and assert they appear.
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(overlay.waitForExistence(timeout: 5),
                       "shorts.controlsOverlay should appear after tapping the Shorts player")
+    }
+
+    // ── Direct-launch with real video — network required ─────────────────────
+
+    /// Verifies no error banner appears when a real Short loads.
+    /// Uses a known-good Short ID (\(Self.knownGoodShortID)) so the test is
+    /// deterministic and doesn't depend on whatever happens to be first in the feed.
+    func testNoErrorBannerOnShortsOpen() throws {
+        launchWithRealShorts(ids: [Self.knownGoodShortID])
+        guard indexLabel.waitForExistence(timeout: 20) else {
+            throw XCTSkip("Shorts player did not appear — network unavailable")
+        }
+        Thread.sleep(forTimeInterval: 5)
+        UITestHelpers.assertNoShortsErrorBanner(in: app)
     }
 }

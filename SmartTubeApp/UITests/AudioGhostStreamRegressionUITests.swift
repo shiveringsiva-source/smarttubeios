@@ -188,12 +188,19 @@ final class ShortsGhostStreamRegressionUITests: XCTestCase {
         UITestHelpers.scrollChipIntoView(shortsChip, in: chipBar, app: app)
         shortsChip.tap()
 
+        // Wait for the Shorts section feed before querying cards — prevents
+        // the predicate matching stale Home-feed cards still in the tree.
+        let sectionFeed = app.scrollViews["home.sectionFeed"]
+        guard sectionFeed.waitForExistence(timeout: 20) else {
+            throw XCTSkip("Shorts section feed did not appear within 20 s")
+        }
+
         let feedPredicate = NSPredicate(format: "identifier BEGINSWITH 'video.card.'")
         let cards = app.descendants(matching: .any).matching(feedPredicate)
         let feedLoaded = XCTNSPredicateExpectation(predicate: NSPredicate(format: "count > 0"),
                                                    object: cards)
-        guard XCTWaiter().wait(for: [feedLoaded], timeout: 20) == .completed else {
-            throw XCTSkip("Shorts feed did not load within 20 s")
+        guard XCTWaiter().wait(for: [feedLoaded], timeout: 10) == .completed else {
+            throw XCTSkip("Shorts feed did not load within 10 s")
         }
         cards.firstMatch.tap()
         XCTAssertTrue(indexLabel.waitForExistence(timeout: 15),
