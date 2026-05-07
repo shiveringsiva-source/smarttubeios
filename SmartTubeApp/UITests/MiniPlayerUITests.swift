@@ -161,6 +161,41 @@ final class MiniPlayerUITests: XCTestCase {
         }
     }
 
+    // MARK: - Regression: imperative dismiss via dismissPlayerAction
+
+    /// Regression test for the bug where the back button had to be tapped multiple
+    /// times (4+) without effect because SwiftUI stopped calling updateUIViewController
+    /// on LandscapePresenter while the .fullScreen modal was presented (UIKit removes
+    /// the presenting VC's view from the window, pausing SwiftUI updates).
+    ///
+    /// Fix: minimize() now fires dismissPlayerAction directly, bypassing SwiftUI.
+    /// This test verifies that a SINGLE back-button tap dismisses the full-screen
+    /// cover and shows the mini-player bar.
+    func testBackButtonDismissesFullScreenOnSingleTap() throws {
+        try openPlayerFromHome()
+
+        // Ensure controls are visible so the back button is hittable.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(backButton.waitForExistence(timeout: 5),
+                      "player.backButton must exist after opening the player")
+
+        // Single tap — this must be sufficient to dismiss the full-screen cover.
+        backButton.tap()
+
+        // The mini-player bar must appear within 5 s without any further taps.
+        XCTAssertTrue(miniPlayerBar.waitForExistence(timeout: 5),
+                      "miniPlayer.bar must appear after a single back-button tap — " +
+                      "regression for the dismissPlayerAction bypass fix")
+
+        // The full-screen player overlay must be gone.
+        let fullScreenGone = NSPredicate(format: "exists == false")
+        let expectation = XCTNSPredicateExpectation(predicate: fullScreenGone,
+                                                    object: backButton)
+        let result = XCTWaiter().wait(for: [expectation], timeout: 3)
+        XCTAssertEqual(result, .completed,
+                       "player.backButton should not be visible once mini-player is showing")
+    }
+
     func testMiniPlayerGhostAudioGuard() throws {
         // Ensure no ghost audio from a previous session bleeds into a new one.
         try openPlayerFromHome()

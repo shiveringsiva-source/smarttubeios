@@ -35,9 +35,7 @@ public struct BrowseView: View {
         }
         .navigationTitle(vm.currentSection.title)
         .toolbar { sectionPicker }
-        #if os(iOS)
-        // Player cover is centralised in MainTabView.
-        #elseif !os(macOS)
+        #if !os(iOS) && !os(macOS)
         .fullScreenCover(item: $selectedVideo) { video in
             PlayerView(video: video, api: api)
         }

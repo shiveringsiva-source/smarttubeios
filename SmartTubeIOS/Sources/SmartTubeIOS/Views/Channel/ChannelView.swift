@@ -47,9 +47,7 @@ public struct ChannelView: View {
             guard let id = vm.channel?.id else { return }
             isFollowedLocally = await LocalSubscriptionStore.shared.isFollowing(id)
         }
-        #if os(iOS)
-        // Player cover is centralised in MainTabView.
-        #elseif !os(macOS)
+        #if !os(iOS) && !os(macOS)
         .fullScreenCover(item: $selectedVideo) { video in
             PlayerView(video: video, api: api)
         }

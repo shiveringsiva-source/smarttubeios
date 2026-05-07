@@ -70,6 +70,7 @@ private struct LandscapePresenter<Item: Identifiable & Hashable>: UIViewControll
     func updateUIViewController(_ vc: UIViewController, context: Context) {
         let coordinator = context.coordinator
         coordinator.latestItem = item
+        coordinator.capturedPlayerState = playerState
         // Wrap the content with the environment objects so the new UIHostingController
         // root gets the same env as the parent SwiftUI tree.
         let capturedStore = store
@@ -91,8 +92,20 @@ private struct LandscapePresenter<Item: Identifiable & Hashable>: UIViewControll
         let capturedGen = coordinator.presentationGeneration
         Task { @MainActor in
             guard coordinator.presentationGeneration == capturedGen else { return }
+            // Dismiss path: sync() doesn't use `root` when latestItem is nil — the dismiss
+            // is done via the stored hostedVC reference. Skip the window guard here because
+            // UIKit removes the presenting VC's view from the window during a .fullScreen
+            // presentation, making vc.view.window nil while the player is on screen.
+            if coordinator.latestItem == nil {
+                landscapeLog.notice("[LandscapePresenter] updateUIViewController — item nil, calling sync for dismiss (bypassing window guard)")
+                coordinator.sync(root: UIViewController())
+                return
+            }
             guard let window = vc.view.window,
-                  let root = window.rootViewController else { return }
+                  let root = window.rootViewController else {
+                landscapeLog.notice("[LandscapePresenter] updateUIViewController — item non-nil but vc.view.window is nil, skipping sync")
+                return
+            }
             coordinator.sync(root: root)
         }
     }
@@ -104,6 +117,7 @@ private struct LandscapePresenter<Item: Identifiable & Hashable>: UIViewControll
         var latestItem: Item?
         var contentBuilder: ((Item) -> AnyView)?
         var latestBinding: Binding<Item?>?
+        var capturedPlayerState: PlayerStateStore?
         var hostedVC: LandscapeAwareHostingController?
         var presentedID: AnyHashable?
         var isTransitioning = false
@@ -165,6 +179,7 @@ private struct LandscapePresenter<Item: Identifiable & Hashable>: UIViewControll
                         self?.presentationGeneration += 1
                         self?.latestItem = nil
                         self?.latestBinding?.wrappedValue = nil
+                        self?.capturedPlayerState?.dismissPlayerAction = nil
                         self?.hostedVC = nil
                         self?.presentedID = nil
                         self?.isTransitioning = false
@@ -172,6 +187,18 @@ private struct LandscapePresenter<Item: Identifiable & Hashable>: UIViewControll
                     self.hostedVC = hc
                     self.presentedID = AnyHashable(currentItem.id)
                     self.presentedAt = Date()
+                    // Register imperative dismiss hook so minimize()/stop() can dismiss
+                    // the VC directly without relying on SwiftUI's updateUIViewController,
+                    // which stalls when the hosting VC's view is off-screen (.fullScreen style).
+                    self.capturedPlayerState?.dismissPlayerAction = { [weak hc, weak self] in
+                        guard let hc, !hc.isBeingDismissed,
+                              hc.presentingViewController != nil else { return }
+                        landscapeLog.notice("[LandscapePresenter] dismissPlayerAction fired — dismissing")
+                        self?.isTransitioning = true
+                        hc.dismiss(animated: false) { [weak self] in
+                            self?.isTransitioning = false
+                        }
+                    }
                     landscapeLog.notice("[LandscapePresenter] presenting LandscapeAwareHostingController from \(type(of: top))")
                     top.present(hc, animated: false) { [weak self] in
                         self?.isTransitioning = false

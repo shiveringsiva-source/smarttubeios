@@ -41,9 +41,7 @@ public struct PlaylistView: View {
         .onAppear {
             vm.load(playlistId: playlistId)
         }
-        #if os(iOS)
-        // Player cover is centralised in MainTabView.
-        #elseif os(tvOS)
+        #if os(tvOS)
         .navigationDestination(item: $selectedVideo) { video in
             PlayerView(video: video, api: api)
         }

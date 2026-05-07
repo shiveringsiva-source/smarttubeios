@@ -13,6 +13,7 @@
 		494A17316084B602873D7C05 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AE55B486AFD7F51FEF1874FF /* Assets.xcassets */; };
 		673C1D012F7F20340021583B /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 673C1D002F7F20340021583B /* Launch Screen.storyboard */; };
 		67B1B1732FA5384E0059D847 /* VideoPlaybackRegressionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B1B1722FA5384E0059D847 /* VideoPlaybackRegressionUITests.swift */; };
+		67E2B0742FAD1BBE005F70E6 /* MiniPlayerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67E2B0732FAD1BBE005F70E6 /* MiniPlayerUITests.swift */; };
 		67E6B6872F9535CD00CD372F /* SmartTubeIOS in Frameworks */ = {isa = PBXBuildFile; productRef = 67E6B6862F9535CD00CD372F /* SmartTubeIOS */; };
 		AA01000000000000000000A4 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01000000000000000000A1 /* ShareViewController.swift */; };
 		AA01000000000000000000A5 /* SmartTubeIOSCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA01000000000000000000B1 /* SmartTubeIOSCore */; };
@@ -98,6 +99,7 @@
 		46FAE8C7AB41057B392DF731 /* DownloadLiveActivity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DownloadLiveActivity.swift; sourceTree = "<group>"; };
 		673C1D002F7F20340021583B /* Launch Screen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = "Launch Screen.storyboard"; sourceTree = "<group>"; };
 		67B1B1722FA5384E0059D847 /* VideoPlaybackRegressionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlaybackRegressionUITests.swift; sourceTree = "<group>"; };
+		67E2B0732FAD1BBE005F70E6 /* MiniPlayerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniPlayerUITests.swift; sourceTree = "<group>"; };
 		67E6B67B2F9535CD00CD372F /* Smart Tube.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Smart Tube.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		6ACA5CEA633CF065619F786C /* SmartTube.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SmartTube.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		79E77E6DD18B12CA7A5341D0 /* SmartTubeDownloadWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SmartTubeDownloadWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -214,6 +216,7 @@
 				AA1100000000000000000AA1 /* AudioGhostStreamRegressionUITests.swift */,
 				AA1100000000000000000BA1 /* AudioOriginalTrackSelectionUITests.swift */,
 				AA1100000000000000000CA1 /* RecommendedChipUITests.swift */,
+				67E2B0732FAD1BBE005F70E6 /* MiniPlayerUITests.swift */,
 			);
 			path = UITests;
 			sourceTree = "<group>";
@@ -584,6 +587,7 @@
 				AA11000000000000000004A2 /* SearchUITests.swift in Sources */,
 				AA11000000000000000005A2 /* LibrarySubscriptionsUITests.swift in Sources */,
 				AA11000000000000000006A2 /* LibraryHistoryUITests.swift in Sources */,
+				67E2B0742FAD1BBE005F70E6 /* MiniPlayerUITests.swift in Sources */,
 				AA11000000000000000007A2 /* ChannelViewUITests.swift in Sources */,
 				AA11000000000000000008A2 /* ShortsPlayerUITests.swift in Sources */,
 				AA11000000000000000009A2 /* PlayerControlsUITests.swift in Sources */,
@@ -751,7 +755,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -770,7 +774,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MARKETING_VERSION = 2.2;
+				MARKETING_VERSION = 2.3;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1093,7 +1097,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -1106,7 +1110,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MARKETING_VERSION = 2.2;
+				MARKETING_VERSION = 2.3;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

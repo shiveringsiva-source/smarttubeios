@@ -3,6 +3,9 @@ import AVFoundation
 import UIKit
 import Observation
 import SmartTubeIOSCore
+import OSLog
+
+private let storeLog = Logger(subsystem: "com.void.smarttube.app", category: "PlayerStateStore")
 
 // MARK: - PersistentPlayerHostView
 
@@ -60,6 +63,14 @@ public final class PlayerStateStore {
     /// The video that is currently loaded or playing. Non-nil when presentation != .hidden.
     private(set) var currentVideo: Video? = nil
 
+    // MARK: - Imperative dismiss hook
+
+    /// Set by LandscapePresenter's coordinator when a full-screen player is presented.
+    /// Fired imperatively by minimize() / stop() to bypass the SwiftUI update-propagation
+    /// pause that occurs when the presenting VC's view is removed from the window by
+    /// UIKit's .fullScreen presentation style (so updateUIViewController never fires).
+    var dismissPlayerAction: (() -> Void)?
+
     // MARK: - Owned objects
 
     /// The single PlaybackViewModel for the app. Lives for the app's lifetime.
@@ -83,28 +94,42 @@ public final class PlayerStateStore {
 
     /// Load `video` (if not already loaded) and present the full-screen player.
     func play(video: Video) {
+        storeLog.notice("[PlayerStateStore] play — id=\(video.id) currentPresentation=\(String(describing: self.presentation))")
         if vm.currentVideoId != video.id {
             vm.load(video: video)
         }
         currentVideo = video
         presentation = .fullScreen
+        storeLog.notice("[PlayerStateStore] play — presentation set to .fullScreen")
     }
 
     /// Collapse the full-screen player to the mini-player bar. Playback continues.
     func minimize() {
+        storeLog.notice("[PlayerStateStore] minimize — currentPresentation=\(String(describing: self.presentation))")
         presentation = .miniPlayer
+        let action = dismissPlayerAction
+        dismissPlayerAction = nil
+        storeLog.notice("[PlayerStateStore] minimize — presentation set to .miniPlayer, dismissPlayerAction=\(action != nil)")
+        action?()
     }
 
     /// Expand the mini-player back to full-screen.
     func expand() {
+        storeLog.notice("[PlayerStateStore] expand — currentPresentation=\(String(describing: self.presentation))")
         presentation = .fullScreen
+        storeLog.notice("[PlayerStateStore] expand — presentation set to .fullScreen")
     }
 
     /// Stop playback completely and hide the player UI.
     func stop() {
+        storeLog.notice("[PlayerStateStore] stop — currentPresentation=\(String(describing: self.presentation))")
         vm.stop()
         currentVideo = nil
         presentation = .hidden
+        let action = dismissPlayerAction
+        dismissPlayerAction = nil
+        storeLog.notice("[PlayerStateStore] stop — presentation set to .hidden, dismissPlayerAction=\(action != nil)")
+        action?()
     }
 }
 #endif

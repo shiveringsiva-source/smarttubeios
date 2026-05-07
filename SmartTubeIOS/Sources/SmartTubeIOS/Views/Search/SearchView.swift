@@ -55,7 +55,6 @@ public struct SearchView: View {
         }
         #elseif os(iOS)
         .toolbar(.hidden, for: .navigationBar)
-        // Player cover is centralised in MainTabView.
         #endif
         .navigationDestination(item: $channelDestination) { dest in
             ChannelView(channelId: dest.channelId)

@@ -19,7 +19,7 @@ public struct PlayerView: View {
     public let video: Video
     #if os(iOS)
     @Environment(PlayerStateStore.self) private var playerState
-    private var vm: PlaybackViewModel { playerState.vm }
+    var vm: PlaybackViewModel { playerState.vm }
     #else
     @State var vm: PlaybackViewModel
     #endif
@@ -156,6 +156,7 @@ public struct PlayerView: View {
                     },
                     onLongPressStart: { vm.beginHoldSpeed() },
                     onLongPressEnd:   { vm.endHoldSpeed() },
+                    onSwipeDown: { playerState.minimize() },
                     // Disabled during scrubbing so the Slider can claim touches uncontested.
                     // Also disabled when controls are visible so SwiftUI buttons (Menu, etc.)
                     // receive touches directly without UIKit gesture interference.
@@ -200,9 +201,13 @@ public struct PlayerView: View {
                                 .onEnded { value in
                                     let dx = value.translation.width
                                     let dy = value.translation.height
-                                    guard abs(dx) > abs(dy),
-                                          !isTransitioning,
-                                          !vm.isScrubbing else { return }
+                                    guard !isTransitioning, !vm.isScrubbing else { return }
+                                    // Swipe-down → minimize to mini-player
+                                    if dy > 50, abs(dy) > abs(dx) {
+                                        playerState.minimize()
+                                        return
+                                    }
+                                    guard abs(dx) > abs(dy) else { return }
                                     if dx < 0, vm.hasNext {
                                         performHorizontalTransition(direction: -1, screenWidth: geo.size.width) { vm.playNext() }
                                     } else if dx > 0, vm.hasPrevious {
@@ -415,7 +420,9 @@ public struct PlayerView: View {
             HStack(spacing: 0) {
                 Button {
                     #if os(iOS)
+                    swipeLog.notice("[PlayerView] backButton tapped — calling playerState.minimize(), presentation=\(String(describing: playerState.presentation))")
                     playerState.minimize()
+                    swipeLog.notice("[PlayerView] backButton — minimize() returned, presentation=\(String(describing: playerState.presentation))")
                     #else
                     vm.stop(); withAnimation(.none) { dismiss() }
                     #endif
@@ -1291,6 +1298,7 @@ private struct SwipeGestureOverlay: UIViewRepresentable {
     var onSwipeCancelled:   (() -> Void)?
     var onLongPressStart:   (() -> Void)?
     var onLongPressEnd:     (() -> Void)?
+    var onSwipeDown:        (() -> Void)? = nil
     var isEnabled:          Bool = true
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -1359,8 +1367,15 @@ private struct SwipeGestureOverlay: UIViewRepresentable {
             let t = gr.translation(in: gr.view)
             switch gr.state {
             case .changed:
-                parent.onPanChanged?(t.x)
+                // Only forward horizontal pan for slide-offset animation.
+                if abs(t.x) >= abs(t.y) { parent.onPanChanged?(t.x) }
             case .ended:
+                // Swipe-down: vertical-dominant, downward, meets threshold → minimize
+                if abs(t.y) > minDistance, t.y > 0, abs(t.y) > abs(t.x) {
+                    parent.onSwipeCancelled?() // reset any horizontal offset
+                    parent.onSwipeDown?()
+                    return
+                }
                 guard abs(t.x) > minDistance, abs(t.x) > abs(t.y) else {
                     parent.onSwipeCancelled?()
                     return

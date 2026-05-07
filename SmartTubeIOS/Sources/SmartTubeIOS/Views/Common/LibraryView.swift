@@ -49,9 +49,6 @@ public struct LibraryView: View {
         #if os(iOS) || os(tvOS)
         .toolbar(.hidden, for: .navigationBar)
         #endif
-        #if os(iOS)
-        // Player cover is centralised in MainTabView.
-        #endif
         #if os(tvOS)
         .navigationDestination(item: $selectedVideo) { video in
             PlayerView(video: video, api: api)

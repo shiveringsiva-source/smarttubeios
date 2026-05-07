@@ -1,5 +1,8 @@
 import SwiftUI
 import SmartTubeIOSCore
+import OSLog
+
+private let rootLog = Logger(subsystem: "com.void.smarttube.app", category: "RootView")
 
 // MARK: - RootView
 //
@@ -89,8 +92,13 @@ struct MainTabView: View {
 
     var body: some View {
         #if os(iOS)
+        // Read these in body so SwiftUI's @Observable tracker registers the dependency.
+        // If only accessed inside the Binding.get closure, changes won't trigger a body re-render
+        // and updateUIViewController won't be called, so the cover never dismisses.
+        let fullScreenVideo: Video? = playerState.presentation == .fullScreen ? playerState.currentVideo : nil
+        let _ = rootLog.notice("[MainTabView] body re-render — presentation=\(String(describing: playerState.presentation)) fullScreenVideo=\(fullScreenVideo?.id ?? "nil")")
         let fullScreenBinding = Binding<Video?>(
-            get: { playerState.presentation == .fullScreen ? playerState.currentVideo : nil },
+            get: { fullScreenVideo },
             set: { if $0 == nil { playerState.minimize() } }
         )
         #endif

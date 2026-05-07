@@ -31,8 +31,7 @@ extension PlayerView {
                 .onTapGesture { showMoreMenu = false }
 
             GeometryReader { geo in
-            ScrollView {
-                VStack(spacing: 0) {
+            VStack(spacing: 0) {
                 // Speed
                 Button {
                     showMoreMenu = false
@@ -253,15 +252,16 @@ extension PlayerView {
                 .buttonStyle(.plain)
                 .foregroundStyle(.primary)
             }
-            }
-            .frame(maxHeight: geo.size.height * 0.75)
+            .frame(maxWidth: .infinity)
             .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 16))
+            .frame(maxHeight: geo.size.height * 0.75)
             #if os(tvOS)
             .focusSection()
             #endif
             .padding(.horizontal, 8)
             .padding(.bottom, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
         }
         .ignoresSafeArea()
