@@ -8266,6 +8266,9 @@
         }
       }
     },
+    "Picture in Picture" : {
+
+    },
     "Playback Speed" : {
       "comment" : "Settings picker label and player more-menu / speed-picker header",
       "extractionState" : "manual",

@@ -55,6 +55,10 @@ public struct PlayerView: View {
     /// Guards scenePhase handlers so only the visible instance calls handleForeground/handleBackground,
     /// preventing ghost VMs from resuming audio when a new PlayerView is pushed on top.
     @State private var isVisible = false
+    #if os(iOS)
+    /// Drives the brief "Fit" / "Fill" toast shown after a double-tap scale toggle.
+    @State private var scaleToast: String?
+    #endif
     #if os(tvOS)
     @FocusState private var playerFocused: Bool
     /// Which playback control is visually highlighted in the overlay.
@@ -120,6 +124,12 @@ public struct PlayerView: View {
                     onTap: {
                         // Suppress toggle-controls when end cards are active — taps belong to the cards.
                         if !vm.hasVisibleEndCards { vm.toggleControls() }
+                    },
+                    onDoubleTap: {
+                        let newMode: AppSettings.VideoGravityMode =
+                            store.settings.videoGravityMode == .fit ? .fill : .fit
+                        store.settings.videoGravityMode = newMode
+                        scaleToast = newMode == .fill ? "Fill" : "Fit"
                     },
                     onTwoFingerTap: { vm.toggleStatsForNerds() },
                     onPanChanged: { dx in
@@ -308,6 +318,9 @@ public struct PlayerView: View {
             .offset(x: slideOffset)
         }
         .background(Color.black.ignoresSafeArea())
+        #if os(iOS)
+        .toast(message: $scaleToast)
+        #endif
         #if os(tvOS)
         // When no overlay is open, the outer view is the exclusive focus target and
         // handles all remote input via onMoveCommand / onTapGesture.
@@ -476,6 +489,7 @@ public struct PlayerView: View {
         // is loaded) means it stays permanently inert.
         .onChange(of: vm.isPlaying) { _, playing in
             guard playing, pipController == nil,
+                  store.settings.pipEnabled,
                   let layer = playerLayer,
                   AVPictureInPictureController.isPictureInPictureSupported() else { return }
             let pip = AVPictureInPictureController(playerLayer: layer)
@@ -636,8 +650,8 @@ public struct PlayerView: View {
                 }
                 Spacer()
                 #if os(iOS)
-                // Picture-in-Picture button — shown whenever PiP is supported on this device
-                if let pip = pipController {
+                // Picture-in-Picture button — shown when PiP is enabled in settings and supported on this device
+                if store.settings.pipEnabled, let pip = pipController {
                     Button {
                         if isPiPActive {
                             pip.stopPictureInPicture()
@@ -1204,6 +1218,7 @@ private struct SwipeGestureOverlay: UIViewRepresentable {
     var onSwipeLeft:        () -> Void
     var onSwipeRight:       () -> Void
     var onTap:              () -> Void
+    var onDoubleTap:        () -> Void = {}
     var onTwoFingerTap:     () -> Void = {}
     var onPanChanged:       ((CGFloat) -> Void)?
     var onSwipeCancelled:   (() -> Void)?
@@ -1223,10 +1238,19 @@ private struct SwipeGestureOverlay: UIViewRepresentable {
         view.addGestureRecognizer(pan)
         context.coordinator.pan = pan
 
+        let doubleTap = UITapGestureRecognizer(target: context.coordinator,
+                                               action: #selector(Coordinator.handleDoubleTap))
+        doubleTap.numberOfTapsRequired = 2
+        doubleTap.cancelsTouchesInView = false
+        doubleTap.require(toFail: pan)
+        view.addGestureRecognizer(doubleTap)
+        context.coordinator.doubleTap = doubleTap
+
         let tap = UITapGestureRecognizer(target: context.coordinator,
                                           action: #selector(Coordinator.handleTap))
         tap.cancelsTouchesInView = false
         tap.require(toFail: pan)
+        tap.require(toFail: doubleTap)
         view.addGestureRecognizer(tap)
         context.coordinator.tap = tap
 
@@ -1250,6 +1274,7 @@ private struct SwipeGestureOverlay: UIViewRepresentable {
         context.coordinator.parent = self
         context.coordinator.pan?.isEnabled = isEnabled
         context.coordinator.tap?.isEnabled = isEnabled
+        context.coordinator.doubleTap?.isEnabled = isEnabled
         context.coordinator.longPress?.isEnabled = isEnabled
     }
 
@@ -1257,6 +1282,7 @@ private struct SwipeGestureOverlay: UIViewRepresentable {
         var parent: SwipeGestureOverlay
         weak var pan: UIPanGestureRecognizer?
         weak var tap: UITapGestureRecognizer?
+        weak var doubleTap: UITapGestureRecognizer?
         weak var longPress: UILongPressGestureRecognizer?
         private let minDistance: CGFloat = 40
 
@@ -1281,6 +1307,7 @@ private struct SwipeGestureOverlay: UIViewRepresentable {
         }
 
         @MainActor @objc func handleTap() { parent.onTap() }
+        @MainActor @objc func handleDoubleTap() { parent.onDoubleTap() }
         @MainActor @objc func handleTwoFingerTap() { parent.onTwoFingerTap() }
 
         @MainActor @objc func handleLongPress(_ gr: UILongPressGestureRecognizer) {

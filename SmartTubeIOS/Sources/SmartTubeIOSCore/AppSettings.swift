@@ -14,6 +14,8 @@ public struct AppSettings: Codable {
     public var backgroundPlaybackEnabled: Bool
     /// When `true`, the player automatically rotates to landscape when a video starts on iPhone.
     public var landscapeAlwaysPlay: Bool
+    /// When `true`, Picture-in-Picture is available and the PiP button is shown in the player.
+    public var pipEnabled: Bool
     /// Seconds to seek backward (configurable; default 10 mirrors Android's default).
     public var seekBackSeconds: Int
     /// Seconds to seek forward (configurable; default 30 mirrors Android's default).
@@ -159,6 +161,7 @@ public struct AppSettings: Codable {
         subtitlesLanguage    = nil
         backgroundPlaybackEnabled = false
         landscapeAlwaysPlay  = false
+        pipEnabled           = true
         seekBackSeconds      = 10
         seekForwardSeconds   = 30
         controlsHideTimeout  = 4

@@ -135,6 +135,8 @@ public struct SettingsView: View {
             #if os(iOS)
             Toggle("Landscape Always Play", isOn: $store.settings.landscapeAlwaysPlay)
                 .accessibilityIdentifier("settings.landscapeAlwaysPlayToggle")
+            Toggle("Picture in Picture", isOn: $store.settings.pipEnabled)
+                .accessibilityIdentifier("settings.pipToggle")
             #endif
         }
     }

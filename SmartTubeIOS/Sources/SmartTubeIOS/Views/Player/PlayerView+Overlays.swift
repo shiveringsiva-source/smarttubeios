@@ -30,7 +30,9 @@ extension PlayerView {
                 .ignoresSafeArea()
                 .onTapGesture { showMoreMenu = false }
 
-            VStack(spacing: 0) {
+            GeometryReader { geo in
+            ScrollView {
+                VStack(spacing: 0) {
                 // Speed
                 Button {
                     showMoreMenu = false
@@ -251,6 +253,8 @@ extension PlayerView {
                 .buttonStyle(.plain)
                 .foregroundStyle(.primary)
             }
+            }
+            .frame(maxHeight: geo.size.height * 0.75)
             .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             #if os(tvOS)
@@ -258,6 +262,7 @@ extension PlayerView {
             #endif
             .padding(.horizontal, 8)
             .padding(.bottom, 8)
+            }
         }
         .ignoresSafeArea()
     }
