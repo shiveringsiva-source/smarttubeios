@@ -81,7 +81,7 @@ enum AppSymbol {
     static let share           = "square.and.arrow.up"
     static let copyDoc         = "doc.on.doc"
     static let download        = "arrow.down.to.line"
-    static let watchLater      = "clock.badge.plus"
+    static let watchLater      = "clock.badge"
 
     // MARK: - Status / info
     static let warning         = "exclamationmark.triangle.fill"

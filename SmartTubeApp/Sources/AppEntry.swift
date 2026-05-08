@@ -181,6 +181,15 @@ struct AppEntry: App {
         let components = url.pathComponents.filter { $0 != "/" }
         guard let videoID = components.first, !videoID.isEmpty else { return }
         browseViewModel.deepLinkedVideo = Video(id: videoID, title: "", channelTitle: "")
+
+        // Clear the App Group pending key so consumePendingVideoID() does not replay
+        // this video on the next cold start. When the app is already active, scenePhase
+        // never transitions to .active, so the onChange handler never fires —
+        // handleOpenURL is the only thing that runs, and it must clean up the key itself.
+        if let defaults = UserDefaults(suiteName: Self.appGroup) {
+            defaults.removeObject(forKey: Self.pendingKey)
+            defaults.synchronize()
+        }
     }
 
     // MARK: - App Group pending video (from Share Extension)

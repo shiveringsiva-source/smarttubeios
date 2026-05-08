@@ -47,6 +47,7 @@
 		F1CDC40190BFE18C52E5AD1B /* SmartTubeIOSCore in Frameworks */ = {isa = PBXBuildFile; productRef = 4D96747315A9E066D09F1F4E /* SmartTubeIOSCore */; };
 		FB01000000000000000000A1 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = FA01000000000000000000A1 /* GoogleService-Info.plist */; };
 		SE000000000000000000001B /* ShareExtensionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SE000000000000000000001A /* ShareExtensionUITests.swift */; };
+		SE000000000000000000002B /* ShareExtensionE2EUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SE000000000000000000002A /* ShareExtensionE2EUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -141,6 +142,7 @@
 		F4A5B6C7D8E9F0A1B2C3D4E5 /* CategoryChipHTTP400UITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryChipHTTP400UITests.swift; sourceTree = "<group>"; };
 		FA01000000000000000000A1 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		SE000000000000000000001A /* ShareExtensionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareExtensionUITests.swift; sourceTree = "<group>"; };
+		SE000000000000000000002A /* ShareExtensionE2EUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareExtensionE2EUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -231,6 +233,7 @@
 				67E2B0732FAD1BBE005F70E6 /* MiniPlayerUITests.swift */,
 				67E2B0B12FADFE59005F70E6 /* PlayerDoubleTapUITests.swift */,
 				SE000000000000000000001A /* ShareExtensionUITests.swift */,
+				SE000000000000000000002A /* ShareExtensionE2EUITests.swift */,
 			);
 			path = UITests;
 			sourceTree = "<group>";
@@ -613,6 +616,7 @@
 				AA1100000000000000000BA2 /* AudioOriginalTrackSelectionUITests.swift in Sources */,
 				AA1100000000000000000CA2 /* RecommendedChipUITests.swift in Sources */,
 				SE000000000000000000001B /* ShareExtensionUITests.swift in Sources */,
+				SE000000000000000000002B /* ShareExtensionE2EUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -775,7 +779,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -1117,7 +1121,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
