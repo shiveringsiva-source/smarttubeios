@@ -14,6 +14,15 @@ extension PlaybackViewModel {
         scheduleControlsHide()
     }
 
+    /// Cancels the auto-hide timer without hiding controls.
+    /// Call this when an overlay (more menu, picker) opens so the transport
+    /// controls remain visible behind the overlay for as long as it is open.
+    public func cancelControlsHide() {
+        playerLog.debug("[controls] cancelControlsHide — pausing auto-hide timer")
+        controlsTimer?.cancel()
+        controlsTimer = nil
+    }
+
     public func toggleControls() {
         playerLog.notice("[controls] toggleControls — controlsVisible=\(self.controlsVisible)")
         if controlsVisible {

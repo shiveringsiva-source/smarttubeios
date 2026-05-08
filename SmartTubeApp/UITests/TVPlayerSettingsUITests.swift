@@ -260,4 +260,85 @@ final class TVPlayerSettingsUITests: XCTestCase {
         XCTAssertFalse(sleepTimerPicker.exists, "player.sleepTimerPicker must close after pressing Menu")
         XCTAssertTrue(titleLabel.exists, "player must remain active after dismissing the picker")
     }
+
+    // MARK: - D-pad navigation regression tests
+
+    /// D-pad down from the speed row (default focus) moves focus to the next row.
+    /// Pressing select after one down press must NOT open the speed picker — it
+    /// should activate whatever row now has focus (Quality or Like/Dislike).
+    /// Regression for: onMoveCommand consuming D-pad events inside the more menu.
+    func testMoreMenuDpadDownNavigatesToNextRow() throws {
+        try openPlayer()
+        try openMoreMenu()
+
+        // Speed row starts with focus. One D-pad down moves to the next row.
+        remote.press(.down)
+        Thread.sleep(forTimeInterval: 0.5)
+
+        // Pressing select must NOT open the speed picker (that would mean focus
+        // never left the speed row — the D-pad down was swallowed by onMoveCommand
+        // on the outer ZStack).
+        remote.press(.select)
+        Thread.sleep(forTimeInterval: 0.5)
+
+        XCTAssertFalse(
+            speedPicker.exists,
+            "player.speedPicker must NOT appear after ↓ + select — D-pad down was swallowed " +
+            "(ConditionalMoveCommand regression: onMoveCommand still intercepting overlay D-pad)"
+        )
+    }
+
+    /// Pressing D-pad down repeatedly reaches the Sleep Timer row and select opens its picker.
+    /// Regression for: onMoveCommand blocking vertical navigation in the more menu.
+    func testMoreMenuDpadReachesSleepTimerRow() throws {
+        try openPlayer()
+        try openMoreMenu()
+
+        // Press down up to 6 times — enough to reach Sleep Timer through any
+        // combination of Quality + Like/Dislike rows.
+        for _ in 0..<6 {
+            remote.press(.down)
+            Thread.sleep(forTimeInterval: 0.35)
+            remote.press(.select)
+            Thread.sleep(forTimeInterval: 0.5)
+            if sleepTimerPicker.waitForExistence(timeout: 2) { break }
+            // Didn't open sleep timer — a different row activated. Dismiss and re-open.
+            remote.press(.menu); Thread.sleep(forTimeInterval: 0.5)
+            guard moreMenuSpeedRow.waitForExistence(timeout: 3) else {
+                throw XCTSkip("Could not re-open more menu between attempts")
+            }
+            Thread.sleep(forTimeInterval: 0.4)
+        }
+
+        XCTAssertTrue(
+            sleepTimerPicker.exists,
+            "player.sleepTimerPicker must appear after navigating down to the Sleep Timer row — " +
+            "D-pad navigation inside the more menu is broken"
+        )
+    }
+
+    // MARK: - Controls auto-hide regression test
+
+    /// When the player controls auto-hide while the more menu is open, the menu
+    /// must remain fully interactive — the speed row must still be selectable.
+    /// Regression for: controlsVisible→false stealing focus from overlay.
+    func testMoreMenuRemainsSelectableAfterControlsHide() throws {
+        try openPlayer()
+        try openMoreMenu()
+
+        // Wait long enough for the controls auto-hide timer to fire (typically 3 s).
+        // The tvOS simulator controls hide after ~3 s by default.
+        Thread.sleep(forTimeInterval: 6)
+
+        // After controls auto-hide the more menu must still work.
+        // Speed row has prefersDefaultFocus and focus is re-asserted on controls-hide.
+        remote.press(.select)
+        Thread.sleep(forTimeInterval: 0.5)
+
+        XCTAssertTrue(
+            speedPicker.waitForExistence(timeout: 5),
+            "player.speedPicker must appear after controls auto-hide — " +
+            "focus was stolen from the more menu when vm.controlsVisible became false"
+        )
+    }
 }

@@ -59,8 +59,9 @@ extension PlayerView {
                 .foregroundStyle(.primary)
                 .accessibilityIdentifier("player.moreMenu.speedRow")
                 #if os(tvOS)
-                .prefersDefaultFocus(in: moreMenuNamespace)
-                .focused($moreMenuSpeedFocused)
+                .background(moreMenuFocusedRow == .speed ? Color.white.opacity(0.15) : .clear)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .focused($moreMenuFocusedRow, equals: .speed)
                 #endif
                 Divider()
                 // Quality (only when formats are available)
@@ -80,7 +81,11 @@ extension PlayerView {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.primary)
-                    .disabled(vm.isLoading)
+                    #if os(tvOS)
+                    .background(moreMenuFocusedRow == .quality ? Color.white.opacity(0.15) : .clear)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .focused($moreMenuFocusedRow, equals: .quality)
+                    #endif
                     Divider()
                 }
                 // Like / Dislike (requires sign-in)
@@ -101,6 +106,11 @@ extension PlayerView {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        #if os(tvOS)
+                        .background(moreMenuFocusedRow == .like ? Color.white.opacity(0.15) : .clear)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .focused($moreMenuFocusedRow, equals: .like)
+                        #endif
                         Divider().frame(height: 44)
                         Button {
                             vm.dislike()
@@ -117,6 +127,11 @@ extension PlayerView {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        #if os(tvOS)
+                        .background(moreMenuFocusedRow == .dislike ? Color.white.opacity(0.15) : .clear)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .focused($moreMenuFocusedRow, equals: .dislike)
+                        #endif
                     }
                     Divider()
                 }
@@ -160,6 +175,11 @@ extension PlayerView {
                 .buttonStyle(.plain)
                 .foregroundStyle(.primary)
                 .accessibilityIdentifier("player.moreMenu.sleepTimerRow")
+                #if os(tvOS)
+                .background(moreMenuFocusedRow == .sleepTimer ? Color.white.opacity(0.15) : .clear)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .focused($moreMenuFocusedRow, equals: .sleepTimer)
+                #endif
                 Divider()
                 #if !os(tvOS)
                 // Download
@@ -240,9 +260,13 @@ extension PlayerView {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.primary)
+                    #if os(tvOS)
+                    .background(moreMenuFocusedRow == .description ? Color.white.opacity(0.15) : .clear)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .focused($moreMenuFocusedRow, equals: .description)
+                    #endif
                     Divider()
                 }
-                // Comments
                 Button {
                     showMoreMenu = false
                     showCommentsSheet = true
@@ -257,6 +281,11 @@ extension PlayerView {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.primary)
+                #if os(tvOS)
+                .background(moreMenuFocusedRow == .comments ? Color.white.opacity(0.15) : .clear)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .focused($moreMenuFocusedRow, equals: .comments)
+                #endif
                 Divider()
                 Button { showMoreMenu = false } label: {                    Text("Cancel")
                         .frame(maxWidth: .infinity)
@@ -267,19 +296,44 @@ extension PlayerView {
                 .buttonStyle(.plain)
                 .foregroundStyle(.primary)
                 .accessibilityIdentifier("player.moreMenu.cancel")
+                #if os(tvOS)
+                .background(moreMenuFocusedRow == .cancel ? Color.white.opacity(0.15) : .clear)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .focused($moreMenuFocusedRow, equals: .cancel)
+                #endif
             }
             .frame(maxWidth: .infinity)
             .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .frame(maxHeight: geo.size.height * 0.75)
             #if os(tvOS)
-            .focusScope(moreMenuNamespace)
+            .onMoveCommand { direction in
+                let rows = moreMenuVisibleRows
+                let current = moreMenuFocusedRow ?? .speed
+                // Left/right within the Like ↔ Dislike pair.
+                if current == .like, direction == .right { moreMenuFocusedRow = .dislike; return }
+                if current == .dislike, direction == .left { moreMenuFocusedRow = .like; return }
+                // For up/down, treat .dislike as .like (same vertical row).
+                let verticalCurrent: MoreMenuRow = current == .dislike ? .like : current
+                guard let idx = rows.firstIndex(of: verticalCurrent) else {
+                    moreMenuFocusedRow = .speed
+                    return
+                }
+                switch direction {
+                case .down where idx < rows.count - 1:
+                    moreMenuFocusedRow = rows[idx + 1]
+                case .up where idx > 0:
+                    moreMenuFocusedRow = rows[idx - 1]
+                default:
+                    break
+                }
+            }
             .onExitCommand {
                 menuLog.notice("[moreMenu] onExitCommand fired — dismissing via Menu button")
                 showMoreMenu = false
             }
             .onAppear {
-                menuLog.notice("[moreMenu] overlay appeared — focusScope=moreMenuNamespace prefersDefaultFocus=speedRow")
+                menuLog.notice("[moreMenu] overlay appeared — explicit D-pad navigation via onMoveCommand + moreMenuFocusedRow")
             }
             .onDisappear {
                 menuLog.notice("[moreMenu] overlay disappeared")

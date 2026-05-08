@@ -73,18 +73,17 @@ public struct PlayerView: View {
     /// `.prefersDefaultFocus` so the ZStack claims default focus when pushed via
     /// NavigationStack — preventing any child view from stealing focus first.
     @Namespace var playerBodyNamespace
-    /// Namespace IDs used with `.focusScope` on each overlay so the tvOS focus
-    /// engine moves focus into the overlay when it opens (replacing `.focusSection`
-    /// which only marks the container but does not actively claim focus).
-    @Namespace var moreMenuNamespace
-    /// Explicitly routes Siri Remote focus when overlays open programmatically,
-    /// since `prefersDefaultFocus` only fires when focus enters a scope naturally.
-    @FocusState var moreMenuSpeedFocused: Bool
-    @FocusState var speedPickerFocused: Bool
-    @FocusState var sleepTimerPickerFocused: Bool
+    /// Namespace IDs used with `.focusScope` on picker overlays so the tvOS focus
+    /// engine moves focus into the overlay when it opens.
     @Namespace var qualityPickerNamespace
     @Namespace var speedPickerNamespace
     @Namespace var sleepTimerNamespace
+    /// Explicitly routes Siri Remote focus when overlays open programmatically.
+    /// `moreMenuFocusedRow` drives D-pad navigation within the more menu via explicit
+    /// `.onMoveCommand` (SwiftUI's spatial engine cannot navigate ZStack overlays).
+    @FocusState var moreMenuFocusedRow: MoreMenuRow?
+    @FocusState var speedPickerFocused: Bool
+    @FocusState var sleepTimerPickerFocused: Bool
     #endif
 
     /// Scales player control icon sizes up on iPad so they're easier to tap.
@@ -365,9 +364,9 @@ public struct PlayerView: View {
         .prefersDefaultFocus(in: playerBodyNamespace)
         .focusable(!isAnyOverlayVisible)
         .focused($playerFocused)
-        .onMoveCommand { direction in
-            swipeLog.debug("[tv] onMoveCommand dir=\(String(describing: direction)) isAnyOverlayVisible=\(isAnyOverlayVisible) isTransitioning=\(isTransitioning) highlighted=\(String(describing: highlightedControl))")
-            guard !isAnyOverlayVisible, !isTransitioning else { return }
+        .modifier(ConditionalMoveCommand(enabled: !isAnyOverlayVisible) { direction in
+            swipeLog.debug("[tv] onMoveCommand dir=\(String(describing: direction)) isTransitioning=\(isTransitioning) highlighted=\(String(describing: highlightedControl))")
+            guard !isTransitioning else { return }
             if let current = highlightedControl {
                 // Controls-nav mode: move the highlight between buttons.
                 highlightedControl = tvNextControl(from: current, direction: direction)
@@ -384,7 +383,7 @@ public struct PlayerView: View {
                 default:     vm.showControls(); highlightedControl = .playPause
                 }
             }
-        }
+        })
         .onTapGesture {
             swipeLog.notice("[tv] onTapGesture (select) — isAnyOverlayVisible=\(isAnyOverlayVisible) highlighted=\(String(describing: highlightedControl)) controlsVisible=\(vm.controlsVisible)")
             guard !isAnyOverlayVisible else { return }
@@ -427,9 +426,11 @@ public struct PlayerView: View {
                 // the speed row so the Siri Remote Select button works immediately.
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 50_000_000) // one render cycle (~50 ms)
-                    moreMenuSpeedFocused = true
-                    swipeLog.notice("[tv] moreMenuSpeedFocused set → true")
+                    moreMenuFocusedRow = .speed
+                    swipeLog.notice("[tv] moreMenuFocusedRow set → .speed")
                 }
+            } else {
+                moreMenuFocusedRow = nil
             }
         }
         .onChange(of: showSpeedPicker) { _, visible in
@@ -453,15 +454,25 @@ public struct PlayerView: View {
             }
         }
         .onChange(of: vm.controlsVisible) { _, visible in
-            swipeLog.debug("[tv] controlsVisible changed → \(visible) highlighted=\(String(describing: highlightedControl))")
+            swipeLog.debug("[tv] controlsVisible changed → \(visible) highlighted=\(String(describing: highlightedControl)) isAnyOverlayVisible=\(isAnyOverlayVisible)")
             if !visible {
                 highlightedControl = nil
-                playerFocused = true
+                // Only reclaim player focus when no overlay is open.
+                // focusScope(moreMenuNamespace) keeps focus inside the menu when
+                // controls hide, so no re-assertion is needed (and re-asserting
+                // would steal focus back from whichever row the user navigated to).
+                if !isAnyOverlayVisible {
+                    playerFocused = true
+                }
             }
         }
         .onChange(of: isAnyOverlayVisible) { _, overlayVisible in
             swipeLog.notice("[tv] isAnyOverlayVisible changed → \(overlayVisible) — moreMenu=\(showMoreMenu) quality=\(showQualityPicker) speed=\(showSpeedPicker) sleep=\(showSleepTimerPicker)")
-            if !overlayVisible {
+            if overlayVisible {
+                // Pause the controls auto-hide timer so transport controls stay
+                // visible behind the overlay while it is open.
+                vm.cancelControlsHide()
+            } else {
                 // Overlay dismissed — reclaim focus and clear nav state.
                 highlightedControl = nil
                 playerFocused = true

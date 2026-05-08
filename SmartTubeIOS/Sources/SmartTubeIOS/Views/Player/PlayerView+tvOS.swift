@@ -11,7 +11,57 @@ import SmartTubeIOSCore
 // Swift does not allow stored properties in extensions.
 
 #if os(tvOS)
+
+// MARK: - ConditionalMoveCommand
+
+/// Conditionally applies `.onMoveCommand`. When `enabled = false` the modifier is
+/// completely absent from the view tree (not just a no-op closure), which allows
+/// D-pad events to fall through to SwiftUI's native focus engine so it can move
+/// focus between buttons inside an overlay's VStack.
+///
+/// `.onMoveCommand(perform: nil)` is NOT equivalent — it still registers a
+/// modifier node in the responder chain and can prevent the focus engine from
+/// receiving the event.
+struct ConditionalMoveCommand: ViewModifier {
+    let enabled: Bool
+    let action: (MoveCommandDirection) -> Void
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.onMoveCommand(perform: action)
+        } else {
+            content   // modifier completely absent — D-pad reaches native focus engine
+        }
+    }
+}
+
 extension PlayerView {
+
+    // MARK: - MoreMenuRow
+
+    /// Identifies each focusable row in the more menu overlay.
+    /// Used by `moreMenuFocusedRow` and `moreMenuVisibleRows` to drive explicit
+    /// D-pad navigation — SwiftUI's spatial focus engine cannot reliably navigate
+    /// between buttons inside a ZStack overlay on tvOS.
+    enum MoreMenuRow: Hashable {
+        case speed, quality, like, dislike, sleepTimer, description, comments, cancel
+    }
+
+    /// Ordered list of rows currently visible in the more menu.
+    /// Drives the `.onMoveCommand` handler to know which row comes next.
+    /// `.dislike` is not in this list — it sits to the right of `.like` and is
+    /// reached via left/right D-pad, not up/down.
+    var moreMenuVisibleRows: [MoreMenuRow] {
+        var rows: [MoreMenuRow] = [.speed]
+        if !vm.availableFormats.isEmpty { rows.append(.quality) }
+        if authService.isSignedIn { rows.append(.like) }
+        rows.append(.sleepTimer)
+        let desc = (vm.playerInfo?.video ?? video).description ?? ""
+        if !desc.isEmpty { rows.append(.description) }
+        rows.append(.comments)
+        rows.append(.cancel)
+        return rows
+    }
 
     // MARK: - TVPlayerControl
 
