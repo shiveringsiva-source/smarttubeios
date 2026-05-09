@@ -24,6 +24,11 @@ public final class SettingsStore {
         } else {
             self.settings = AppSettings()
         }
+        // Reset settings to defaults when launched for UI testing so each test
+        // suite starts from a clean, known state and prior runs cannot bleed in.
+        if ProcessInfo.processInfo.arguments.contains("--uitesting-reset-settings") {
+            self.settings = AppSettings()
+        }
     }
 
     private func save() {

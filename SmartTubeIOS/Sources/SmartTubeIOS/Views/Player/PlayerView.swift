@@ -199,6 +199,7 @@ public struct PlayerView: View {
                         .scaleEffect(1.5)
                         .transition(.opacity)
                         .animation(.easeInOut(duration: 0.2), value: vm.isLoading)
+                        .allowsHitTesting(false)
                 }
 
                 // Hold-to-speed badge — shown while user long-presses to boost to 2×

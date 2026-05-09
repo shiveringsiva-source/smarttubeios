@@ -87,38 +87,47 @@ final class SettingsUITests: XCTestCase {
     func testSponsorBlockToggleEnablesSection() {
         openSettings()
         let form = app.collectionViews.firstMatch
-        // Scroll using a form-scoped query, then switch to an app-scoped query for taps.
-        // After a Toggle state change SwiftUI re-renders the Form and the form-scoped
-        // XCUIElement reference becomes stale — the app-scoped query re-resolves each time.
-        let toggleForScrolling = form.switches["settings.sponsorBlockToggle"]
-        UITestHelpers.scrollUntilVisible(toggleForScrolling, in: form)
-        let toggle = app.switches["settings.sponsorBlockToggle"].firstMatch
-        XCTAssertTrue(toggle.waitForExistence(timeout: 5),
+        // Scroll to the toggle first so XCTest can find it.
+        let toggleQuery = app.switches["settings.sponsorBlockToggle"]
+        UITestHelpers.scrollUntilVisible(toggleQuery, in: form)
+        XCTAssertTrue(toggleQuery.waitForExistence(timeout: 5),
                       "settings.sponsorBlockToggle must be present in the SponsorBlock section")
 
-        // Ensure it starts OFF; if it is already on, skip the enable-state assertion.
-        let wasOn = (toggle.value as? String) == "1"
-        if wasOn {
-            // Turn it off so we can verify turning it on shows sub-options.
-            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
+        // If the toggle is already ON, turn it OFF first so we can test the ON transition.
+        if (toggleQuery.value as? String) == "1" {
+            // .tap() auto-scrolls the element into view, unlike coordinate taps.
+            toggleQuery.tap()
+            Thread.sleep(forTimeInterval: 1.5)
         }
-        // Turn on using coordinate tap (right side = UISwitch).
-        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
-        // At least one per-category picker row should now be visible.
-        // Category displayNames: "Sponsor", "Self-Promotion", "Interaction Reminder", etc.
-        // Use label predicate since SwiftUI Text labels map to XCUIElement.label,
-        // not necessarily to accessibilityIdentifier in iOS 26.
-        let sponsorPred = NSPredicate(format: "label == 'Sponsor'")
-        let sponsorRow = app.descendants(matching: .any).matching(sponsorPred).firstMatch
-        let selfPromoPred = NSPredicate(format: "label == 'Self-Promotion'")
-        let selfPromoRow = app.descendants(matching: .any).matching(selfPromoPred).firstMatch
-        let subOptionsAppear = sponsorRow.waitForExistence(timeout: 6)
-            || selfPromoRow.waitForExistence(timeout: 3)
-        XCTAssertTrue(subOptionsAppear,
+
+        // Turn ON. Re-query so we get a fresh element after any form re-render.
+        let enableToggle = app.switches["settings.sponsorBlockToggle"].firstMatch
+        XCTAssertTrue(enableToggle.waitForExistence(timeout: 5),
+                      "settings.sponsorBlockToggle must still be present after turning it off")
+        enableToggle.tap()
+
+        // The "Excluded Channels" NavigationLink only appears when SponsorBlock is enabled.
+        // It renders as a Button whose label starts with "Excluded Channels".
+        let excludedChannelsRow = app.buttons
+            .matching(NSPredicate(format: "label BEGINSWITH 'Excluded Channels'"))
+            .firstMatch
+        UITestHelpers.scrollUntilVisible(excludedChannelsRow, in: form)
+        XCTAssertTrue(excludedChannelsRow.waitForExistence(timeout: 6),
                       "SponsorBlock category pickers should appear when SponsorBlock is enabled")
 
-        // Restore to OFF so we leave settings clean.
-        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
+        // Restore to OFF. After scrolling down to "Excluded Channels" (11+ rows below the
+        // toggle), the toggle is off-screen and out of the accessibility tree.
+        // Swipe down repeatedly until it reappears.
+        Thread.sleep(forTimeInterval: 0.5)
+        let restoreToggle = app.switches["settings.sponsorBlockToggle"].firstMatch
+        var scrollBack = 0
+        while !restoreToggle.exists && scrollBack < 10 {
+            form.swipeDown()
+            scrollBack += 1
+        }
+        XCTAssertTrue(restoreToggle.waitForExistence(timeout: 5),
+                      "settings.sponsorBlockToggle must still be present for cleanup")
+        restoreToggle.tap()
     }
 
     func testAboutSectionResetButtonVisible() {
@@ -277,9 +286,12 @@ final class SettingsUITests: XCTestCase {
             if !wasOn {
                 openSettings()
                 let f = app.collectionViews.firstMatch
-                let t = f.switches["settings.landscapeAlwaysPlayToggle"]
-                UITestHelpers.scrollUntilVisible(t, in: f)
-                t.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
+                // Wait for the Settings form to fully load before interacting with it.
+                if f.waitForExistence(timeout: 10) {
+                    let t = f.switches["settings.landscapeAlwaysPlayToggle"]
+                    UITestHelpers.scrollUntilVisible(t, in: f)
+                    t.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
+                }
             }
         }
 

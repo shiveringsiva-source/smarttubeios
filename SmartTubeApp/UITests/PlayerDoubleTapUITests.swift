@@ -76,11 +76,11 @@ final class PlayerDoubleTapUITests: XCTestCase {
         // Tap in the centre of the left third (normalised x ≈ 0.17).
         doubleTap(normalizedX: 1.0 / 6.0)
 
-        let toast = app.staticTexts
-            .matching(NSPredicate(format: "label BEGINSWITH '\u{2190}'"))
-            .firstMatch
+        let toast = app.staticTexts["player.toast"].firstMatch
         XCTAssertTrue(toast.waitForExistence(timeout: 3),
                       "A seek-back toast (← Xs) must appear after double-tapping the left third of the player")
+        XCTAssertTrue(toast.label.hasPrefix("\u{2190}"),
+                      "Seek-back toast label must start with ← but was '\(toast.label)'")
         XCTAssertEqual(app.state, .runningForeground,
                        "App must still be running after left-zone double-tap")
     }
@@ -93,11 +93,11 @@ final class PlayerDoubleTapUITests: XCTestCase {
         // Tap in the centre of the right third (normalised x ≈ 0.83).
         doubleTap(normalizedX: 5.0 / 6.0)
 
-        let toast = app.staticTexts
-            .matching(NSPredicate(format: "label ENDSWITH '\u{2192}'"))
-            .firstMatch
-        XCTAssertTrue(toast.waitForExistence(timeout: 3),
+        let toast = app.staticTexts["player.toast"].firstMatch
+        XCTAssertTrue(toast.waitForExistence(timeout: 5),
                       "A seek-forward toast (Xs →) must appear after double-tapping the right third of the player")
+        XCTAssertTrue(toast.label.hasSuffix("\u{2192}"),
+                      "Seek-forward toast label must end with → but was '\(toast.label)'")
         XCTAssertEqual(app.state, .runningForeground,
                        "App must still be running after right-zone double-tap")
     }
@@ -110,11 +110,11 @@ final class PlayerDoubleTapUITests: XCTestCase {
         // Tap dead-centre.
         doubleTap(normalizedX: 0.5)
 
-        let toast = app.staticTexts
-            .matching(NSPredicate(format: "label == 'Fit' OR label == 'Fill'"))
-            .firstMatch
-        XCTAssertTrue(toast.waitForExistence(timeout: 3),
+        let toast = app.staticTexts["player.toast"].firstMatch
+        XCTAssertTrue(toast.waitForExistence(timeout: 5),
                       "'Fit' or 'Fill' toast must appear after double-tapping the centre third of the player")
+        XCTAssertTrue(toast.label == "Fit" || toast.label == "Fill",
+                      "Scale toast label must be 'Fit' or 'Fill' but was '\(toast.label)'")
         XCTAssertEqual(app.state, .runningForeground,
                        "App must still be running after centre-zone double-tap")
     }

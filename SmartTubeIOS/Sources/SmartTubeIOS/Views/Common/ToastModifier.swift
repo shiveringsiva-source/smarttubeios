@@ -43,6 +43,7 @@ private struct ToastModifier: ViewModifier {
                 .background(.black.opacity(0.72), in: Capsule())
                 .padding(.bottom, 32)
                 .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .bottom)))
+                .accessibilityIdentifier("player.toast")
         }
     }
 }

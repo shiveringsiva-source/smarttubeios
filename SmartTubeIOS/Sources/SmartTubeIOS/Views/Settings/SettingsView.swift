@@ -201,7 +201,7 @@ public struct SettingsView: View {
                             Text("Show Toast").tag(AppSettings.SponsorBlockAction.showToast)
                             Text("Nothing").tag(AppSettings.SponsorBlockAction.nothing)
                         }
-
+                        .accessibilityIdentifier("settings.sponsorBlock.\(cat.rawValue)")
                     }
                 }
 
@@ -218,6 +218,7 @@ public struct SettingsView: View {
                 NavigationLink("Excluded Channels (\(store.settings.sponsorBlockExcludedChannels.count))") {
                     SponsorBlockExcludedChannelsView()
                 }
+                .accessibilityIdentifier("settings.sponsorBlockExcludedChannels")
             }
         } header: {
             Text("SponsorBlock")
