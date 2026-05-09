@@ -196,6 +196,9 @@ extension InnerTubeAPI {
 
         walk(json)
         let withThumbs = channels.filter { $0.thumbnailURL != nil }.count
+        // Sort alphabetically so the list is stable and predictable regardless of
+        // the order YouTube's guide API returns entries. Matches LocalSubscriptionStore.
+        channels.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
         tubeLog.notice("parseGuideChannels → \(channels.count, privacy: .public) channels, \(withThumbs, privacy: .public) with thumbnail")
         return channels
     }
@@ -384,6 +387,8 @@ extension InnerTubeAPI {
         }
 
         walk(json)
+        // Sort alphabetically so the channel list is stable. Matches LocalSubscriptionStore.
+        channels.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
         tubeLog.notice("parseSubscribedChannels → \(channels.count, privacy: .public) unique channels")
         return channels
     }

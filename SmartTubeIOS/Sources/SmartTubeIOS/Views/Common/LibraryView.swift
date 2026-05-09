@@ -191,39 +191,42 @@ public struct LibraryView: View {
                 type: section.browseSectionType
             ))
         }
+        #if os(tvOS)
+        // tvOS: player is opened via navigationDestination(item: $selectedVideo).
+        // Save offset when selectedVideo is set; restore when it clears.
         .onChange(of: selectedVideo) { old, new in
             if old == nil, new != nil {
-                // Read live UIKit contentOffset on the main actor — always accurate
-                // regardless of how many SwiftUI layout passes have occurred.
-                #if os(iOS) || os(tvOS)
                 savedScrollOffset = scrollStore.scrollView?.contentOffset.y ?? 0
-                #endif
             } else if old != nil, new == nil, let saved = savedScrollOffset {
                 restoreOffset = saved
                 savedScrollOffset = nil
             }
         }
-        #if os(iOS)
-        // On iOS, videos are opened via playerState.play(video:) rather than setting
-        // selectedVideo (which is tvOS-only). Mirror the selectedVideo scroll-save/restore
-        // logic by observing playerState.presentation transitions instead.
-        .onChange(of: playerState.presentation) { old, new in
-            if old == .hidden, new == .fullScreen {
-                // Player just launched from this tab — snapshot the scroll offset.
-                savedScrollOffset = scrollStore.scrollView?.contentOffset.y ?? 0
-            } else if old == .fullScreen, new != .fullScreen, let saved = savedScrollOffset {
-                // Player exited fullScreen (minimized or stopped) — schedule a restore.
-                restoreOffset = saved
-                savedScrollOffset = nil
-            }
-        }
         #endif
+        .onDisappear {
+            // Snapshot scroll position whenever the Library view leaves the screen
+            // (player opening, tab switch, navigation push). At onDisappear time the
+            // UIScrollView is still in memory and contentOffset is accurate.
+            #if os(iOS) || os(tvOS)
+            if let offset = scrollStore.scrollView?.contentOffset.y, offset > 0 {
+                savedScrollOffset = offset
+            }
+            #endif
+        }
         .onAppear {
             browseVM.select(section: BrowseSection(
                 id: selectedSection.id,
                 title: selectedSection.rawValue,
                 type: selectedSection.browseSectionType
             ))
+            // Restore scroll position when returning from the player, another tab,
+            // or any navigation that caused onDisappear to fire.
+            #if os(iOS) || os(tvOS)
+            if let saved = savedScrollOffset {
+                restoreOffset = saved
+                savedScrollOffset = nil
+            }
+            #endif
         }
         .task(id: selectedSection) {
             guard selectedSection == .playlists else { return }

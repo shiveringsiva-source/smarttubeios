@@ -250,26 +250,38 @@ extension PlaybackViewModel {
             playerLog.notice("preferredStreamURL=\(prefURL?.absoluteString.prefix(120) ?? "nil")")
 
             // --- SponsorBlock ---
+            // Segments from the cache are applied inline (fast path, zero network cost).
+            // When not cached, the network fetch runs in a background Task so it does not
+            // block the AVPlayer setup. Segments are applied to `sponsorSegments` when
+            // the fetch completes; the time observer picks them up on the next tick.
+            sponsorSegments = []
             let channelIsExcluded = video.channelId.map {
                 settings.sponsorBlockExcludedChannels.keys.contains($0)
             } ?? false
             if settings.sponsorBlockEnabled, !channelIsExcluded {
-                var segments: [SponsorSegment]
                 if let cachedSegments = cached.sponsorSegments {
+                    // Cache hit — apply immediately, no network needed.
                     playerLog.notice("cache HIT: sponsorSegments (skipping network)")
-                    segments = cachedSegments
+                    let minDur = settings.sponsorBlockMinSegmentDuration
+                    sponsorSegments = minDur > 0
+                        ? cachedSegments.filter { ($0.end - $0.start) >= minDur }
+                        : cachedSegments
                 } else {
-                    segments = await sponsorBlock.fetchSegments(
-                        videoId: video.id,
-                        categories: settings.activeSponsorCategories
-                    )
-                    await VideoPreloadCache.shared.store(sponsorSegments: segments, for: video.id)
+                    // Cache miss — fetch in background so playback can start immediately.
+                    let videoId = video.id
+                    let cats = settings.activeSponsorCategories
+                    let minDur = settings.sponsorBlockMinSegmentDuration
+                    Task(priority: .utility) { [weak self] in
+                        guard let self else { return }
+                        var segments = await self.sponsorBlock.fetchSegments(
+                            videoId: videoId,
+                            categories: cats
+                        )
+                        await VideoPreloadCache.shared.store(sponsorSegments: segments, for: videoId)
+                        if minDur > 0 { segments = segments.filter { ($0.end - $0.start) >= minDur } }
+                        self.sponsorSegments = segments
+                    }
                 }
-                let minDur = settings.sponsorBlockMinSegmentDuration
-                if minDur > 0 {
-                    segments = segments.filter { ($0.end - $0.start) >= minDur }
-                }
-                sponsorSegments = segments
             }
 
             // --- Related videos + like status ---

@@ -32,21 +32,20 @@ extension PlaybackViewModel {
                   group.options.count > 1 else { return }
             var tracks: [AudioTrack] = []
             var optionMap: [String: AVMediaSelectionOption] = [:]
-            for (index, option) in group.options.enumerated() {
+            for (_, option) in group.options.enumerated() {
                 let locale = option.locale?.identifier
                     ?? option.extendedLanguageTag
                     ?? "unknown"
                 let displayName = option.locale.flatMap {
                     Locale.current.localizedString(forLanguageCode: $0.identifier)
                 } ?? locale
-                // Use the HLS DEFAULT=YES flag to identify the original track — not AVPlayer's
-                // automatic selection, which follows device locale and would wrongly mark an
-                // AI-dubbed track as "original" on non-English devices.
-                // When the manifest has no DEFAULT=YES (group.defaultOption == nil), treat
-                // the first rendition as original — YouTube orders originals first.
-                let isDefault = group.defaultOption != nil ? group.defaultOption == option : index == 0
+                // Only mark as original when the HLS manifest explicitly sets DEFAULT=YES.
+                // When group.defaultOption == nil (no DEFAULT in the manifest), we cannot
+                // determine the original track from position alone: YouTube sometimes lists
+                // AI-dubbed tracks first, making index-0 an unreliable signal.
+                let isOriginal = group.defaultOption != nil && group.defaultOption == option
                 let track = AudioTrack(id: locale, name: displayName,
-                                       languageCode: locale, isOriginal: isDefault)
+                                       languageCode: locale, isOriginal: isOriginal)
                 tracks.append(track)
                 optionMap[locale] = option
             }
@@ -54,25 +53,43 @@ extension PlaybackViewModel {
             self.audioOptionsByID = optionMap
             self.availableAudioTracks = tracks
 
-            // Auto-apply the user's saved language preference (fuzzy-match on base language).
-            // When no preference is saved, prefer the device's language order over the HLS
-            // DEFAULT track — YouTube sets DEFAULT=YES based on the viewer's account language,
-            // not the video's original language, so blind DEFAULT selection gives wrong results
-            // (e.g. German for an English video when the account UI is in German).
+            // Auto-select priority (highest → lowest):
+            //  1. User's saved language preference (respects explicit manual selection).
+            //  2. Track marked as original by HLS DEFAULT=YES — this is the authoritative
+            //     signal from YouTube's manifest; prefer it over device language.
+            //  3. English track ("en", "en-US", etc.) — most YouTube originals are English,
+            //     so this is a better fallback than device language for un-marked manifests.
+            //  4. Device preferred languages — only as last resort to avoid overriding the
+            //     original with an AI-dubbed version for non-English device users.
+            //  5. First track in list.
+            //
+            // Prior behaviour used device language before the DEFAULT track, which caused
+            // AI-dubbed tracks to be selected on non-English devices (issue #24).
             let preferred = self.settings.preferredAudioLanguage
             let autoSelect: AudioTrack? = {
-                guard let lang = preferred else {
-                    for deviceLang in Locale.preferredLanguages {
-                        if let exact = tracks.first(where: { $0.languageCode == deviceLang }) { return exact }
-                        let base = deviceLang.components(separatedBy: "-").first ?? deviceLang
-                        if let match = tracks.first(where: { $0.languageCode.hasPrefix(base) }) { return match }
-                    }
-                    return tracks.first(where: \.isOriginal)
+                // 1. Saved preference
+                if let lang = preferred {
+                    if let exact = tracks.first(where: { $0.languageCode == lang }) { return exact }
+                    let base = lang.components(separatedBy: "-").first ?? lang
+                    return tracks.first(where: { $0.languageCode.hasPrefix(base) })
+                        ?? tracks.first(where: \.isOriginal)
                 }
-                if let exact = tracks.first(where: { $0.languageCode == lang }) { return exact }
-                let base = lang.components(separatedBy: "-").first ?? lang
-                return tracks.first(where: { $0.languageCode.hasPrefix(base) })
-                    ?? tracks.first(where: \.isOriginal)
+                // 2. HLS DEFAULT=YES original
+                if let original = tracks.first(where: \.isOriginal) { return original }
+                // 3. English track (common original language on YouTube)
+                let englishPrefixes = ["en-", "en_"]
+                if let english = tracks.first(where: { $0.languageCode == "en" })
+                    ?? tracks.first(where: { lang in englishPrefixes.contains(where: { lang.languageCode.hasPrefix($0) }) }) {
+                    return english
+                }
+                // 4. Device preferred languages
+                for deviceLang in Locale.preferredLanguages {
+                    if let exact = tracks.first(where: { $0.languageCode == deviceLang }) { return exact }
+                    let base = deviceLang.components(separatedBy: "-").first ?? deviceLang
+                    if let match = tracks.first(where: { $0.languageCode.hasPrefix(base) }) { return match }
+                }
+                // 5. First track
+                return tracks.first
             }()
             self.selectedAudioTrack = autoSelect
             // Always explicitly select so AVPlayer doesn't override with a locale-based pick.

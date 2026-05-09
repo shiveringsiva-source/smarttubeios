@@ -51,7 +51,8 @@ final class ScrollOffsetStore: @unchecked Sendable {}
 /// ScrollView {
 ///     ScrollOffsetReader(store: scrollStore).frame(width: 0, height: 0)
 /// }
-/// // In onChange (always on @MainActor):
+/// // In onDisappear (always on @MainActor) — read live offset before the view
+/// // leaves the window:
 /// savedOffset = scrollStore.scrollView?.contentOffset.y ?? 0
 /// ```
 #if os(iOS) || os(tvOS)

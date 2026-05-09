@@ -28,16 +28,20 @@ extension PlaybackViewModel {
                 // another seek, producing the end-of-video twitch / 500 ms audio loop.
                 guard !isSkippingSegment else { return true }
                 currentToastSegment = nil
-                // If the segment reaches (or exceeds) the video end, seeking would clamp
-                // to the last decodable frame and never fire didPlayToEndTimeNotification,
-                // leaving the player stuck in the segment window forever. Treat it as a
-                // natural end instead.
+                // If the segment end is within 2 s of the video's playable duration, seeking
+                // there risks landing past the last decodable frame (especially with toleranceAfter).
+                // The player would clamp to the final frame without ever firing
+                // didPlayToEndTimeNotification, leaving it frozen. Treat as a natural end instead.
+                // 2 s (vs the previous 0.5 s) gives sufficient margin for keyframe alignment
+                // and CDN-reported duration inaccuracies.
                 let effectiveDuration = player.currentItem?.duration.seconds ?? duration
-                if effectiveDuration > 0 && seg.end >= effectiveDuration - 0.5 {
+                if effectiveDuration > 0 && seg.end >= effectiveDuration - 2.0 {
+                    playerLog.notice("[SponsorBlock] segment \(seg.category) ends at \(seg.end)s near duration \(effectiveDuration)s — calling handlePlaybackEnd")
                     handlePlaybackEnd()
                     return true
                 }
                 isSkippingSegment = true
+                playerLog.notice("[SponsorBlock] seeking past \(seg.category) segment \(seg.start)–\(seg.end)s")
                 // Use toleranceAfter so the seek always lands at or past seg.end even when
                 // there is no keyframe at exactly that timestamp. This prevents the seek from
                 // returning finished=false, resetting the guard, and immediately re-entering
@@ -49,6 +53,7 @@ extension PlaybackViewModel {
                 ) { [weak self] finished in
                     Task { @MainActor [weak self] in
                         guard let self else { return }
+                        playerLog.notice("[SponsorBlock] seek to \(seg.end)s finished=\(finished), currentTime=\(self.currentTime)")
                         if finished { self.currentTime = seg.end }
                         self.isSkippingSegment = false
                     }
@@ -72,7 +77,7 @@ extension PlaybackViewModel {
         guard let seg = currentToastSegment else { return }
         currentToastSegment = nil
         let effectiveDuration = player.currentItem?.duration.seconds ?? duration
-        if effectiveDuration > 0 && seg.end >= effectiveDuration - 0.5 {
+        if effectiveDuration > 0 && seg.end >= effectiveDuration - 2.0 {
             handlePlaybackEnd()
             return
         }

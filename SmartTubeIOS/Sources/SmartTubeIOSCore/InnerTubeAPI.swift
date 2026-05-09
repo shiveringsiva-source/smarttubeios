@@ -36,19 +36,24 @@ public actor InnerTubeAPI {
 
     /// The iOS client context used for stream URL retrieval.
     /// Returns c=iOS URLs and an HLS manifest, both playable natively by AVPlayer.
-    let iosClientContext: [String: Any] = [
-        "client": [
-            "hl": "en",
-            "gl": "US",
-            "clientName": InnerTubeClients.iOS.name,
-            "clientVersion": InnerTubeClients.iOS.version,
-            "deviceMake": "Apple",
-            "deviceModel": "iPhone16,2",
-            "osName": "iPhone",
-            "osVersion": "18.3.2.22D82",
-            "clientScreen": "WATCH",
+    /// `osVersion` is derived at runtime from ProcessInfo so requests reflect the
+    /// actual device OS and are not rejected by YouTube's version validation.
+    var iosClientContext: [String: Any] {
+        let osVer = InnerTubeClients.iOS.currentOSVersionString.replacingOccurrences(of: "_", with: ".")
+        return [
+            "client": [
+                "hl": "en",
+                "gl": "US",
+                "clientName": InnerTubeClients.iOS.name,
+                "clientVersion": InnerTubeClients.iOS.version,
+                "deviceMake": "Apple",
+                "deviceModel": "iPhone16,2",
+                "osName": "iPhone",
+                "osVersion": osVer,
+                "clientScreen": "WATCH",
+            ]
         ]
-    ]
+    }
     let iosUserAgent = InnerTubeClients.iOS.userAgent
 
     /// The Android client context used for download URL retrieval.
@@ -87,7 +92,11 @@ public actor InnerTubeAPI {
     // Note: TV key (AIzaSyDCU8...) is defined in Android as API_KEY_OLD and never used.
 
     public init(authToken: String? = nil) {
-        self.session = URLSession(configuration: .default)
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 20
+        config.timeoutIntervalForResource = 60
+        config.waitsForConnectivity = true
+        self.session = URLSession(configuration: config)
         self.authToken = authToken
     }
 

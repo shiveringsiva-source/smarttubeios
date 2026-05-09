@@ -109,7 +109,9 @@ public final class AuthService {
         authLog.notice("Using clientId: \(creds.clientId)")
 
         do {
-            let deviceResponse = try await requestDeviceCode(creds: creds)
+            let deviceResponse = try await retryWithBackoff { [self] in
+                try await requestDeviceCode(creds: creds)
+            }
             authLog.notice("✅ Got device code. userCode=\(deviceResponse.userCode) expiresIn=\(deviceResponse.expiresIn)s interval=\(deviceResponse.interval)s")
             let expiresAt = Date().addingTimeInterval(TimeInterval(deviceResponse.expiresIn))
             // Static fallback URL — safe to use URL(string:) with a known-valid literal
@@ -224,7 +226,9 @@ public final class AuthService {
         if let t = accessToken, let exp = tokenExpiry, exp > Date() { return t }
         guard let refresh = refreshToken else { throw AuthError.notSignedIn }
         let creds = await credentialsFetcher.credentials()
-        try await refreshAccessToken(refreshToken: refresh, creds: creds)
+        try await retryWithBackoff(maxAttempts: 2) { [self] in
+            try await refreshAccessToken(refreshToken: refresh, creds: creds)
+        }
         guard let t = accessToken else { throw AuthError.notSignedIn }
         return t
     }
@@ -571,6 +575,39 @@ public final class AuthService {
             kSecAttrAccount: key,
         ]
         SecItemDelete(query as CFDictionary)
+    }
+
+    // MARK: - Retry
+
+    /// Retries `operation` up to `maxAttempts` times on transient URLErrors,
+    /// using exponential backoff. Permanent OAuth and parsing errors are thrown
+    /// immediately without retrying. Task cancellation propagates immediately.
+    private func retryWithBackoff<T>(
+        maxAttempts: Int = 3,
+        initialDelay: TimeInterval = 1.0,
+        maxDelay: TimeInterval = 10.0,
+        _ operation: () async throws -> T
+    ) async throws -> T {
+        let transientCodes: [URLError.Code] = [
+            .timedOut, .networkConnectionLost, .notConnectedToInternet,
+            .cannotConnectToHost, .cannotFindHost, .secureConnectionFailed,
+        ]
+        var delay = initialDelay
+        var lastError: (any Error)?
+        for attempt in 1...maxAttempts {
+            do {
+                return try await operation()
+            } catch let urlError as URLError
+                    where transientCodes.contains(urlError.code) && attempt < maxAttempts {
+                authLog.notice("retryWithBackoff: attempt \(attempt)/\(maxAttempts) failed (\(urlError.code.rawValue)), retrying in \(Int(delay))s")
+                lastError = urlError
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                delay = min(delay * 2, maxDelay)
+            } catch {
+                throw error
+            }
+        }
+        throw lastError ?? URLError(.timedOut)
     }
 
     // MARK: - Helpers

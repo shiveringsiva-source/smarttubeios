@@ -23,6 +23,9 @@ extension PlaybackViewModel {
                 // scheduleControlsHide(), which cancels and restarts the 4 s hide-timer
                 // every 0.5 s, preventing controls from ever auto-hiding post-scrub.
                 guard !self.isScrubbing else { return }
+                // Also skip updates while a SponsorBlock auto-seek is in flight so we
+                // don't update currentTime to an intermediate position mid-seek.
+                guard !self.isSkippingSegment else { return }
                 self.currentTime = seconds
                 self.checkSponsorSkip(at: seconds)
                 self.updateCaptionCue(for: seconds)

@@ -57,7 +57,11 @@ extension InnerTubeAPI {
             body["browseId"] = "FEsubscriptions"
         }
         let data = try await postTV(endpoint: "browse", body: body)
-        return try parseVideoGroup(from: data, title: "Subscriptions")
+        var group = try parseVideoGroup(from: data, title: "Subscriptions")
+        // Sort newest-first so the feed is in chronological order regardless of the
+        // order YouTube's API returns tiles. Matches LocalSubscriptionFeedService behaviour.
+        group.videos.sort { ($0.publishedAt ?? .distantPast) > ($1.publishedAt ?? .distantPast) }
+        return group
     }
 
     /// Fetches the list of channels the authenticated user subscribes to (requires auth).

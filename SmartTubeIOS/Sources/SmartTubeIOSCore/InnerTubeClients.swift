@@ -19,7 +19,19 @@ package enum InnerTubeClients {
         package static let name      = "iOS"
         package static let nameID    = "5"
         package static let version   = "21.02.3"
-        package static let userAgent = "com.google.ios.youtube/\(version) (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)"
+        /// Returns the running iOS version formatted as "MAJOR_MINOR_PATCH" (or "MAJOR_MINOR"
+        /// when the patch is 0). Dynamically derived from ProcessInfo so the User-Agent always
+        /// reflects the actual device OS — prevents YouTube from rejecting requests sent from
+        /// devices running iOS versions newer than the hardcoded string.
+        package static var currentOSVersionString: String {
+            let v = ProcessInfo.processInfo.operatingSystemVersion
+            return v.patchVersion == 0
+                ? "\(v.majorVersion)_\(v.minorVersion)"
+                : "\(v.majorVersion)_\(v.minorVersion)_\(v.patchVersion)"
+        }
+        package static var userAgent: String {
+            "com.google.ios.youtube/\(version) (iPhone16,2; U; CPU iOS \(currentOSVersionString) like Mac OS X;)"
+        }
     }
 
     /// Android client — used exclusively for downloads.

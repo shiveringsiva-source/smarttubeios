@@ -383,9 +383,16 @@ public struct PlayerView: View {
                 highlightedControl = tvNextControl(from: current, direction: direction)
                 vm.showControls()
             } else if vm.controlsVisible {
-                // Controls visible but nav not started: any d-pad enters nav mode.
-                highlightedControl = .playPause
-                vm.showControls()
+                // Controls visible but nav not started yet.
+                // Left/right seeks directly (Siri Remote gen 1 edge-tap and D-pad seek UX);
+                // up/down enters control-navigation mode so the user can reach other buttons.
+                switch direction {
+                case .left:  vm.seekRelative(seconds: -Double(store.settings.seekBackSeconds))
+                case .right: vm.seekRelative(seconds: Double(store.settings.seekForwardSeconds))
+                default:
+                    highlightedControl = .playPause
+                    vm.showControls()
+                }
             } else {
                 // Controls hidden: left/right seek, up/down shows controls.
                 switch direction {
@@ -1011,6 +1018,9 @@ public struct PlayerView: View {
     private var playPauseButton: some View {
         Button { vm.togglePlayPause() } label: {
             Image(systemName: vm.isPlaying ? "pause.fill" : "play.fill")
+                // .original preserves the white foreground on tvOS even when the focus
+                // engine or button state tries to apply a system tint colour.
+                .renderingMode(.original)
                 .font(.system(size: 42 * controlScale))
                 .foregroundStyle(.white)
         }
@@ -1018,7 +1028,7 @@ public struct PlayerView: View {
         #if os(tvOS)
         .focusable(false)
         .scaleEffect(highlightedControl == .playPause ? 1.6 : 1.0)
-        .shadow(color: highlightedControl == .playPause ? .white.opacity(0.9) : .clear, radius: 16)
+        .shadow(color: highlightedControl == .playPause ? .white.opacity(0.65) : .clear, radius: 8)
         .animation(.easeInOut(duration: 0.15), value: highlightedControl)
         #endif
         .accessibilityIdentifier("player.playPauseButton")
@@ -1027,6 +1037,9 @@ public struct PlayerView: View {
     private func seekButton(symbol: String, seconds: TimeInterval, tvHighlighted: Bool = false) -> some View {
         Button { vm.seekRelative(seconds: seconds) } label: {
             Image(systemName: symbol)
+                // .original preserves the white foreground on tvOS — prevents system
+                // tinting from turning the icon into a white rectangle when highlighted.
+                .renderingMode(.original)
                 .font(.system(size: 28 * controlScale))
                 .foregroundStyle(.white)
         }
@@ -1034,7 +1047,7 @@ public struct PlayerView: View {
         #if os(tvOS)
         .focusable(false)
         .scaleEffect(tvHighlighted ? 1.55 : 1.0)
-        .shadow(color: tvHighlighted ? .white.opacity(0.85) : .clear, radius: 14)
+        .shadow(color: tvHighlighted ? .white.opacity(0.6) : .clear, radius: 7)
         .animation(.easeInOut(duration: 0.15), value: tvHighlighted)
         #endif
     }
