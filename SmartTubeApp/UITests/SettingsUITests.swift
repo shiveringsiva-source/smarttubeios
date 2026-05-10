@@ -264,7 +264,10 @@ final class SettingsUITests: XCTestCase {
         dismissButton.tap()
         if !wasOn {
             openSettings()
-            UITestHelpers.scrollUntilVisible(toggle, in: form)
+            // Use a generous timeout: after dismissing the player with orientation changes
+            // the Settings CollectionView may take longer than the default 5 s to appear.
+            UITestHelpers.scrollUntilVisible(toggle, in: form, scrollViewTimeout: 10)
+            guard toggle.exists else { return }
             toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
         }
     }

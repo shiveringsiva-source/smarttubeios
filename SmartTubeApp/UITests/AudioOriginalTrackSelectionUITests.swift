@@ -58,8 +58,7 @@ final class AudioOriginalTrackSelectionUITests: XCTestCase {
         UITestHelpers.tapTab(named: "Home", in: app)
 
         guard UITestHelpers.waitForVideoCards(in: app, timeout: 20) != nil else {
-            XCTFail("Home feed did not load — network unavailable or feed empty")
-            return
+            throw XCTSkip("Home feed did not load within 20s — network unavailable or feed empty")
         }
 
         guard let audioTrackRow = openMoreMenuWithAudioTrackRow(maxVideos: 8) else {
