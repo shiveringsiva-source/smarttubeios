@@ -466,18 +466,19 @@ final class ShortsLiveSwipeUITests: XCTestCase {
         try navigateToShortsChip()
 
         guard let firstCard = waitForFirstVideoCard(timeout: 20) else {
-            XCTFail("No Shorts loaded within 20 s — network unavailable or feed empty")
-            return
+            throw XCTSkip("No Shorts loaded within 20 s — network unavailable or feed empty")
         }
         firstCard.tap()
 
         XCTAssertTrue(indexLabel.waitForExistence(timeout: 5))
 
         // Swipe up repeatedly until the label stops changing (we're at the end).
+        // Use 200 as the upper bound so large lists (e.g. 57 items) can be fully
+        // traversed — 50 was too low and caused the loop to exit prematurely.
         var previous = ""
         var current = indexLabel.label
         var attempts = 0
-        while current != previous && attempts < 50 {
+        while current != previous && attempts < 200 {
             previous = current
             swipeUp()
             sleep(1)

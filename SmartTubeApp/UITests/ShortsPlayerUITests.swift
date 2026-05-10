@@ -28,7 +28,7 @@ final class ShortsPlayerUITests: XCTestCase {
     //
     // Used when a test needs a real stream (e.g. no-error-banner check).
     // Update this ID if the Short is deleted and the test starts skipping.
-    private static let knownGoodShortID = "To1J1B2IpPA"
+    private static let knownGoodShortID = "-8X6bbscyJs"
 
     private var app: XCUIApplication!
 
