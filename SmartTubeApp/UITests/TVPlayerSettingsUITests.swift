@@ -1,5 +1,9 @@
 import XCTest
 
+// XCUIRemote is tvOS-only. The entire file is guarded so it compiles cleanly
+// for iOS targets that share the UITests/ source directory.
+#if os(tvOS)
+
 // MARK: - TVPlayerSettingsUITests
 //
 // Verifies that the player settings menu (more menu) and its sub-pickers can be
@@ -348,3 +352,5 @@ final class TVPlayerSettingsUITests: XCTestCase {
         )
     }
 }
+
+#endif // os(tvOS)

@@ -62,6 +62,7 @@ extension PlayerView {
                 .background(moreMenuFocusedRow == .speed ? Color.white.opacity(0.15) : .clear)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .focused($moreMenuFocusedRow, equals: .speed)
+                .prefersDefaultFocus(in: moreMenuNamespace)
                 #endif
                 Divider()
                 // Quality (only when formats are available)
@@ -349,6 +350,9 @@ extension PlayerView {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         }
         .ignoresSafeArea()
+        #if os(tvOS)
+        .focusScope(moreMenuNamespace)
+        #endif
     }
 
     // MARK: - Description overlay

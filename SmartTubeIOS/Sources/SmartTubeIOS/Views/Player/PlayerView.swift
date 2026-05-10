@@ -77,6 +77,7 @@ public struct PlayerView: View {
     @Namespace var playerBodyNamespace
     /// Namespace IDs used with `.focusScope` on picker overlays so the tvOS focus
     /// engine moves focus into the overlay when it opens.
+    @Namespace var moreMenuNamespace
     @Namespace var qualityPickerNamespace
     @Namespace var speedPickerNamespace
     @Namespace var sleepTimerNamespace

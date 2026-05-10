@@ -19,7 +19,10 @@ final class SettingsUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments += ["--uitesting"]
+        // Reset settings to defaults before every test so state persisted by
+        // prior test runs (e.g. --uitesting-disable-sponsorblock from
+        // PlayerDoubleTapUITests) does not bleed into these tests.
+        app.launchArguments += ["--uitesting", "--uitesting-reset-settings"]
         app.launch()
     }
 

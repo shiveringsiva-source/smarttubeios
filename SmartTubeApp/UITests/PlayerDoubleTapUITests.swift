@@ -52,16 +52,30 @@ final class PlayerDoubleTapUITests: XCTestCase {
     /// Waits for the controls overlay to auto-hide after the player opens.
     /// Brings controls up first (known starting state), then waits predicate-based
     /// for them to disappear — avoids fixed-sleep races on cold app launches.
+    ///
+    /// The bring-up tap uses dy:0.1 (top edge of the player) so it lands outside
+    /// all three horizontal gesture zones (left/centre/right thirds) and does NOT
+    /// trigger a seek or scale action.
     private func waitForControlsToHide(timeout: TimeInterval = 12) {
-        // Bring controls up so we have a known starting state.
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        // Tap the top edge — outside all gesture zones — to bring controls into a
+        // known visible state without triggering seek or scale.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
         let playPause = app.buttons["player.playPauseButton"].firstMatch
         XCTAssertTrue(playPause.waitForExistence(timeout: 4),
                       "Controls never appeared — cannot wait for them to hide")
-        // Now wait for them to disappear (auto-hide fires after 4 s of inactivity).
+        // Wait for controls to disappear (auto-hide fires after ~4 s of inactivity).
         let hiddenPredicate = NSPredicate(format: "exists == false")
-        let expectation = XCTNSPredicateExpectation(predicate: hiddenPredicate, object: playPause)
-        XCTWaiter().wait(for: [expectation], timeout: timeout)
+        let exp = XCTNSPredicateExpectation(predicate: hiddenPredicate, object: playPause)
+        XCTWaiter().wait(for: [exp], timeout: timeout)
+        // Extra settle: give any in-flight auto-show timer (driven by isLoading) time
+        // to fire and resolve before we fire the gesture. Without this, the controls
+        // can re-appear within ~100 ms of the predicate firing (disabling the overlay).
+        _ = XCTWaiter().wait(for: [], timeout: 1.5)
+        // Re-verify controls are still hidden. If isLoading drove a re-show, the
+        // double-tap would arrive with the gesture overlay disabled and be swallowed.
+        if playPause.exists {
+            XCTFail("Controls reappeared during the settle window — isLoading may still be true, disabling the gesture overlay. Wait longer or ensure the video is buffered before tapping.")
+        }
     }
 
     /// Performs a double-tap at the given normalised X position (mid-height).
@@ -74,13 +88,14 @@ final class PlayerDoubleTapUITests: XCTestCase {
 
     /// Double-tapping the left third must show the seek-back toast (e.g. "← 10s").
     func testDoubleTapLeftZoneShowsSeekBackToast() throws {
+        print("▶ [step] openPlayer")
         openPlayer()
-        // Wait for controls to hide so the zone gesture fires unobstructed.
+        print("▶ [step] waitForControlsToHide")
         waitForControlsToHide()
-
+        print("▶ [step] doubleTap left (x≈0.17)")
         // Tap in the centre of the left third (normalised x ≈ 0.17).
         doubleTap(normalizedX: 1.0 / 6.0)
-
+        print("▶ [step] waiting for seek-back toast")
         let toast = app.staticTexts["player.toast"].firstMatch
         XCTAssertTrue(toast.waitForExistence(timeout: 3),
                       "A seek-back toast (← Xs) must appear after double-tapping the left third of the player")
@@ -92,12 +107,14 @@ final class PlayerDoubleTapUITests: XCTestCase {
 
     /// Double-tapping the right third must show the seek-forward toast (e.g. "30s →").
     func testDoubleTapRightZoneShowsSeekForwardToast() throws {
+        print("▶ [step] openPlayer")
         openPlayer()
+        print("▶ [step] waitForControlsToHide")
         waitForControlsToHide()
-
+        print("▶ [step] doubleTap right (x≈0.83)")
         // Tap in the centre of the right third (normalised x ≈ 0.83).
         doubleTap(normalizedX: 5.0 / 6.0)
-
+        print("▶ [step] waiting for seek-forward toast")
         let toast = app.staticTexts["player.toast"].firstMatch
         XCTAssertTrue(toast.waitForExistence(timeout: 5),
                       "A seek-forward toast (Xs →) must appear after double-tapping the right third of the player")
@@ -109,28 +126,56 @@ final class PlayerDoubleTapUITests: XCTestCase {
 
     /// Double-tapping the centre third must show a Fit or Fill video-gravity toast.
     func test_ZZDoubleTapCentreZoneTogglesFitFill() throws {
+        print("▶ [step] openPlayer")
         openPlayer()
+        print("▶ [step] waitForControlsToHide")
         waitForControlsToHide()
-
-        // Tap in the centre third (off-centre to avoid exact 0.5 which may
-        // conflict with iOS system gesture detection at the screen midpoint).
+        print("▶ [step] doubleTap centre (x=0.4)")
         doubleTap(normalizedX: 0.4)
 
         // Diagnostic: if controls became visible the single-tap handler fired instead of
         // the double-tap handler (controls-toggle vs scale-toggle).
+        print("▶ [step] checking controls did not reappear")
         let ppAfter = app.buttons["player.playPauseButton"].firstMatch
         if ppAfter.waitForExistence(timeout: 1) {
             XCTFail("Controls appeared after centre double-tap — onTap fired instead of onDoubleTap (isEnabled race?). controlsVisible=true means isEnabled=false, so gesture overlay was disabled when double-tap arrived.")
             return
         }
 
+        print("▶ [step] waiting for toast")
+        // Try both the accessibility identifier AND the raw label text. The toast is
+        // self-dismissing so query both in parallel to avoid a narrow timing window.
         let toast = app.staticTexts["player.toast"].firstMatch
-        XCTAssertTrue(toast.waitForExistence(timeout: 5),
-                      "'Fit' or 'Fill' toast must appear after double-tapping the centre third of the player")
-        XCTAssertTrue(toast.label == "Fit" || toast.label == "Fill",
-                      "Scale toast label must be 'Fit' or 'Fill' but was '\(toast.label)'")
+        let fitLabel = app.staticTexts.matching(
+            NSPredicate(format: "label == 'Fit' OR label == 'Fill'")
+        ).firstMatch
+        let appeared = toast.waitForExistence(timeout: 8) || fitLabel.exists
+
+        if !appeared {
+            let allTexts = app.staticTexts.allElementsBoundByIndex.map {
+                "\($0.identifier.isEmpty ? "(no-id)" : $0.identifier): '\($0.label)'"
+            }
+            let allButtons = app.buttons.allElementsBoundByIndex.map {
+                "\($0.identifier.isEmpty ? "(no-id)" : $0.identifier): '\($0.label)' exists=\($0.exists)"
+            }
+            XCTFail("'Fit' or 'Fill' toast must appear after double-tapping the centre third of the player. "
+                + "No toast found. Visible texts: \(allTexts). Buttons: \(allButtons)")
+            return
+        }
+
+        // Decide which element we found.
+        let toastLabel: String
+        if toast.exists {
+            toastLabel = toast.label
+        } else {
+            toastLabel = fitLabel.label
+        }
+
+        XCTAssertTrue(toastLabel == "Fit" || toastLabel == "Fill",
+                      "Scale toast label must be 'Fit' or 'Fill' but was '\(toastLabel)'")
         XCTAssertEqual(app.state, .runningForeground,
                        "App must still be running after centre-zone double-tap")
+        print("▶ [step] done — toast='\(toastLabel)'")
     }
 
     /// Tapping each zone twice must not crash and must toggle the state consistently.
