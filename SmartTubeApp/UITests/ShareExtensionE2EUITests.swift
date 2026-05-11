@@ -170,12 +170,24 @@ final class ShareExtensionE2EUITests: XCTestCase {
     }
 
     /// Returns the share button from Safari's toolbar or navigation bar.
+    /// Tries multiple known identifiers/labels to handle Safari toolbar changes across iOS versions.
     private func safariShareButton() throws -> XCUIElement {
+        // iOS 26 moved the address bar to the bottom; the share button may be in a
+        // different container or use a different identifier than older releases.
+        // Candidates are ordered from most-specific to most-general.
         let candidates: [XCUIElement] = [
             safari.toolbars.buttons["Share"].firstMatch,
             safari.navigationBars.buttons["Share"].firstMatch,
+            safari.buttons["ShareButton"].firstMatch,           // iOS 26 bottom toolbar
             safari.buttons["Share"].firstMatch,
+            safari.buttons["square.and.arrow.up"].firstMatch,  // SF Symbol name fallback
         ]
+        for candidate in candidates where candidate.waitForExistence(timeout: 3) {
+            return candidate
+        }
+        // If the bottom toolbar is collapsed (page was scrolled), scroll up to reveal it.
+        safari.webViews.firstMatch.swipeDown()
+        Thread.sleep(forTimeInterval: 0.5)
         for candidate in candidates where candidate.waitForExistence(timeout: 3) {
             return candidate
         }

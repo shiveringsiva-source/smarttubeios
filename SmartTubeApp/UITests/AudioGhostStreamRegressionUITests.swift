@@ -164,13 +164,17 @@ final class PlayerGhostStreamRegressionUITests: XCTestCase {
 
 final class ShortsGhostStreamRegressionUITests: XCTestCase {
 
+    /// Real YouTube Short IDs used for direct-launch testing.
+    /// Tried in order; the first set launches the Shorts player without navigating
+    /// through the home feed, avoiding auth dependency on parallel clone simulators.
+    private static let shortIDs = ["MCv4EyEFgVg", "pPvd8UxmCGY", "fKopy74weus"]
+
     private var app: XCUIApplication!
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        // Do NOT launch here — openFirstShort() launches with the Shorts deeplink.
         app = XCUIApplication()
-        app.launchArguments += ["--uitesting", "--uitesting-enable-shorts"]
-        app.launch()
     }
 
     override func tearDownWithError() throws { app = nil }
@@ -181,36 +185,21 @@ final class ShortsGhostStreamRegressionUITests: XCTestCase {
         app.staticTexts["shorts.indexLabel"].firstMatch
     }
 
-    /// Opens the Shorts chip and taps the first Short card.
+    /// Launches the Shorts player directly with real Short IDs, bypassing home feed navigation.
+    /// Uses `--uitesting-shorts-ids` so the player opens without requiring a signed-in account
+    /// on parallel clone simulators.
     private func openFirstShort() throws {
-        UITestHelpers.tapTab(named: "Home", in: app)
-        let chipBar = app.scrollViews["home.chipBar"]
-        XCTAssertTrue(chipBar.waitForExistence(timeout: 10), "home.chipBar must appear")
-        let shortsChip = chipBar.buttons["Shorts"]
-        guard shortsChip.waitForExistence(timeout: 5) else {
-            XCTFail("Shorts chip not found")
-            return
-        }
-        UITestHelpers.scrollChipIntoView(shortsChip, in: chipBar, app: app)
-        shortsChip.tap()
+        let ids = Self.shortIDs.joined(separator: ",")
+        app.launchArguments = [
+            "--uitesting",
+            "--uitesting-shorts",
+            "--uitesting-shorts-ids=\(ids)",
+        ]
+        app.launch()
 
-        // Wait for the Shorts section feed before querying cards — prevents
-        // the predicate matching stale Home-feed cards still in the tree.
-        let sectionFeed = app.scrollViews["home.sectionFeed"]
-        guard sectionFeed.waitForExistence(timeout: 20) else {
-            throw XCTSkip("Shorts section feed did not appear within 20 s — network unavailable")
+        guard indexLabel.waitForExistence(timeout: 20) else {
+            throw XCTSkip("Shorts player did not appear — network unavailable or short IDs may be stale")
         }
-
-        let feedPredicate = NSPredicate(format: "identifier BEGINSWITH 'video.card.'")
-        let cards = app.descendants(matching: .any).matching(feedPredicate)
-        let feedLoaded = XCTNSPredicateExpectation(predicate: NSPredicate(format: "count > 0"),
-                                                   object: cards)
-        guard XCTWaiter().wait(for: [feedLoaded], timeout: 10) == .completed else {
-            throw XCTSkip("Shorts feed did not load within 10 s — network unavailable")
-        }
-        cards.firstMatch.tap()
-        XCTAssertTrue(indexLabel.waitForExistence(timeout: 15),
-                      "shorts.indexLabel must appear after tapping a Short")
     }
 
     /// Taps the player until `shorts.controlsOverlay` is visible.

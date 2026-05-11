@@ -498,9 +498,10 @@ extension PlayerView {
         // to ever become true. Creating it at view-appear time (before any item
         // is loaded) means it stays permanently inert.
         .onChange(of: vm.isPlaying) { _, playing in
+            let pipUITestingOverride = ProcessInfo.processInfo.arguments.contains("--uitesting-enable-pip")
             guard playing, pipController == nil,
                   store.settings.pipEnabled,
-                  AVPictureInPictureController.isPictureInPictureSupported() else { return }
+                  pipUITestingOverride || AVPictureInPictureController.isPictureInPictureSupported() else { return }
             let pip = AVPictureInPictureController(playerLayer: playerLayer)
             pip?.canStartPictureInPictureAutomaticallyFromInline = true
             let delegate = PiPDelegate { active in isPiPActive = active }

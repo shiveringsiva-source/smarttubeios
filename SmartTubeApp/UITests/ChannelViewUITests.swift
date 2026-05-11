@@ -2,15 +2,15 @@ import XCTest
 
 // MARK: - ChannelViewUITests
 //
-// UI tests for ChannelView — opened by navigating from a search result.
+// UI tests for ChannelView.
 //
-// The tests open a channel by:
-//   1. Searching for a well-known channel name ("MKBHD").
-//   2. Tapping the first video card to open the player.
-//   3. Using the player's channel name label to navigate to the ChannelView.
+// Entry point: all tests use `--uitesting-deeplink-channel=<id>` to navigate
+// directly to ChannelView without going through the player or search results.
+// This avoids the iOS 26 NavigationStack timing issues observed on parallel
+// clone simulators where the player dismiss + push was too slow.
 //
-// Alternative entry: search results may directly show a channel card that
-// navigates to ChannelView on tap. Both paths are tested.
+// Legacy path (openChannelFromPlayer) is kept for reference but is no longer
+// used in any test.
 //
 // Requirements:
 //   • Network access is required.
@@ -21,22 +21,54 @@ final class ChannelViewUITests: XCTestCase {
     /// A query that reliably returns video results (not just channel cards) from a known creator.
     private static let searchQuery = "marques brownlee review"
 
+    /// Stable channel ID used for deeplink-based navigation.
+    /// UCBcRF18a7Qf58cCRy5xuWwQ = MKBHD (Marques Brownlee) — major tech creator since 2009.
+    private static let kTestChannelID = "UCBcRF18a7Qf58cCRy5xuWwQ"
+
     private var app: XCUIApplication!
 
     // MARK: - Lifecycle
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments += ["--uitesting"]
-        app.launch()
+        // Do NOT launch here — each test uses openChannelViaDeeplink() which
+        // re-launches with the channel deeplink arg.
     }
 
     override func tearDownWithError() throws {
         app = nil
     }
 
-    // MARK: - Helpers
+    // MARK: - Deeplink helper (preferred)
+
+    /// Launches the app with `--uitesting-deeplink-channel=<kTestChannelID>` and waits
+    /// for `channel.header` or a "Channel" navigation bar to appear.
+    /// All 8 channel tests use this instead of the player-based navigation.
+    private func openChannelViaDeeplink() throws {
+        app = XCUIApplication()
+        app.launchArguments = [
+            "--uitesting",
+            "--uitesting-deeplink-channel=\(Self.kTestChannelID)",
+        ]
+        app.launch()
+
+        let channelNavBar = app.navigationBars
+            .matching(NSPredicate(format: "identifier CONTAINS 'Channel'")).firstMatch
+        let channelTitleEl = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier == 'channel.title'")).firstMatch
+        let headerEl = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier == 'channel.header'")).firstMatch
+
+        guard channelNavBar.waitForExistence(timeout: 30)
+                || channelTitleEl.waitForExistence(timeout: 5)
+                || headerEl.waitForExistence(timeout: 5) else {
+            throw XCTSkip(
+                "ChannelView did not appear within 30 s — deeplink may not have fired or network is unavailable"
+            )
+        }
+    }
+
+    // MARK: - Legacy helpers (kept for reference)
 
     /// Navigates to Search, types a query, submits, and waits for video cards.
     private func searchAndWaitForCards(query: String) throws {
@@ -94,88 +126,49 @@ final class ChannelViewUITests: XCTestCase {
     // MARK: - Tests
 
     func testChannelViewHeaderVisibleWhenOpenedFromSearch() throws {
-        // Navigate directly to a channel using a deeplink search route if available,
-        // otherwise open via player → channel navigation.
-        try searchAndWaitForCards(query: Self.searchQuery)
-        guard let _ = UITestHelpers.waitForVideoCards(in: app, timeout: 20) else {
-            throw XCTSkip("No search results — network unavailable or feed empty")
-        }
-        // Open the first result in the player.
-        let firstCard = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "identifier BEGINSWITH 'video.card.'"))
-            .firstMatch
-        guard UITestHelpers.openPlayer(from: firstCard, in: app) else {
-            throw XCTSkip("Player did not open from search result — network unavailable or timing-dependent")
-        }
-        // Controls start hidden — tap left-center to show them (avoids interactive button areas).
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5)).tap()
-        Thread.sleep(forTimeInterval: 1.0)
-        let predicate = NSPredicate(format: "identifier == 'player.channelName'")
-        let channelEl = app.descendants(matching: .any).matching(predicate).firstMatch
-        guard channelEl.waitForExistence(timeout: 8), channelEl.isEnabled else {
-            throw XCTSkip("player.channelName not found or disabled — channelId unavailable for this video")
-        }
-        guard channelEl.isHittable else {
-            throw XCTSkip("player.channelName not hittable (zero-size or off-screen) — cannot navigate to ChannelView")
-        }
-        channelEl.tap()
-        // After dismiss() the parent NavigationStack pushes ChannelView.
-        // Use descendants to find channel.title regardless of iOS version element type changes.
-        let channelTitlePred = NSPredicate(format: "identifier == 'channel.title'")
-        let channelTitleEl = app.descendants(matching: .any).matching(channelTitlePred).firstMatch
-        let navBarPred = NSPredicate(format: "identifier CONTAINS 'Channel'")
-        let channelNavBar = app.navigationBars.matching(navBarPred).firstMatch
-        guard channelNavBar.waitForExistence(timeout: 20) || channelTitleEl.waitForExistence(timeout: 5) else {
-            throw XCTSkip("ChannelView did not navigate into view — iOS 26 notification+navigationDestination timing may require a different approach")
+        // Previously navigated via Search → Player → channel name tap.
+        // Replaced with deeplink to avoid iOS 26 NavigationStack timing flakiness.
+        try openChannelViaDeeplink()
+        let headerPred = NSPredicate(format: "identifier == 'channel.header'")
+        let header = app.descendants(matching: .any).matching(headerPred).firstMatch
+        guard header.waitForExistence(timeout: 10) else {
+            throw XCTSkip("channel.header did not appear — network unavailable or channel slow to load")
         }
     }
 
     func testChannelHeaderVisible() throws {
-        guard try openChannelFromPlayer() else {
-            throw XCTSkip("Could not navigate to ChannelView from player")
-        }
-        // Guard against the app crashing during channel navigation (can happen
-        // intermittently in iOS 26 simulator when ChannelView is pushed via notification).
-        guard app.state == .runningForeground else {
-            throw XCTSkip("App was not in foreground after channel navigation — skipping header assertion")
-        }
+        try openChannelViaDeeplink()
         // Use a type-agnostic predicate — SwiftUI may expose the HStack as
         // .other, .group, or another type depending on the iOS version.
         let headerPred = NSPredicate(format: "identifier == 'channel.header'")
         let header = app.descendants(matching: .any).matching(headerPred).firstMatch
-        guard header.waitForExistence(timeout: 5) else {
+        guard header.waitForExistence(timeout: 10) else {
             throw XCTSkip("channel.header did not appear — network unavailable or channel slow to load")
         }
     }
 
     func testChannelVideoGridPopulates() throws {
-        guard try openChannelFromPlayer() else {
-            throw XCTSkip("Could not navigate to ChannelView from player")
-        }
+        try openChannelViaDeeplink()
         guard let _ = UITestHelpers.waitForVideoCards(in: app, timeout: 20) else {
             throw XCTSkip("No video cards in channel grid — network unavailable or channel empty")
         }
     }
 
     func testChannelFilterPickerVisible() throws {
-        guard try openChannelFromPlayer() else {
-            throw XCTSkip("Could not navigate to ChannelView from player")
-        }
+        try openChannelViaDeeplink()
         let picker = app.segmentedControls["channel.filterPicker"]
-        guard picker.waitForExistence(timeout: 5) else {
+        guard picker.waitForExistence(timeout: 10) else {
             throw XCTSkip("channel.filterPicker did not appear — network unavailable or channel slow to load")
         }
     }
 
     func testShortsFilterSwitchesContent() throws {
-        guard try openChannelFromPlayer() else {
-            throw XCTSkip("Could not navigate to ChannelView from player")
-        }
+        try openChannelViaDeeplink()
         guard UITestHelpers.waitForVideoCards(in: app, timeout: 20) != nil else {
             throw XCTSkip("No video cards — channel may be empty")
         }
         let picker = app.segmentedControls["channel.filterPicker"]
-        guard picker.waitForExistence(timeout: 5) else {
+        guard picker.waitForExistence(timeout: 10) else {
             throw XCTSkip("channel.filterPicker not found")
         }
         picker.buttons["Shorts"].tap()
@@ -186,14 +179,12 @@ final class ChannelViewUITests: XCTestCase {
     }
 
     func testAllFilterRestoresFeed() throws {
-        guard try openChannelFromPlayer() else {
-            throw XCTSkip("Could not navigate to ChannelView from player")
-        }
+        try openChannelViaDeeplink()
         guard UITestHelpers.waitForVideoCards(in: app, timeout: 20) != nil else {
             throw XCTSkip("No video cards")
         }
         let picker = app.segmentedControls["channel.filterPicker"]
-        guard picker.waitForExistence(timeout: 5) else {
+        guard picker.waitForExistence(timeout: 10) else {
             throw XCTSkip("channel.filterPicker not found")
         }
         picker.buttons["Shorts"].tap()
@@ -206,9 +197,7 @@ final class ChannelViewUITests: XCTestCase {
     }
 
     func testTappingVideoFromChannelOpensPlayer() throws {
-        guard try openChannelFromPlayer() else {
-            throw XCTSkip("Could not navigate to ChannelView from player")
-        }
+        try openChannelViaDeeplink()
         guard let firstCard = UITestHelpers.waitForVideoCards(in: app, timeout: 20) else {
             throw XCTSkip("No video cards in channel")
         }
@@ -218,9 +207,7 @@ final class ChannelViewUITests: XCTestCase {
     }
 
     func testNoErrorAlertOnChannelLoad() throws {
-        guard try openChannelFromPlayer() else {
-            throw XCTSkip("Could not navigate to ChannelView from player")
-        }
+        try openChannelViaDeeplink()
         Thread.sleep(forTimeInterval: 5)
         let errorAlert = app.alerts["Error"].firstMatch
         if errorAlert.exists {

@@ -269,6 +269,22 @@ public final class BrowseViewModel {
                 }
 
             case .recommended:
+                // UI-testing injection: bypass the network fetch when
+                // `--uitesting-inject-recommended-ids=<id1,id2,...>` is present.
+                // Allows Recommended chip tests to run on unauthenticated parallel
+                // simulator clones without auth or visitor-session dependency.
+                if let arg = ProcessInfo.processInfo.arguments.first(where: {
+                    $0.hasPrefix("--uitesting-inject-recommended-ids=")
+                }) {
+                    let raw = String(arg.dropFirst("--uitesting-inject-recommended-ids=".count))
+                    let ids = raw.split(separator: ",").map(String.init).filter { !$0.isEmpty }
+                    guard !ids.isEmpty, !Task.isCancelled else { break }
+                    let videos = ids.map { Video(id: $0, title: $0, channelTitle: "Test Channel") }
+                    isAuthRequired = false
+                    recommendedUsesSearchFallback = false
+                    videoGroups = [VideoGroup(title: "Recommended", videos: videos)]
+                    break
+                }
                 let group = try await api.fetchHome()
                 if !Task.isCancelled {
                     if group.videos.isEmpty {

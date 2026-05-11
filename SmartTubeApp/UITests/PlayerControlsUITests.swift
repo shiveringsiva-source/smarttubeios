@@ -178,6 +178,12 @@ final class PlayerControlsUITests: XCTestCase {
 
     #if os(iOS)
     func testPiPButtonStartsPiP() throws {
+        // Re-launch with --uitesting-enable-pip to bypass the isPictureInPictureSupported()
+        // guard on parallel clone simulators where the entitlement may not propagate.
+        app.terminate()
+        app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--uitesting-enable-pip"]
+        app.launch()
         try openPlayerFromHome()
         showControls()
         guard pipButton.waitForExistence(timeout: 5) else {

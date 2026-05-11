@@ -22,6 +22,7 @@ struct AppEntry: App {
     #endif
     @State private var deepLinkLaunchArgConsumed = false
     @State private var pendingVideoArgConsumed = false
+    @State private var channelDeepLinkConsumed = false
     /// Shared download service for video cards. See SmartTubeIOS/RootView.swift.
     @State private var cardDownloadService: VideoDownloadService
     @Environment(\.scenePhase) private var scenePhase
@@ -72,6 +73,15 @@ struct AppEntry: App {
                 .map(\.type)
             settingsStore.settings.enabledSections = ordered
         }
+    }
+
+    /// When launched with `--uitesting-sign-out`, clears the in-memory auth session
+    /// so UI tests can verify signed-out UI on a simulator with a real account stored
+    /// in the keychain. Keychain credentials are preserved and will be used again on
+    /// the next cold start — this only affects the current app launch.
+    private func signOutIfNeeded() {
+        guard ProcessInfo.processInfo.arguments.contains("--uitesting-sign-out") else { return }
+        authService.clearSession()
     }
 
     var body: some Scene {
@@ -175,6 +185,7 @@ struct AppEntry: App {
                             consumePendingVideoID()
                             consumePendingVideoFromLaunchArgs()
                             consumeDeepLinkFromLaunchArgs()
+                            consumeChannelDeepLinkFromLaunchArgs()
                             authService.handleForeground()
                             browseViewModel.refreshIfStale()
                             consumePendingRSSFeedURL()
@@ -193,7 +204,10 @@ struct AppEntry: App {
                             #endif
                         }
                     }
-                    .onAppear { enableShortsIfNeeded() }
+                    .onAppear {
+                        enableShortsIfNeeded()
+                        signOutIfNeeded()
+                    }
                     #if os(iOS)
                     .alert(item: $watchLaterAlert) { item in
                         Alert(
@@ -356,6 +370,31 @@ struct AppEntry: App {
         guard !videoID.isEmpty else { return }
         pendingVideoArgConsumed = true
         browseViewModel.deepLinkedVideo = Video(id: videoID, title: "", channelTitle: "")
+    }
+
+    /// Handles `--uitesting-deeplink-channel=<channelId>` launch argument.
+    ///
+    /// Posts `.openChannel` via NotificationCenter so the active navigation host
+    /// (HomeView, BrowseView, or PlaylistView) pushes `ChannelView` directly,
+    /// bypassing the need to navigate through the player or search results.
+    /// Fires only once per launch so repeated `.active` transitions are no-ops.
+    @MainActor
+    private func consumeChannelDeepLinkFromLaunchArgs() {
+        guard !channelDeepLinkConsumed else { return }
+        let args = ProcessInfo.processInfo.arguments
+        guard let arg = args.first(where: { $0.hasPrefix("--uitesting-deeplink-channel=") }) else { return }
+        let channelID = String(arg.dropFirst("--uitesting-deeplink-channel=".count))
+        guard !channelID.isEmpty else { return }
+        channelDeepLinkConsumed = true
+        // Wrap in a Task to yield one run-loop tick so the HomeView's
+        // onReceive(.openChannel) handler is registered before the notification fires.
+        Task { @MainActor in
+            NotificationCenter.default.post(
+                name: Notification.Name("com.smarttube.openChannel"),
+                object: nil,
+                userInfo: ["channelId": channelID, "channelTitle": ""]
+            )
+        }
     }
 
     // MARK: - Stub data for UI testing

@@ -279,20 +279,21 @@ final class PlayerLiveSwipeUITests: XCTestCase {
             throw XCTSkip("Player controls-visible swipe not yet adapted for iPad layout")
         }
 
-        openHomeTab()
+        // Open a known-good video via deeplink so the test doesn't depend on the
+        // Home feed loading (which requires auth on parallel clone simulators).
+        // Rick Astley — Never Gonna Give You Up: stable, public, always has related videos.
+        app.terminate()
+        app.launchArguments = ["--uitesting", "--uitesting-deeplink-video=dQw4w9WgXcQ",
+                               "--uitesting-disable-sponsorblock"]
+        app.launch()
 
-        guard let card = waitForFirstVideoCard(timeout: 20) else {
-            throw XCTSkip("No video cards loaded within 20 s — network unavailable or feed empty")
-        }
-        card.tap()
-
-        guard titleLabel.waitForExistence(timeout: 15) else {
+        guard titleLabel.waitForExistence(timeout: 20) else {
             throw XCTSkip("Player did not open — network unavailable")
         }
 
-        // Wait for related videos (controls not shown, just using time).
-        guard waitForControlsWithNextEnabled(timeout: 20) else {
-            throw XCTSkip("Related videos did not load within 20 s — network unavailable")
+        // Wait up to 30 s for related videos (hasNext = true) to ensure swipe-left works.
+        guard waitForControlsWithNextEnabled(timeout: 30) else {
+            throw XCTSkip("Related videos did not load within 30 s — network unavailable")
         }
         // By now playerInfo has had time to load; wait for non-empty title.
         let nonEmptyPred2 = NSPredicate(format: "label != ''")

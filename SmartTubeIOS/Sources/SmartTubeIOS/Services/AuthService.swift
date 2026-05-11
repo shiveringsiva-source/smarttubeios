@@ -197,6 +197,23 @@ public final class AuthService {
         clearKeychain()
     }
 
+    /// Clears the in-memory auth session without touching the keychain.
+    /// Used by `--uitesting-sign-out` so UI tests can verify signed-out UI on a
+    /// simulator that has real credentials stored in the keychain.
+    public func clearSession() {
+        pollTask?.cancel()
+        pollTask = nil
+        tokenRefreshTask?.cancel()
+        tokenRefreshTask = nil
+        accessToken      = nil
+        refreshToken     = nil
+        tokenExpiry      = nil
+        accountName      = nil
+        accountAvatarURL = nil
+        isSignedIn       = false
+        pendingActivation = nil
+    }
+
     /// Returns a valid access token, refreshing if necessary.
     public func validAccessToken() async throws -> String {
         if let t = accessToken, let exp = tokenExpiry, exp > Date() { return t }

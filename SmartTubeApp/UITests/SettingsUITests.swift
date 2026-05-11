@@ -164,19 +164,20 @@ final class SettingsUITests: XCTestCase {
     }
 
     func testSignInButtonVisibleWhenSignedOut() throws {
+        // Re-launch with --uitesting-sign-out so the in-memory auth session is
+        // cleared at startup. This allows the test to assert sign-in UI even on
+        // a simulator that has real account credentials in the keychain.
+        app.terminate()
+        app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--uitesting-reset-settings", "--uitesting-sign-out"]
+        app.launch()
         openSettings()
         // In SwiftUI Form, Button rows expose their text as the element's label, not as a
         // child staticText.  Use a predicate that matches either by identifier or by label.
         let signInPredicate = NSPredicate(format: "identifier == 'settings.signInButton' OR label == 'Sign in with Google'")
-        let signOutPredicate = NSPredicate(format: "label == 'Sign Out'")
-        let signInEl  = app.descendants(matching: .any).matching(signInPredicate).firstMatch
-        let signOutEl = app.descendants(matching: .any).matching(signOutPredicate).firstMatch
-        // If signed in, skip — we can't test the sign-in button without signing out first.
-        if signOutEl.waitForExistence(timeout: 5) {
-            throw XCTSkip("Account is signed in — skipping signed-out UI assertion")
-        }
+        let signInEl = app.descendants(matching: .any).matching(signInPredicate).firstMatch
         XCTAssertTrue(signInEl.waitForExistence(timeout: 5),
-                      "'Sign in with Google' button must be visible when no account is signed in")
+                      "'Sign in with Google' button must be visible when the session is cleared via --uitesting-sign-out")
     }
 
     func testLandscapeAlwaysPlayToggleExistsAndToggles() {

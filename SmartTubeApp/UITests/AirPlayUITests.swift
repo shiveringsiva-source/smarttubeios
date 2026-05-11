@@ -25,7 +25,9 @@ final class AirPlayUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments += ["--uitesting"]
+        // --uitesting-enable-pip bypasses AVPictureInPictureController.isPictureInPictureSupported()
+        // on parallel clone simulators where entitlements may not propagate.
+        app.launchArguments += ["--uitesting", "--uitesting-enable-pip"]
         app.launch()
     }
 
