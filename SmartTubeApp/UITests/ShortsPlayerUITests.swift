@@ -98,7 +98,7 @@ final class ShortsPlayerUITests: XCTestCase {
         // Wait for the Shorts section feed ScrollView before querying cards.
         // Without this guard the predicate below can match stale Home-feed cards
         // still in the accessibility tree during the section-switch animation.
-        let sectionFeed = app.descendants(matching: .any)["home.sectionFeed"]
+        let sectionFeed = app.descendants(matching: .any)["home.sectionContainer"]
         guard sectionFeed.waitForExistence(timeout: 20) else {
             throw XCTSkip("Shorts section feed did not appear within 20 s — network unavailable or Shorts empty")
         }
@@ -163,15 +163,17 @@ final class ShortsPlayerUITests: XCTestCase {
     /// Verifies the back button in the Shorts player is tappable and does not crash the app.
     /// Uses direct-launch with real Short IDs to avoid auth dependency on parallel clone simulators.
     func testBackButtonDismissesShortsPlayer() throws {
-        launchWithRealShorts(ids: Self.knownGoodShortIDs)
+        app.launchArguments = ["--uitesting", "--uitesting-shorts",
+                               "--uitesting-shorts-ids=\(Self.knownGoodShortIDs.joined(separator: ","))",
+                               "--uitesting-show-controls"]
+        app.launch()
         guard indexLabel.waitForExistence(timeout: 40) else {
             throw XCTSkip("Shorts player did not appear — network unavailable or Short IDs may be stale")
         }
-        showShortsControls()
-
+        // Controls are shown immediately via --uitesting-show-controls.
         let backPred = NSPredicate(format: "identifier == 'shorts.backButton'")
         let backBtn = app.descendants(matching: .any).matching(backPred).firstMatch
-        guard backBtn.waitForExistence(timeout: 5) else {
+        guard backBtn.waitForExistence(timeout: 10) else {
             throw XCTSkip("shorts.backButton did not appear — controls may not be visible")
         }
         backBtn.tap()

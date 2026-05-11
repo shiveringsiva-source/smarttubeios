@@ -151,11 +151,23 @@ public final class BrowseViewModel {
             let raw = String(arg.dropFirst("--uitesting-inject-recommended-ids=".count))
             let ids = raw.split(separator: ",").map(String.init).filter { !$0.isEmpty }
             if !ids.isEmpty {
-                let videos = ids.map { Video(id: $0, title: $0, channelTitle: "Test Channel") }
+                let baseVideos = ids.map { Video(id: $0, title: $0, channelTitle: "Test Channel") }
                 isAuthRequired = false
                 recommendedUsesSearchFallback = false
                 isLoading = false
-                videoGroups = [VideoGroup(title: "Recommended", videos: videos)]
+                // Use .row layout (eager HStack inside ScrollView(.horizontal)) so all cards
+                // are always rendered in the accessibility tree on iOS 26. LazyVGrid (.grid)
+                // uses lazy rendering and its items do not appear in the XCTest accessibility tree.
+                // Create 5 rows so the vertical scroll view has enough content for scroll-position
+                // tests to swipe and move rows off-screen.
+                videoGroups = (0..<5).map { rowIdx in
+                    let rowVideos = ids.enumerated().map { i, id in
+                        Video(id: rowIdx == 0 ? id : "\(id)-\(rowIdx)",
+                              title: id, channelTitle: "Test Channel")
+                    }
+                    return VideoGroup(title: rowIdx == 0 ? "Recommended" : nil,
+                                      videos: rowVideos, layout: .row)
+                }
                 browseLog.notice("UI-testing inject: populated \(ids.count) recommended videos synchronously")
                 return
             }

@@ -438,9 +438,12 @@ extension PlayerView {
             // verify focus routing without relying on gesture delivery, which is
             // unreliable on the tvOS simulator.
             // Called AFTER load() so it runs after controlsVisible is reset to false.
+            // cancelControlsHide() keeps the overlay permanently on screen for tests
+            // that need to interact with controls elements.
             if ProcessInfo.processInfo.arguments.contains("--uitesting-show-controls") {
                 swipeLog.notice("[tv] --uitesting-show-controls launch arg detected — calling showControls()")
                 vm.showControls()
+                vm.cancelControlsHide()
             }
             if ProcessInfo.processInfo.arguments.contains("--uitesting-open-more-menu") {
                 swipeLog.notice("[tv] --uitesting-open-more-menu launch arg detected — scheduling showMoreMenu=true after focus settles")

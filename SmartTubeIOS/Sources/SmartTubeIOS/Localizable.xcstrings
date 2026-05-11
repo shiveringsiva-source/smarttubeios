@@ -1777,6 +1777,12 @@
         }
       }
     },
+    "Audio Only" : {
+
+    },
+    "Audio only — thumbnail" : {
+
+    },
     "Audio Track" : {
       "comment" : "Player more-menu option and picker header",
       "extractionState" : "manual",
@@ -4950,6 +4956,9 @@
 
     },
     "Follow channels to see their latest videos here" : {
+
+    },
+    "Force IPv4 (VPN users)" : {
 
     },
     "French" : {
@@ -14777,6 +14786,9 @@
           }
         }
       }
+    },
+    "Video has been saved to your Photos library." : {
+
     },
     "View count" : {
       "comment" : "Search sort order option",

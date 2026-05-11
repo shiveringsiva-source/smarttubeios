@@ -61,9 +61,9 @@ final class SubscriptionsScrollRestorationUITests: XCTestCase {
 
         // 3. Wait for home.sectionFeed to appear — this confirms the section switch
         //    has occurred and the Home feed is rendering.
-        let feedScrollView = app.descendants(matching: .any)["home.sectionFeed"]
+        let feedScrollView = app.descendants(matching: .any)["home.sectionContainer"]
         guard feedScrollView.waitForExistence(timeout: 30) else {
-            throw XCTSkip("home.sectionFeed did not appear within 30 s — Home feed may not have loaded")
+            throw XCTSkip("home.sectionContainer did not appear within 30 s — Home feed may not have loaded")
         }
 
         // 4. Wait for at least one video card inside the section feed.

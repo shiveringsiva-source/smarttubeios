@@ -575,6 +575,22 @@ extension PlaybackViewModel {
         guard !Task.isCancelled else { return }
 
         // --- Related videos + like status ---
+        // UI testing inject: bypass all network fetches for related videos.
+        // Used by testPlayerSwipeRightWorksWhenControlsAreVisible which runs on
+        // clone simulators that may lack network access for playerInfo.
+        if let relArg = ProcessInfo.processInfo.arguments.first(where: {
+            $0.hasPrefix("--uitesting-inject-related-video-ids=")
+        }) {
+            let raw = String(relArg.dropFirst("--uitesting-inject-related-video-ids=".count))
+            let ids = raw.split(separator: ",").map(String.init).filter { !$0.isEmpty }
+            if !ids.isEmpty {
+                relatedVideos = ids.map { Video(id: $0, title: $0, channelTitle: "Test Channel") }
+                hasNext = true
+                playerLog.notice("UI-testing inject: set \(ids.count) related videos synchronously")
+                // fall through to remainder of loading (chapters, endCards, etc.)
+            }
+        } else {
+
         // Fresh cache hit: use immediately (no network).
         // Stale cache hit: stale data was already returned by consume() — revalidate silently in background.
         // Full miss: live blocking fetch so relatedVideos is populated before the panel opens.
@@ -611,6 +627,8 @@ extension PlaybackViewModel {
         }
         if let status = nextInfo?.likeStatus { likeStatus = status }
         if let ch = nextInfo?.chapters, !ch.isEmpty { chapters = ch }
+
+        } // end of non-inject related-videos branch
 
         guard !Task.isCancelled else { return }
 

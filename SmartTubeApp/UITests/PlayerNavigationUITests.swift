@@ -279,26 +279,31 @@ final class PlayerLiveSwipeUITests: XCTestCase {
             throw XCTSkip("Player controls-visible swipe not yet adapted for iPad layout")
         }
 
-        // Open a known-good video via deeplink so the test doesn't depend on the
-        // Home feed loading (which requires auth on parallel clone simulators).
-        // Rick Astley — Never Gonna Give You Up: stable, public, always has related videos.
+        // Open Rick Astley via deeplink with:
+        //   --uitesting-inject-related-video-ids: bypasses InnerTube fetch so hasNext=true
+        //     immediately on clone simulators that may lack network for playerInfo.
+        //   --uitesting-show-controls: shows controls overlay on launch (+ cancelControlsHide)
+        //     so player.nextBtn is immediately accessible without relying on tap delivery.
         app.terminate()
-        app.launchArguments = ["--uitesting", "--uitesting-deeplink-video=dQw4w9WgXcQ",
-                               "--uitesting-disable-sponsorblock"]
+        app.launchArguments = ["--uitesting",
+                               "--uitesting-deeplink-video=dQw4w9WgXcQ",
+                               "--uitesting-disable-sponsorblock",
+                               "--uitesting-inject-related-video-ids=9bZkp7q19f0,MCv4EyEFgVg,pPvd8UxmCGY",
+                               "--uitesting-show-controls"]
         app.launch()
 
         guard titleLabel.waitForExistence(timeout: 20) else {
             throw XCTSkip("Player did not open — network unavailable")
         }
 
-        // Wait up to 30 s for related videos (hasNext = true) to ensure swipe-left works.
-        guard waitForControlsWithNextEnabled(timeout: 30) else {
-            throw XCTSkip("Related videos did not load within 30 s — network unavailable")
+        // With inject + show-controls, player.nextBtn should be enabled within seconds.
+        guard waitForControlsWithNextEnabled(timeout: 15) else {
+            throw XCTSkip("player.nextBtn did not become enabled within 15 s — inject may not have applied")
         }
-        // By now playerInfo has had time to load; wait for non-empty title.
+        // Wait for non-empty title (playerInfo loads from network even with inject).
         let nonEmptyPred2 = NSPredicate(format: "label != ''")
         let titleHasText2 = XCTNSPredicateExpectation(predicate: nonEmptyPred2, object: titleLabel)
-        guard XCTWaiter().wait(for: [titleHasText2], timeout: 5) == .completed else {
+        guard XCTWaiter().wait(for: [titleHasText2], timeout: 10) == .completed else {
             throw XCTSkip("Title label stayed empty after controls loaded — playerInfo did not load (network unavailable)")
         }
         let firstTitle = titleLabel.label

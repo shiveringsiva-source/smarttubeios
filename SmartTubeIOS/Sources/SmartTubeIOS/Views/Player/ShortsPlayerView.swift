@@ -211,8 +211,11 @@ public struct ShortsPlayerView: View {
             // accessibility of the controls elements without relying on gesture
             // delivery, which is unreliable in the simulator.
             // Called AFTER loadVideo so it runs after controlsVisible is reset.
+            // cancelControlsHide() keeps the overlay permanently visible so tests
+            // do not race against the 4 s auto-hide timer.
             if ProcessInfo.processInfo.arguments.contains("--uitesting-show-controls") {
                 vm.showControls()
+                vm.cancelControlsHide()
             }
         }
         .onDisappear {

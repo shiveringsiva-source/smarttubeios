@@ -225,17 +225,28 @@ final class ShortsGhostStreamRegressionUITests: XCTestCase {
     /// After the fix the idempotency guard keeps `currentIndex` and the loaded video
     /// unchanged, so the index label should show the same value before and after.
     func testIndexUnchangedAfterChannelNavAndBack() throws {
-        try openFirstShort()
+        // Launch with --uitesting-show-controls so the overlay is immediately visible
+        // without relying on tap-to-show (UIKit gesture delivery is unreliable on
+        // clone simulators). cancelControlsHide() in ShortsPlayerView keeps the
+        // overlay permanently on screen for the duration of the test.
+        let ids = Self.shortIDs.joined(separator: ",")
+        app.launchArguments = [
+            "--uitesting",
+            "--uitesting-shorts",
+            "--uitesting-shorts-ids=\(ids)",
+            "--uitesting-show-controls",
+        ]
+        app.launch()
+        guard indexLabel.waitForExistence(timeout: 20) else {
+            throw XCTSkip("Shorts player did not appear — network unavailable or short IDs may be stale")
+        }
         let indexBefore = indexLabel.label
-
-        // Show the overlay so the channel button is on screen.
-        showControls()
 
         // Tap the channel button (added identifier `shorts.channelButton`).
         let channelPred = NSPredicate(format: "identifier == 'shorts.channelButton'")
         let channelButton = app.descendants(matching: .any).matching(channelPred).firstMatch
 
-        guard channelButton.waitForExistence(timeout: 5), channelButton.isEnabled else {
+        guard channelButton.waitForExistence(timeout: 10), channelButton.isEnabled else {
             throw XCTSkip("shorts.channelButton not found or disabled — channelId unavailable for this Short")
         }
         channelButton.tap()

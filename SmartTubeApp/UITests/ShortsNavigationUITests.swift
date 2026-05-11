@@ -396,7 +396,7 @@ final class ShortsLiveSwipeUITests: XCTestCase {
 
         // Wait for the Shorts section feed before querying cards — prevents
         // the predicate matching stale Home-feed cards still in the tree.
-        let sectionFeed = app.descendants(matching: .any)["home.sectionFeed"]
+        let sectionFeed = app.descendants(matching: .any)["home.sectionContainer"]
         guard sectionFeed.waitForExistence(timeout: 20) else { return }
     }
 
