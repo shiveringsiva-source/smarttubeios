@@ -219,6 +219,7 @@ extension PlayerView {
         #if os(iOS)
         .toast(message: $scaleToast)
         .toast(message: $seekToastMessage)
+        .toast(message: Binding(get: { vm.toastMessage }, set: { vm.toastMessage = $0 }))
         #endif
         #if os(tvOS)
         // When no overlay is open, the outer view is the exclusive focus target and

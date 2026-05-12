@@ -9,8 +9,11 @@ private let audioOnlyLog = CrashlyticsLogger(category: "AudioOnly")
 extension PlaybackViewModel {
 
     /// Toggles audio-only mode on the **currently playing video** immediately.
-    /// - Turning ON: saves playback position, loads the audio-only item, seeks back.
-    /// - Turning OFF: saves playback position, reloads HLS video item, seeks back.
+    /// - Turning ON: overlay appears immediately; attempts to swap to an audio-only
+    ///   stream in the background. If the swap fails, the overlay stays visible with
+    ///   HLS audio playing underneath — the setting is NOT reverted.
+    /// - Turning OFF: overlay hides; reloads HLS only if an audio-only stream was
+    ///   successfully loaded (tracked by `audioOnlyItemActive`).
     /// The caller is responsible for persisting `store.settings.audioOnlyMode`.
     @MainActor
     func toggleAudioOnlyLive() {
@@ -19,14 +22,21 @@ extension PlaybackViewModel {
         settings.audioOnlyMode = isAudioOnlyMode
 
         if isAudioOnlyMode {
+            // Overlay shows immediately via isAudioOnlyMode = true.
+            // Attempt stream swap in background; failure does NOT revert the overlay.
             Task { [weak self] in
                 guard let self else { return }
-                await self.loadAudioOnlyItemIfEnabled(seekTo: savedTime)
+                await self.loadAudioOnlyItemIfEnabled(seekTo: savedTime, liveToggle: true)
             }
         } else {
-            Task { [weak self] in
-                guard let self else { return }
-                await self.reloadHLSItem(seekTo: savedTime, qualityCap: nil)
+            // Only reload HLS if we actually swapped to an audio-only stream;
+            // otherwise HLS is already playing and no reload is needed.
+            if audioOnlyItemActive {
+                audioOnlyItemActive = false
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.reloadHLSItem(seekTo: savedTime, qualityCap: nil)
+                }
             }
         }
     }
@@ -36,7 +46,11 @@ extension PlaybackViewModel {
     ///
     /// The existing HLS item is already loaded when this runs. If every audio-only
     /// attempt fails the HLS item remains active — the user gets video silently.
-    func loadAudioOnlyItemIfEnabled(seekTo seekTime: TimeInterval = 0) async {
+    /// - Parameter liveToggle: When `true` (called from `toggleAudioOnlyLive`), audio
+    ///   load failures do NOT revert `isAudioOnlyMode` — the overlay stays visible with
+    ///   HLS audio playing underneath. When `false` (new video load), failures silently
+    ///   fall back to HLS and reset the flag.
+    func loadAudioOnlyItemIfEnabled(seekTo seekTime: TimeInterval = 0, liveToggle: Bool = false) async {
         guard isAudioOnlyMode else { return }
         guard let info = playerInfo else { return }
 
@@ -54,7 +68,7 @@ extension PlaybackViewModel {
         }
 
         // Attempt 2: android_vr client — no PO Token required for unauthenticated users.
-        await retryAudioOnlyWithAndroidVR(videoId: info.video.id, seekTo: seekTime)
+        await retryAudioOnlyWithAndroidVR(videoId: info.video.id, seekTo: seekTime, liveToggle: liveToggle)
     }
 
     /// Builds an `AVURLAsset` for the given audio URL, checks playability, and replaces
@@ -86,6 +100,7 @@ extension PlaybackViewModel {
                 case .failed:
                     let err = item.error.map { "\($0)" } ?? "nil"
                     audioOnlyLog.error("❌ Audio-only AVPlayerItem failed: \(err)")
+                    self.audioOnlyItemActive = false
                     // Reset the flag so the UI re-shows the video layer.
                     // The HLS item placed by the primary load path is no longer the
                     // current item at this point, so also clear the error display.
@@ -99,6 +114,7 @@ extension PlaybackViewModel {
             }
         }
 
+        audioOnlyItemActive = true
         player.replaceCurrentItem(with: item)
         audioOnlyLog.notice("Audio-only: loaded \(url.absoluteString.prefix(80))")
         return true
@@ -106,7 +122,7 @@ extension PlaybackViewModel {
 
     /// Fetches player info with the android_vr client and retries loading the audio URL.
     /// Falls back to the existing HLS item (already in player) on any failure.
-    private func retryAudioOnlyWithAndroidVR(videoId: String, seekTo seekTime: TimeInterval = 0) async {
+    private func retryAudioOnlyWithAndroidVR(videoId: String, seekTo seekTime: TimeInterval = 0, liveToggle: Bool = false) async {
         do {
             let vrInfo = try await api.fetchPlayerInfoAndroidVR(videoId: videoId)
             if let url = vrInfo.bestAdaptiveAudioURL {
@@ -117,9 +133,17 @@ extension PlaybackViewModel {
             audioOnlyLog.error("Audio-only: android_vr fetch failed: \(error)")
         }
 
-        // Both attempts failed — the HLS item is already in the player. Reset the flag
-        // so the UI re-shows the video layer rather than a blank thumbnail overlay.
-        audioOnlyLog.notice("Audio-only: all attempts failed, falling back to HLS")
-        isAudioOnlyMode = false
+        // Both attempts failed.
+        audioOnlyItemActive = false
+        if liveToggle {
+            // Live toggle: keep overlay showing with HLS audio underneath.
+            // Don't reset isAudioOnlyMode — the user's preference stays.
+            audioOnlyLog.notice("Audio-only: all attempts failed (live toggle) — overlay stays, HLS audio continues")
+            toastMessage = "Audio-only stream unavailable — showing thumbnail"
+        } else {
+            // New video load: silently fall back to HLS video.
+            audioOnlyLog.notice("Audio-only: all attempts failed, falling back to HLS")
+            isAudioOnlyMode = false
+        }
     }
 }

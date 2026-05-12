@@ -98,12 +98,6 @@ See [CHANGELOG.md](CHANGELOG.md) for a full version history.
 
 ---
 
-## Support
-
-If you find SmartTube useful, consider supporting development on [Ko-fi](https://ko-fi.com/milikadelic).
-
----
-
 ## License
 
 [GPL-3.0](LICENSE)

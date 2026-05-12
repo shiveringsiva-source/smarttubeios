@@ -94,6 +94,9 @@ public final class PlaybackViewModel {
     /// When `true`, the player loads only the audio-only adaptive stream and displays
     /// the video thumbnail in place of the player layer. Updated from `AppSettings.audioOnlyMode`.
     public var isAudioOnlyMode: Bool = false
+    /// `true` when an actual audio-only AVPlayerItem (not HLS) is the current item.
+    /// Used by `toggleAudioOnlyLive` to decide whether to reload HLS on turn-off.
+    var audioOnlyItemActive: Bool = false
 
     // MARK: - Captions
 
