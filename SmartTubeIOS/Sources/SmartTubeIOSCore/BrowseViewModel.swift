@@ -33,6 +33,10 @@ public final class BrowseViewModel {
     /// Populated when the current section is `.channels`; empty for all other sections.
     public private(set) var subscribedChannels: [Channel] = []
     public private(set) var isLoading: Bool = false
+    /// True while a pagination (loadMore) request is in flight. Distinct from `isLoading`,
+    /// which covers the initial/refresh fetch. Keeping these separate prevents the preload
+    /// cache work that follows the initial fetch from blocking subsequent loadMore calls.
+    private var isLoadingMore: Bool = false
     public var error: Error?
     /// True when the current section requires authentication and the user is not signed in.
     public private(set) var isAuthRequired: Bool = false
@@ -181,14 +185,14 @@ public final class BrowseViewModel {
               let lastInGroup = lastGroup.videos.last,
               lastInGroup.id == lastVideo.id,
               lastGroup.nextPageToken != nil,
-              !isLoading
+              !isLoadingMore
         else {
             let hasToken = videoGroups.last?.nextPageToken != nil
-            browseLog.notice("loadMore skipped: section=\(currentSection.title) isLoading=\(isLoading) hasToken=\(hasToken) lastVideoMatch=\(videoGroups.last?.videos.last?.id == lastVideo.id)")
+            browseLog.notice("loadMore skipped: section=\(currentSection.title) isLoading=\(isLoading) isLoadingMore=\(isLoadingMore) hasToken=\(hasToken) lastVideoMatch=\(videoGroups.last?.videos.last?.id == lastVideo.id)")
             return
         }
         browseLog.notice("loadMore triggered: section=\(currentSection.title) currentCount=\(videoGroups.first?.videos.count ?? 0)")
-        isLoading = true  // synchronous guard — prevents duplicate tasks before the Task body runs
+        isLoadingMore = true  // synchronous guard — prevents duplicate pagination tasks before the Task body runs
         fetchTask = Task { await fetchNextPage(for: currentSection) }
     }
 
@@ -441,8 +445,8 @@ public final class BrowseViewModel {
             return
         }
         browseLog.notice("fetchNextPage start: section=\(section.title) token=\(token.prefix(20))…")
-        isLoading = true
-        defer { isLoading = false }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
         do {
             switch section.type {
             case .home:
