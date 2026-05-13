@@ -13,7 +13,12 @@ private let playerLog = CrashlyticsLogger(category: "Player")
 extension PlaybackViewModel {
 
     public func load(video: Video) {
-        playerLog.notice("[load] load() called — id=\(video.id) currentVideo=\(self.currentVideo?.id ?? "nil") isLoading=\(self.isLoading)")
+        playerLog.notice("[load] load() called — id=\(video.id) currentVideo=\(self.currentVideo?.id ?? "nil") isLoading=\(self.isLoading) player.item=\(self.player.currentItem != nil)")
+        if currentVideo?.id == video.id, !isLoading {
+            playerLog.notice("[load] re-opening same video \(video.id) — stop() may have deactivated AVAudioSession")
+        } else if let prev = currentVideo, prev.id != video.id, !isLoading {
+            playerLog.notice("[load] switching from \(prev.id) to \(video.id) after stop()")
+        }
         // If the exact same video is already being loaded, ignore the duplicate call.
         // SwiftUI can trigger load() multiple times during a single navigation (e.g.
         // selectedVideo binding re-evaluated while a queue autoplay is in flight).
@@ -202,7 +207,7 @@ extension PlaybackViewModel {
         isLoading = true
         // Note: isLoading = false is set explicitly after AVPlayer setup (Phase 1 end),
         // not via defer, so Phase 2 background work does not delay the spinner dismissal.
-        playerLog.notice("load video id=\(video.id) title=\(video.title)")
+        playerLog.notice("[loadAsync] start id=\(video.id) title=\(video.title) player.rate=\(self.player.rate) timeControlStatus=\(self.player.timeControlStatus.rawValue)")
         do {
             // --- Cache-first load ---
             // Check VideoPreloadCache for all data types. Fresh hits skip the network
@@ -420,7 +425,7 @@ extension PlaybackViewModel {
                     guard let self, !Task.isCancelled else { return }
                     switch status {
                     case .readyToPlay:
-                        playerLog.notice("✅ AVPlayerItem readyToPlay")
+                        playerLog.notice("✅ AVPlayerItem readyToPlay — video=\(self.currentVideo?.id ?? "nil") rate=\(self.player.rate) timeControlStatus=\(self.player.timeControlStatus.rawValue) isAudioOnlyMode=\(self.isAudioOnlyMode)")
                         if let pos = self.savedPositionToRestore, pos > 0 {
                             self.savedPositionToRestore = nil
                             self.seek(to: pos)
@@ -488,9 +493,20 @@ extension PlaybackViewModel {
             // Commands are removed in suspend()/stop(); re-registering here
             // ensures they work when load() is called after a stop().
             setupRemoteCommandCenter()
+            // Re-activate the audio session. stop() calls setActive(false) to release
+            // the session to other apps; without this call on the next load() the player
+            // starts silently because AVFoundation cannot acquire the inactive session.
+            do {
+                try AVAudioSession.sharedInstance().setActive(true)
+                playerLog.notice("[loadAsync] AVAudioSession activated before playback")
+            } catch {
+                playerLog.error("[loadAsync] AVAudioSession setActive(true) failed: \(error.localizedDescription)")
+            }
             #endif
+            playerLog.notice("[loadAsync] setting rate=\(self.settings.playbackSpeed) — player.timeControlStatus=\(self.player.timeControlStatus.rawValue) isAudioOnlyMode=\(self.isAudioOnlyMode)")
             player.rate = Float(settings.playbackSpeed)
             isPlaying = true
+            playerLog.notice("[loadAsync] rate set — player.rate=\(self.player.rate) timeControlStatus=\(self.player.timeControlStatus.rawValue)")
             #if canImport(UIKit)
             UIApplication.shared.isIdleTimerDisabled = true
             updateNowPlayingInfo()
