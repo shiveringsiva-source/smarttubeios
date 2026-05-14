@@ -80,7 +80,11 @@ extension InnerTubeAPI {
             return videos
         }
 
-        func walk(_ obj: Any) {
+        func walk(_ obj: Any, depth: Int = 0) {
+            guard depth < 50 else {
+                tubeLog.warning("parseHomeSections: walk depth limit (50) reached — skipping subtree")
+                return
+            }
             if let dict = obj as? [String: Any] {
                 if let shelf = dict["richShelfRenderer"] as? [String: Any] {
                     let title = (shelf["title"] as? [String: Any]).flatMap { extractText($0) }
@@ -115,15 +119,15 @@ extension InnerTubeAPI {
                         tubeLog.debug("walk: skipping ad richSectionRenderer content keys=\(contentKeys, privacy: .public)")
                     } else if !contentKeys.contains("richShelfRenderer") {
                         tubeLog.notice("walk: unrecognised richSectionRenderer — add key to adRendererKeys if it is an ad\nkeys=\(contentKeys, privacy: .public)\nJSON=\(dumpJSON(content), privacy: .public)")
-                        for value in dict.values { walk(value) }
+                        for value in dict.values { walk(value, depth: depth + 1) }
                     } else {
-                        for value in dict.values { walk(value) }
+                        for value in dict.values { walk(value, depth: depth + 1) }
                     }
                     return
                 }
-                for value in dict.values { walk(value) }
+                for value in dict.values { walk(value, depth: depth + 1) }
             } else if let arr = obj as? [Any] {
-                for item in arr { walk(item) }
+                for item in arr { walk(item, depth: depth + 1) }
             }
         }
 
@@ -157,7 +161,11 @@ extension InnerTubeAPI {
         // Handles WEB (videoRenderer, richItemRenderer, compactVideoRenderer),
         // WEB grid (gridVideoRenderer), and TVHTML5 tileRenderer (subs/history/home on TV client).
         // Matches Android MediaServiceCore ItemWrapper renderer dispatch order.
-        func walk(_ obj: Any) {
+        func walk(_ obj: Any, depth: Int = 0) {
+            guard depth < 50 else {
+                tubeLog.warning("parseVideoGroup: walk depth limit (50) reached — skipping subtree")
+                return
+            }
             if let dict = obj as? [String: Any] {
                 // TVHTML5 gridRenderer stores its continuation in
                 // gridRenderer.continuations[0].nextContinuationData.continuation.
@@ -180,7 +188,7 @@ extension InnerTubeAPI {
                         currentSectionDate = headerTitle.flatMap { parseSectionDate($0) }
                         tubeLog.debug("parseVideoGroup: section '\(headerTitle ?? "nil", privacy: .public)' → date=\(currentSectionDate != nil ? "yes" : "nil", privacy: .public)")
                     }
-                    walk(sectionRenderer["contents"] as Any)
+                    walk(sectionRenderer["contents"] as Any, depth: depth + 1)
                     currentSectionDate = prevDate
                     return
                 }
@@ -213,7 +221,7 @@ extension InnerTubeAPI {
                         // Continuation token nested inside richItemRenderer
                         nextPageToken = token
                     } else {
-                        for value in content.values { walk(value) }
+                        for value in content.values { walk(value, depth: depth + 1) }
                     }
                 } else if let renderer = dict["compactVideoRenderer"] as? [String: Any] {
                     if let v = parseVideoRenderer(renderer) { videos.append(v) }
@@ -229,10 +237,10 @@ extension InnerTubeAPI {
                           let token = command["token"] as? String {
                     nextPageToken = token
                 } else {
-                    for value in dict.values { walk(value) }
+                    for value in dict.values { walk(value, depth: depth + 1) }
                 }
             } else if let arr = obj as? [Any] {
-                for item in arr { walk(item) }
+                for item in arr { walk(item, depth: depth + 1) }
             }
         }
 
