@@ -304,10 +304,14 @@ public final class PlaybackViewModel {
         player.allowsExternalPlayback = true
         #if canImport(UIKit)
         do {
+            // Only configure the audio category at init time. setActive(true) is
+            // deliberately deferred to loadAsync (PlaybackViewModel+Loading.swift ~line 494)
+            // so that cold-launching the app does not interrupt background audio from
+            // other apps before the user starts a video (GitHub issue #54).
+            // setCategory alone does not interrupt other apps per AVAudioSession docs.
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
-            try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            playerLog.error("AVAudioSession setup failed: \(error.localizedDescription)")
+            playerLog.error("AVAudioSession category setup failed: \(error.localizedDescription)")
         }
         #endif
         setupTimeObserver()
