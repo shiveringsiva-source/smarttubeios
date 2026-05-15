@@ -4,6 +4,32 @@ import os
 
 private let playlistLog = ViewModelLogger(category: "Playlist")
 
+// MARK: - QueuedPlaylistLoader
+//
+// Seam that decouples PlaylistViewModel from CurrentQueueStore's concrete type.
+// The default adapter (`CurrentQueuePlaylistLoader`) delegates to the store;
+// tests inject a mock that returns controlled video arrays.
+
+public protocol QueuedPlaylistLoader: Sendable {
+    /// Returns the current play-queue videos tagged with playlist metadata,
+    /// or `nil` if the given playlist ID is not the play queue.
+    func loadQueuedVideos(for playlistId: String) async -> [Video]?
+}
+
+public struct CurrentQueuePlaylistLoader: QueuedPlaylistLoader {
+    public init() {}
+    public func loadQueuedVideos(for playlistId: String) async -> [Video]? {
+        guard playlistId == CurrentQueueStore.playlistID else { return nil }
+        let videos = await CurrentQueueStore.shared.videos
+        return videos.enumerated().map { index, v in
+            var copy           = v
+            copy.playlistId    = CurrentQueueStore.playlistID
+            copy.playlistIndex = index
+            return copy
+        }
+    }
+}
+
 // MARK: - PlaylistViewModel
 //
 // Fetches and paginates the videos inside a single playlist.
@@ -20,40 +46,39 @@ public final class PlaylistViewModel {
     private var nextPageToken: String?
     private var fetchTask: Task<Void, Never>?
     private let api: any InnerTubeAPIProtocol
+    private let queueLoader: any QueuedPlaylistLoader
 
-    public init(api: any InnerTubeAPIProtocol = InnerTubeAPI()) {
+    public init(
+        api: any InnerTubeAPIProtocol = InnerTubeAPI(),
+        queueLoader: any QueuedPlaylistLoader = CurrentQueuePlaylistLoader()
+    ) {
         self.api = api
+        self.queueLoader = queueLoader
     }
 
     public func load(playlistId: String, refresh: Bool = false) {
         // ── Queue short-circuit ────────────────────────────────────────────────
-        // Reads directly from CurrentQueueStore; never hits the YouTube API.
-        if playlistId == CurrentQueueStore.playlistID {
-            fetchTask?.cancel()
-            fetchTask = Task {
-                let queuedVideos = await CurrentQueueStore.shared.videos
-                self.videos = queuedVideos.enumerated().map { index, v in
-                    var copy           = v
-                    copy.playlistId    = CurrentQueueStore.playlistID
-                    copy.playlistIndex = index
-                    return copy
-                }
-            }
-            return
-        }
-        // ── Existing API path ──────────────────────────────────────────────────
-        // If the same playlist is already loaded and no refresh was requested,
-        // do nothing — this preserves scroll position when navigating back.
-        if !refresh && self.playlistId == playlistId && !videos.isEmpty {
-            return
-        }
-        if refresh || self.playlistId != playlistId {
-            self.playlistId = playlistId
-            videos = []
-            nextPageToken = nil
-        }
+        // Delegates to `queueLoader` so this ViewModel is not coupled to
+        // CurrentQueueStore's concrete type or magic playlist ID.
         fetchTask?.cancel()
-        fetchTask = Task { await fetch() }
+        fetchTask = Task {
+            if let queuedVideos = await self.queueLoader.loadQueuedVideos(for: playlistId) {
+                self.videos = queuedVideos
+                return
+            }
+            // ── Existing API path ──────────────────────────────────────────────────
+            // If the same playlist is already loaded and no refresh was requested,
+            // do nothing — this preserves scroll position when navigating back.
+            if !refresh && self.playlistId == playlistId && !self.videos.isEmpty {
+                return
+            }
+            if refresh || self.playlistId != playlistId {
+                self.playlistId = playlistId
+                self.videos = []
+                self.nextPageToken = nil
+            }
+            await self.fetch()
+        }
     }
 
     public func loadMoreIfNeeded(lastVideo: Video) {

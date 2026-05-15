@@ -58,10 +58,11 @@ public actor VideoPreloadCache {
     // only need to supply `videoId`, `isAuthenticated`, and `sponsorCategories` —
     // no service references need to flow through the view hierarchy.
     // Auth token is kept in sync via `setAuthToken(_:)`.
+    // Services are injected via init so tests can substitute pre-configured instances.
 
-    private let api          = InnerTubeAPI()
-    private let sponsorBlock = SponsorBlockService()
-    private let deArrow      = DeArrowService()
+    private let api:          InnerTubeAPI
+    private let sponsorBlock: SponsorBlockService
+    private let deArrow:      DeArrowService
 
     // MARK: - TTL constants
 
@@ -136,7 +137,14 @@ public actor VideoPreloadCache {
     nonisolated(unsafe) private let pathMonitor = NWPathMonitor()
     private var currentPath: NWPath? = nil
 
-    private init() {
+    private init(
+        api: InnerTubeAPI = InnerTubeAPI(),
+        sponsorBlock: SponsorBlockService = SponsorBlockService(),
+        deArrow: DeArrowService = DeArrowService()
+    ) {
+        self.api          = api
+        self.sponsorBlock = sponsorBlock
+        self.deArrow      = deArrow
         pathMonitor.pathUpdateHandler = { [weak self] path in
             Task { await self?.updatePath(path) }
         }
