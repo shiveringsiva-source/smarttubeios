@@ -70,4 +70,21 @@ struct CrashlyticsLogger: Sendable {
         )
         crashlytics.record(error: error)
     }
+
+    /// Automatically records a diagnostic report when playback fails and the error is
+    /// shown to the user. Uses domain `SmartTube.AutoDiagnostic` (code 1) so it appears
+    /// as a distinct Firebase issue from user-triggered reports, making it easy to query
+    /// "all sessions where a user couldn't play a video" without manual intervention.
+    /// Custom keys set by `recordNonFatal` (stream_url, has_retried, etc.) are already
+    /// stamped on the Crashlytics instance and are automatically attached to this event.
+    static func sendAutoPlaybackDiagnostic() {
+        let crashlytics = Crashlytics.crashlytics()
+        crashlytics.log("[AutoDiagnostic] Playback failure — see custom keys and session breadcrumbs.")
+        crashlytics.setCustomValue("auto", forKey: "trigger")
+        crashlytics.record(error: NSError(
+            domain: "SmartTube.AutoDiagnostic",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "Playback failure — see session breadcrumbs"]
+        ))
+    }
 }

@@ -120,6 +120,7 @@ public final class PlaybackViewModel {
                 "has_retried":       "\(hasRetriedPlayback)",
                 "current_time":      "\(Int(currentTime))s",
             ])
+            CrashlyticsLogger.sendAutoPlaybackDiagnostic()
         }
     }
     public var controlsVisible: Bool = false
