@@ -13,7 +13,9 @@
 		494A17316084B602873D7C05 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AE55B486AFD7F51FEF1874FF /* Assets.xcassets */; };
 		53352CFF63CF0A5B34A1998B /* SpinnerDismissalUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CD3DC338DC0106A0F179BC1 /* SpinnerDismissalUITests.swift */; };
 		7AECD855592A4E3EA60955D6 /* FallbackVideoPlaybackUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29446E9C8CE04B2FBCDD8A2E /* FallbackVideoPlaybackUITests.swift */; };
+		B4C8D3E4F5A6B7C8D9E0F1A2 /* PlayerAndMiniPlayerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B7C2D4E5F6A7B8C9D0E1F2 /* PlayerAndMiniPlayerUITests.swift */; };
 		7AECD855592A4E3EA60955D6 /* FallbackVideoPlaybackUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29446E9C8CE04B2FBCDD8A2E /* FallbackVideoPlaybackUITests.swift */; };
+		B4C8D3E4F5A6B7C8D9E0F1A2 /* PlayerAndMiniPlayerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B7C2D4E5F6A7B8C9D0E1F2 /* PlayerAndMiniPlayerUITests.swift */; };
 		673C1D012F7F20340021583B /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 673C1D002F7F20340021583B /* Launch Screen.storyboard */; };
 		67A5E80B2FB3932400C53D61 /* SafariExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 67A5E7F32FB3932400C53D61 /* SafariExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		67AEAB0F2FAF96BC00820F4D /* VideoDownloadUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67AEAB0E2FAF96BC00820F4D /* VideoDownloadUITests.swift */; };
@@ -124,7 +126,9 @@
 		46FAE8C7AB41057B392DF731 /* DownloadLiveActivity.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DownloadLiveActivity.swift; sourceTree = "<group>"; };
 		4CD3DC338DC0106A0F179BC1 /* SpinnerDismissalUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpinnerDismissalUITests.swift; sourceTree = "<group>"; };
 		29446E9C8CE04B2FBCDD8A2E /* FallbackVideoPlaybackUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FallbackVideoPlaybackUITests.swift; sourceTree = "<group>"; };
+		A3B7C2D4E5F6A7B8C9D0E1F2 /* PlayerAndMiniPlayerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerAndMiniPlayerUITests.swift; sourceTree = "<group>"; };
 		29446E9C8CE04B2FBCDD8A2E /* FallbackVideoPlaybackUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FallbackVideoPlaybackUITests.swift; sourceTree = "<group>"; };
+		A3B7C2D4E5F6A7B8C9D0E1F2 /* PlayerAndMiniPlayerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerAndMiniPlayerUITests.swift; sourceTree = "<group>"; };
 		673C1D002F7F20340021583B /* Launch Screen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = "Launch Screen.storyboard"; sourceTree = "<group>"; };
 		67A5E7F32FB3932400C53D61 /* SafariExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SafariExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		67AEAB0E2FAF96BC00820F4D /* VideoDownloadUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoDownloadUITests.swift; sourceTree = "<group>"; };
@@ -299,6 +303,7 @@
 				67AEAB0E2FAF96BC00820F4D /* VideoDownloadUITests.swift */,
 				4CD3DC338DC0106A0F179BC1 /* SpinnerDismissalUITests.swift */,
 					29446E9C8CE04B2FBCDD8A2E /* FallbackVideoPlaybackUITests.swift */,
+				A3B7C2D4E5F6A7B8C9D0E1F2 /* PlayerAndMiniPlayerUITests.swift */,
 			);
 			path = UITests;
 			sourceTree = "<group>";
@@ -751,6 +756,7 @@
 				RS000000000000000000001B /* RSSFeedsUITests.swift in Sources */,
 				53352CFF63CF0A5B34A1998B /* SpinnerDismissalUITests.swift in Sources */,
 					7AECD855592A4E3EA60955D6 /* FallbackVideoPlaybackUITests.swift in Sources */,
+				B4C8D3E4F5A6B7C8D9E0F1A2 /* PlayerAndMiniPlayerUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

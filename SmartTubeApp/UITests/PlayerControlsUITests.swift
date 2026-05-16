@@ -2,18 +2,15 @@ import XCTest
 
 // MARK: - PlayerControlsUITests
 //
-// UI tests for the PlayerView controls overlay: show/hide, play/pause,
-// next button, PiP, back button, related videos, and error-free playback.
+// All tests except testPiPButtonStartsPiP have moved to PlayerAndMiniPlayerUITests.swift
+// (combined with MiniPlayerUITests for a single shared app launch).
 //
-// Requirements:
-//   • Network access is required.
-//   • Run on an iOS 17+ simulator with the SmartTubeApp scheme selected.
+// testPiPButtonStartsPiP is kept here because it deliberately terminates and
+// re-launches the app with --uitesting-enable-pip and cannot share state.
 
 final class PlayerControlsUITests: XCTestCase {
 
     private var app: XCUIApplication!
-
-    // MARK: - Lifecycle
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -28,8 +25,6 @@ final class PlayerControlsUITests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Opens the Home tab, waits for the first video card, and opens the player.
-    /// Returns the video title if the player opened, or skips if network/feed unavailable.
     @discardableResult
     private func openPlayerFromHome() throws -> String {
         UITestHelpers.tapTab(named: "Home", in: app)
@@ -42,29 +37,14 @@ final class PlayerControlsUITests: XCTestCase {
         return app.staticTexts["player.titleLabel"].firstMatch.label
     }
 
-    private var titleLabel: XCUIElement {
-        app.staticTexts["player.titleLabel"].firstMatch
-    }
-
     private var playPauseButton: XCUIElement {
         app.buttons["player.playPauseButton"].firstMatch
-    }
-
-    private var nextButton: XCUIElement {
-        app.buttons["player.nextBtn"].firstMatch
-    }
-
-    private var backButton: XCUIElement {
-        app.buttons["player.backButton"].firstMatch
     }
 
     private var pipButton: XCUIElement {
         app.buttons["player.pipButton"].firstMatch
     }
 
-    /// Taps the player until the controls overlay becomes visible.
-    /// Retries up to 5 times with 1.5s gaps to account for the UIKit
-    /// tap.require(toFail: pan) delay and iOS version timing differences.
     private func showControls() {
         for _ in 0..<5 {
             if playPauseButton.exists { return }
@@ -74,111 +54,6 @@ final class PlayerControlsUITests: XCTestCase {
     }
 
     // MARK: - Tests
-
-    func testControlsAppearOnTap() throws {
-        try openPlayerFromHome()
-        showControls()
-        guard playPauseButton.waitForExistence(timeout: 5) else {
-            try captureAndSkip("player.playPauseButton did not appear — controls overlay may not respond to tap reliably on simulator (timing-dependent)", in: app)
-        }
-    }
-
-    func testPlayPauseToggles() throws {
-        try openPlayerFromHome()
-        showControls()
-        guard playPauseButton.waitForExistence(timeout: 5) else {
-            try captureAndSkip("player.playPauseButton did not appear — controls overlay may not respond to tap reliably on simulator (timing-dependent)", in: app)
-        }
-
-        // Capture current image (playing → pause icon, or paused → play icon).
-        playPauseButton.tap()
-        Thread.sleep(forTimeInterval: 0.5)
-
-        // Tap again to restore.
-        showControls()
-        guard playPauseButton.waitForExistence(timeout: 5) else {
-            try captureAndSkip("player.playPauseButton did not reappear after re-tap — timing-dependent", in: app)
-        }
-        playPauseButton.tap()
-
-        // The app must still be running — no crash on toggle.
-        XCTAssertEqual(app.state, .runningForeground,
-                       "App must still be running after toggling play/pause")
-    }
-
-    func testBackButtonDismissesPlayer() throws {
-        try openPlayerFromHome()
-        // Back button is always visible (even when controls overlay is hidden).
-        XCTAssertTrue(backButton.waitForExistence(timeout: 5),
-                      "player.backButton must be present")
-        backButton.tap()
-
-        // Back now minimizes to the mini-player bar rather than stopping playback.
-        let miniPlayerBar = app.otherElements["miniPlayer.bar"].firstMatch
-        XCTAssertTrue(miniPlayerBar.waitForExistence(timeout: 5),
-                      "miniPlayer.bar should appear after tapping the back button")
-
-        // Close the mini-player to fully stop playback.
-        let miniPlayerClose = app.buttons["miniPlayer.closeButton"].firstMatch
-        guard miniPlayerClose.waitForExistence(timeout: 3) else {
-            try captureAndSkip("miniPlayer.closeButton not found — in-app PiP may not be active on this build", in: app)
-        }
-        miniPlayerClose.tap()
-
-        // After closing, the Home feed chip bar should be visible and mini-player gone.
-        let chipBar = app.scrollViews["home.chipBar"]
-        XCTAssertTrue(chipBar.waitForExistence(timeout: 5),
-                      "home.chipBar should reappear after closing the mini-player")
-        XCTAssertFalse(miniPlayerBar.exists,
-                       "miniPlayer.bar should be gone after tapping close")
-    }
-
-    func testNoErrorBannerOnNormalPlayback() throws {
-        let title = try openPlayerFromHome()
-        Thread.sleep(forTimeInterval: 10)
-        UITestHelpers.assertNoPlayerErrorBanner(in: app, videoTitle: title)
-    }
-
-    func testPlayerStaysOpenAfterTap() throws {
-        try openPlayerFromHome()
-        showControls()
-        Thread.sleep(forTimeInterval: 2)
-        XCTAssertTrue(titleLabel.exists,
-                      "player.titleLabel should still be visible after tapping the player — player must not dismiss unexpectedly")
-    }
-
-    func testNextVideoButtonLoadsNewVideo() throws {
-        try openPlayerFromHome()
-        let initialTitle = titleLabel.label
-
-        // Wait for related videos to arrive by polling nextBtn.
-        let deadline = Date().addingTimeInterval(20)
-        var nextEnabled = false
-        while Date() < deadline {
-            showControls()
-            if nextButton.waitForExistence(timeout: 3.5), nextButton.isEnabled {
-                nextEnabled = true
-                break
-            }
-        }
-        guard nextEnabled else {
-            try captureAndSkip("player.nextBtn did not become enabled within 20 s — related videos may not have loaded", in: app)
-        }
-
-        nextButton.tap()
-
-        // Poll until the title label changes, indicating the new video's playerInfo loaded.
-        // Skip gracefully if the title never changes (same-title related video or slow network).
-        let loadDeadline = Date().addingTimeInterval(30)
-        var newTitle = titleLabel.label
-        while Date() < loadDeadline && newTitle == initialTitle {
-            Thread.sleep(forTimeInterval: 1)
-            newTitle = titleLabel.label
-        }
-        guard newTitle != initialTitle else {
-            try captureAndSkip("Title did not change within 30s — next video may share the same title or network is slow", in: app)
-        }
-    }
 
     #if os(iOS)
     func testPiPButtonStartsPiP() throws {
@@ -200,35 +75,4 @@ final class PlayerControlsUITests: XCTestCase {
                        "App must still be running after tapping the PiP button")
     }
     #endif
-
-    // MARK: - Regression: next/back buttons must be tappable in portrait (task #45)
-
-    /// Verifies that the next-video and back/previous-video buttons in the player
-    /// bottom bar are hittable in portrait mode after increasing their touch targets.
-    ///
-    /// Fix: `.padding(8).background(.black.opacity(0.4)).clipShape(Circle())` added
-    /// to both button labels (iOS-only), matching the landscape-lock/audio-only pattern.
-    func testNextAndPrevButtonsAreHittableInPortrait() throws {
-        XCUIDevice.shared.orientation = .portrait
-        try openPlayerFromHome()
-        showControls()
-        // Re-tap to ensure controls remain visible before asserting hittability.
-        // The overlay auto-dismisses after a few seconds; a second tap keeps it up.
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        Thread.sleep(forTimeInterval: 0.5)
-
-        // next button must exist and be hittable
-        guard nextButton.waitForExistence(timeout: 8) else {
-            try captureAndSkip("player.nextBtn did not appear — controls may not have shown in portrait (timing-dependent)", in: app)
-        }
-        XCTAssertTrue(nextButton.isHittable,
-                      "player.nextBtn must be hittable in portrait — regression for task #45 hit-area fix")
-
-        // previous/back button (if reachable after the player is open from a feed)
-        let prevButton = app.buttons["player.prevBtn"].firstMatch
-        if prevButton.waitForExistence(timeout: 3) {
-            XCTAssertTrue(prevButton.isHittable,
-                          "player.prevBtn must be hittable in portrait — regression for task #45 hit-area fix")
-        }
-    }
 }
