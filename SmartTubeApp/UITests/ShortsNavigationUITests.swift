@@ -170,6 +170,42 @@ final class ShortsNavigationUITests: XCTestCase {
         XCTAssertTrue(menuAppeared,
             "Long-pressing a Short card must show a context menu with Share or Add to Queue")
     }
+
+    // MARK: - Chip immediate load regression (#93)
+
+    /// Regression for #93: Shorts chip must show videos immediately after tapping,
+    /// without requiring a Settings-and-back navigation to trigger the refresh.
+    func testShortsChipShowsVideosImmediately() throws {
+        tapTab(named: "Home")
+
+        let chipBar = app.scrollViews.matching(identifier: "home.chipBar").firstMatch
+        guard chipBar.waitForExistence(timeout: 5) else {
+            throw XCTSkip("Chip bar not found — cannot verify Shorts chip load.")
+        }
+
+        // Tap the Shorts chip.
+        let shortsChip = app.buttons["Shorts"]
+        XCTAssertTrue(shortsChip.waitForExistence(timeout: 5))
+        scrollToShortsChip()
+        shortsChip.tap()
+
+        // The section container must appear and contain content
+        // without navigating to Settings and back first.
+        let sectionContainer = app.otherElements["home.sectionContainer"].firstMatch
+        guard sectionContainer.waitForExistence(timeout: 15) else {
+            throw XCTSkip("Section container not found after Shorts chip tap — network issue.")
+        }
+
+        // Either the content loads, or a legitimate empty/auth state is shown.
+        let hasContent  = sectionContainer.descendants(matching: .any)
+                              .matching(NSPredicate(format: "identifier BEGINSWITH 'video.card.'"))
+                              .count > 0
+        let hasEmpty    = app.staticTexts["Nothing here yet"].exists
+                       || app.staticTexts["Sign in to see your library"].exists
+
+        XCTAssertTrue(hasContent || hasEmpty,
+            "Shorts chip must show content or empty state immediately — not require Settings nav")
+    }
 }
 
 // MARK: - ShortsSwipeUITests

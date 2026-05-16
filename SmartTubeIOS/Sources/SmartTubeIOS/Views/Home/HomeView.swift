@@ -101,8 +101,16 @@ public struct HomeView: View {
             await sectionVM.updateAuthToken(auth.accessToken)
         }
         .task(id: selectedSection) {
-            guard selectedSection.type == .playlists else { return }
-            queueVideosCount = await CurrentQueueStore.shared.videos.count
+            if selectedSection.type == .playlists {
+                queueVideosCount = await CurrentQueueStore.shared.videos.count
+            } else if selectedSection.type != .home {
+                // Safety net: if sectionVM somehow fell out of sync with selectedSection
+                // (e.g., the chip action raced with an in-flight cancellation, or an
+                // @Observable tracking gap left the view empty), force a reload.
+                if sectionVM.currentSection != selectedSection {
+                    sectionVM.select(section: selectedSection)
+                }
+            }
         }
     }
 
@@ -139,10 +147,16 @@ public struct HomeView: View {
     private func chipButton(section: BrowseSection) -> some View {
         let isSelected = selectedSection == section
         let action = {
-            guard selectedSection != section else { return }
-            selectedSection = section
-            if section.type != .home {
+            let isNewSection = selectedSection != section
+            if isNewSection { selectedSection = section }
+            guard section.type != .home else { return }
+            if isNewSection {
                 sectionVM.select(section: section)
+            } else if sectionVM.videoGroups.isEmpty && !sectionVM.isLoading {
+                // Same chip re-tapped on an empty section — retry the load.
+                // This handles failed fetches or cases where an observation gap
+                // left the view showing an empty state despite data being available.
+                sectionVM.reload(section: section)
             }
         }
         #if os(tvOS)

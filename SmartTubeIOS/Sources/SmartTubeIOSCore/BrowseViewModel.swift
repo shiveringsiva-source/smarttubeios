@@ -120,6 +120,14 @@ public final class BrowseViewModel {
         loadContent(for: section, refresh: true, source: "select")
     }
 
+    /// Reloads the given section unconditionally, bypassing the same-section guard in `select`.
+    /// Use this to retry a failed/empty fetch or to recover from an observation gap.
+    public func reload(section: BrowseSection) {
+        browseLog.notice("reload: forcing refresh of \(section.title)")
+        currentSection = section
+        loadContent(for: section, refresh: true, source: "reload")
+    }
+
     /// Rebuilds the visible sections list from settings.
     /// Call this when AppSettings.enabledSections changes.
     public func configureSections(_ enabledTypes: [BrowseSection.SectionType]) {
