@@ -67,10 +67,16 @@ final class HomeFeedAndSettingsUITests: XCTestCase {
     }
 
     /// Collects all currently visible `video.card.*` element identifiers.
+    ///
+    /// SwiftUI propagates `.accessibilityIdentifier("video.card.<id>")` set on a
+    /// VideoCardView wrapper to ALL leaf accessibility elements within the card
+    /// (thumbnail image + every text label). To avoid false duplicates we query
+    /// only `.image` elements — each card has exactly one thumbnail image that
+    /// receives the card's identifier, giving us one entry per card.
     private func visibleCardIdentifiers() -> [String] {
         let predicate = NSPredicate(format: "identifier BEGINSWITH 'video.card.'")
-        let cards = app.descendants(matching: .any).matching(predicate)
-        return (0..<cards.count).map { cards.element(boundBy: $0).identifier }
+        let images = app.descendants(matching: .image).matching(predicate)
+        return (0..<images.count).map { images.element(boundBy: $0).identifier }
     }
 
     /// Returns any identifiers that appear more than once in `ids`.
@@ -381,22 +387,29 @@ final class HomeFeedAndSettingsUITests: XCTestCase {
         }
         Thread.sleep(forTimeInterval: 1.0)
 
+        // Use .image type to get one thumbnail per card (identifier propagates to all
+        // leaf elements, so .image gives exactly one representative element per card).
         let predicate = NSPredicate(format: "identifier BEGINSWITH 'video.card.'")
-        let cards = app.descendants(matching: .any).matching(predicate)
-        let count = cards.count
+        let cardImages = app.descendants(matching: .image).matching(predicate)
+        let count = cardImages.count
         XCTAssertGreaterThan(count, 0, "Expected at least one card")
 
+        // For each card, check that at least one of its staticText siblings
+        // (which share the card's identifier due to propagation) has a non-empty label.
+        // A blank cell (from ForEach duplicate-ID rendering) produces no visible text.
         var blankCardIds = [String]()
         for i in 0..<count {
-            let card = cards.element(boundBy: i)
-            let titlePredicate = NSPredicate(format: "identifier == 'video.card.title'")
-            let titleElements = card.descendants(matching: .staticText).matching(titlePredicate)
-            let hasTitle = titleElements.count > 0 && !(titleElements.firstMatch.label.isEmpty)
-            if !hasTitle { blankCardIds.append(card.identifier) }
+            let cardId = cardImages.element(boundBy: i).identifier
+            let idPredicate = NSPredicate(format: "identifier == '\(cardId)'")
+            let texts = app.descendants(matching: .staticText).matching(idPredicate)
+            let hasNonEmptyText = (0..<texts.count).contains { idx in
+                !texts.element(boundBy: idx).label.isEmpty
+            }
+            if !hasNonEmptyText { blankCardIds.append(cardId) }
         }
 
         XCTAssertTrue(blankCardIds.isEmpty,
-                      "Cards with blank/missing titles: \(blankCardIds.prefix(5)). " +
+                      "Cards with blank/missing text: \(blankCardIds.prefix(5)). " +
                       "Blank cells usually mean duplicate video IDs reached ForEach.")
     }
 }

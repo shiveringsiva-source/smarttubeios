@@ -64,7 +64,14 @@ public final class HomeViewModel {
         let recs  = recState?.videos  ?? []
         let subs  = subState?.videos  ?? []
 
-        guard !subs.isEmpty else { return recs }
+        guard !subs.isEmpty else {
+            var seen = Set<String>()
+            let deduped = recs.filter { seen.insert($0.id).inserted }
+            if deduped.count != recs.count {
+                homeLog.notice("mergedVideos: recs-only dedup removed \(recs.count - deduped.count) duplicate(s) (raw=\(recs.count))")
+            }
+            return deduped
+        }
         guard !recs.isEmpty else {
             var seen = Set<String>()
             let deduped = subs.filter { seen.insert($0.id).inserted }
