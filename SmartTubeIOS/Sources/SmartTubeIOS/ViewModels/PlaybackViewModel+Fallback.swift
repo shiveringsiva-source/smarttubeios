@@ -46,6 +46,7 @@ extension PlaybackViewModel {
                             self.seek(to: pos)
                         }
                         self.loadAudioTracks(from: fallbackItem)
+                        self.isLoading = false
                     case .failed:
                         let err = fallbackItem.error.map { "\($0)" } ?? "nil"
                         playerLog.error("❌ Fallback AVPlayerItem failed: \(err)")
@@ -160,6 +161,7 @@ extension PlaybackViewModel {
                             self.seek(to: pos)
                         }
                         self.loadAudioTracks(from: compositeItem)
+                        self.isLoading = false
                     case .failed:
                         let err = compositeItem.error.map { "\($0)" } ?? "nil"
                         playerLog.error("❌ Adaptive composition AVPlayerItem failed: \(err)")
@@ -229,6 +231,7 @@ extension PlaybackViewModel {
                             self.seek(to: pos)
                         }
                         self.loadAudioTracks(from: recoveryItem)
+                        self.isLoading = false
                     case .failed:
                         let err = recoveryItem.error.map { "\($0)" } ?? "nil"
                         playerLog.error("❌ 403 recovery AVPlayerItem failed: \(err) — falling back to Android client")
