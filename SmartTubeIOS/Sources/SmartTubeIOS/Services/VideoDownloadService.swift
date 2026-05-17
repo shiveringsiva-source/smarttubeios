@@ -178,6 +178,7 @@ public final class VideoDownloadService {
                 try? FileManager.default.removeItem(at: tempURL)
                 state = .saving
                 try await saveToPhotoLibrary(fileURL: photosURL)
+                storeInDownloadStore(video: video, mergedFileURL: photosURL)
                 try? FileManager.default.removeItem(at: photosURL)
                 downloadLog.notice("[download] ✅ saved to Photos \(video.id)")
                 state = .done
@@ -215,6 +216,7 @@ public final class VideoDownloadService {
             if #available(iOS 16.1, *) { await updateLiveActivity(phase: .saving, progress: 1) }
             #endif
             try await saveToPhotoLibrary(fileURL: mergedURL)
+            storeInDownloadStore(video: video, mergedFileURL: mergedURL)
             try? FileManager.default.removeItem(at: mergedURL)
             downloadLog.notice("[download] ✅ adaptive merge saved to Photos \(video.id)")
             state = .done
@@ -437,6 +439,32 @@ public final class VideoDownloadService {
         default:
             return false
         }
+    }
+
+    /// Copies `mergedFileURL` to the DownloadStore destination and registers the download.
+    /// If the copy fails (e.g. disk full) the Photos save is unaffected — this is best-effort.
+    private func storeInDownloadStore(video: Video, mergedFileURL: URL) {
+        let destURL = DownloadStore.shared.destinationURL(for: video.id)
+        let fm = FileManager.default
+        try? fm.createDirectory(at: destURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        do {
+            // Remove a stale file from a previous download of the same video.
+            try? fm.removeItem(at: destURL)
+            try fm.copyItem(at: mergedFileURL, to: destURL)
+        } catch {
+            downloadLog.notice("[download] DownloadStore copy failed for \(video.id): \(error.localizedDescription)")
+            return
+        }
+        DownloadStore.shared.add(DownloadedVideo(
+            videoId: video.id,
+            title: video.title,
+            channelTitle: video.channelTitle,
+            thumbnailURL: video.thumbnailURL,
+            duration: video.duration ?? 0,
+            fileURL: destURL,
+            downloadedAt: Date()
+        ))
+        downloadLog.notice("[download] registered in DownloadStore \(video.id)")
     }
 
     private func downloadToTemp(url: URL, videoId: String, userAgent: String = InnerTubeClients.iOS.userAgent) async throws -> URL {

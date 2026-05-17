@@ -32,6 +32,7 @@ public struct LibraryView: View {
         case history       = "History"
         case playlists     = "Playlists"
         case rss           = "RSS Feeds"
+        case downloads     = "Downloads"
 
         var id: String { rawValue }
         var browseSectionType: BrowseSection.SectionType {
@@ -40,6 +41,7 @@ public struct LibraryView: View {
             case .history:       return .history
             case .playlists:     return .playlists
             case .rss:           return .history  // not used — RSS renders its own view
+            case .downloads:     return .history  // not used — DownloadsView renders its own content
             }
         }
     }
@@ -123,6 +125,9 @@ public struct LibraryView: View {
             Group {
                 if selectedSection == .rss {
                     RSSFeedsView()
+                } else if selectedSection == .downloads {
+                    DownloadsView()
+                        .environment(DownloadStore.shared)
                 } else if !auth.isSignedIn && selectedSection != .subscriptions {
                     segmentSignInPrompt
                 } else if browseVM.isLoading && browseVM.videoGroups.flatMap({ $0.videos }).isEmpty {
@@ -191,7 +196,7 @@ public struct LibraryView: View {
             }
         }
         .onChange(of: selectedSection) { _, section in
-            guard section != .rss else { return }
+            guard section != .rss && section != .downloads else { return }
             browseVM.select(section: BrowseSection(
                 id: section.id,
                 title: section.rawValue,
@@ -221,7 +226,7 @@ public struct LibraryView: View {
             #endif
         }
         .onAppear {
-            guard selectedSection != .rss else { return }
+            guard selectedSection != .rss && selectedSection != .downloads else { return }
             browseVM.select(section: BrowseSection(
                 id: selectedSection.id,
                 title: selectedSection.rawValue,

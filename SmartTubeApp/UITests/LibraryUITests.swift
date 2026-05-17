@@ -556,4 +556,55 @@ final class LibraryUITests: XCTestCase {
         Thread.sleep(forTimeInterval: 2)
         XCTAssertTrue(app.state == .runningForeground, "App should still be running after navigating to Playlists")
     }
+
+    // MARK: - Downloads tests (task-99)
+
+    private func openDownloadsSegment() throws {
+        UITestHelpers.tapTab(named: "Library", in: app)
+        let picker = app.segmentedControls["library.sectionPicker"]
+        guard picker.waitForExistence(timeout: 5) else {
+            try captureAndSkip("library.sectionPicker did not appear — Library tab may not have loaded", in: app)
+        }
+        let button = picker.buttons["Downloads"]
+        guard button.waitForExistence(timeout: 3) else {
+            try captureAndSkip("Downloads segment not found in library picker", in: app)
+        }
+        button.tap()
+    }
+
+    func testDownloadsSegmentExistsInLibrary() throws {
+        UITestHelpers.tapTab(named: "Library", in: app)
+        let picker = app.segmentedControls["library.sectionPicker"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 5), "library.sectionPicker should appear")
+        XCTAssertTrue(
+            picker.buttons["Downloads"].exists,
+            "'Downloads' segment must be present in the library picker"
+        )
+    }
+
+    func testDownloadsSectionDoesNotCrash() throws {
+        try openDownloadsSegment()
+        Thread.sleep(forTimeInterval: 1)
+        XCTAssertEqual(
+            app.state, .runningForeground,
+            "App should still be running after opening Downloads in Library"
+        )
+    }
+
+    func testDownloadsShowsEmptyStateOrList() throws {
+        try openDownloadsSegment()
+        Thread.sleep(forTimeInterval: 1.5)
+        // Either the "No Downloaded Videos" text (empty state) or a downloaded video row must exist.
+        let emptyStateText = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS 'No Downloaded Videos'")
+        ).firstMatch
+        let videoRow = app.cells.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'downloads.videoRow.'")
+        ).firstMatch
+        let eitherExists = emptyStateText.waitForExistence(timeout: 4) || videoRow.waitForExistence(timeout: 1)
+        XCTAssertTrue(
+            eitherExists,
+            "Downloads section must show either an empty state or a video list"
+        )
+    }
 }

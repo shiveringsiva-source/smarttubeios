@@ -199,6 +199,70 @@ extension PlaybackViewModel {
         // cleared after player.rate was set, which dismissed the spinner before buffering
         // completed on slow networks (GitHub issue #53).
         playerLog.notice("[loadAsync] start id=\(video.id) title=\(video.title) player.rate=\(self.player.rate) timeControlStatus=\(self.player.timeControlStatus.rawValue)")
+
+        // Local-file fast path — bypass all network fetches for downloaded videos.
+        // The path must be inside Documents/SmartTubeDownloads/ to prevent path-traversal
+        // from a crafted Video object.
+        if let localURL = video.localFileURL {
+            let downloadsDir = FileManager.default
+                .urls(for: .documentDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("SmartTubeDownloads").path
+            if localURL.path.hasPrefix(downloadsDir),
+               FileManager.default.fileExists(atPath: localURL.path) {
+                let item = AVPlayerItem(url: localURL)
+                item.audioTimePitchAlgorithm = .spectral
+                // Wire up observers BEFORE replaceCurrentItem (task-80 rule).
+                itemObserverTask?.cancel()
+                itemObserverTask = Task { [weak self] in
+                    for await status in item.statusStream {
+                        guard let self, !Task.isCancelled else { return }
+                        switch status {
+                        case .readyToPlay:
+                            self.loadAudioTracks(from: item)
+                            self.isLoading = false
+                        case .failed:
+                            playerLog.error("❌ local-file AVPlayerItem failed: \(String(describing: item.error))")
+                            self.error = item.error
+                        case .unknown:
+                            break
+                        @unknown default:
+                            break
+                        }
+                    }
+                }
+                player.replaceCurrentItem(with: item)
+                endObserverTask?.cancel()
+                endObserverTask = Task { [weak self] in
+                    let notifications = NotificationCenter.default.notifications(
+                        named: AVPlayerItem.didPlayToEndTimeNotification,
+                        object: item
+                    )
+                    for await _ in notifications {
+                        guard let self, !Task.isCancelled else { return }
+                        self.handlePlaybackEnd()
+                    }
+                }
+                #if canImport(UIKit)
+                setupRemoteCommandCenter()
+                do {
+                    try AVAudioSession.sharedInstance().setActive(true)
+                } catch {
+                    playerLog.error("[loadAsync] local: AVAudioSession setActive failed: \(error.localizedDescription)")
+                }
+                #endif
+                player.rate = Float(settings.playbackSpeed)
+                isPlaying = true
+                #if canImport(UIKit)
+                UIApplication.shared.isIdleTimerDisabled = true
+                updateNowPlayingInfo()
+                #endif
+                playerLog.notice("[loadAsync] local-file fast path: playing \(localURL.lastPathComponent)")
+                return
+            }
+            // File missing or path invalid — fall through to network re-stream.
+            playerLog.notice("[loadAsync] localFileURL set but file not accessible, falling through: \(localURL.path)")
+        }
+
         do {
             // --- Cache-first load ---
             // Check VideoPreloadCache for all data types. Fresh hits skip the network

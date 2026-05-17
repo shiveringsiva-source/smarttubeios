@@ -31,6 +31,7 @@ struct SmartTubeApp: App {
                 .environment(settingsStore)
                 .environment(\.innerTubeAPI, api)
                 .environment(cardDownloadService)
+                .environment(DownloadStore.shared)
                 .onChange(of: authService.accessToken, initial: true) { _, newToken in
                     Task {
                         await api.setAuthToken(newToken)
