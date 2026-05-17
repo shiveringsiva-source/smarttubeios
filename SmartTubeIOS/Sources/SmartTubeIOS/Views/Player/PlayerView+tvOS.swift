@@ -44,7 +44,7 @@ extension PlayerView {
     /// D-pad navigation — SwiftUI's spatial focus engine cannot reliably navigate
     /// between buttons inside a ZStack overlay on tvOS.
     enum MoreMenuRow: Hashable {
-        case speed, quality, like, dislike, sleepTimer, audioOnly, description, comments, cancel
+        case speed, quality, like, dislike, sleepTimer, audioOnly, captions, audioTrack, description, comments, cancel
     }
 
     /// Ordered list of rows currently visible in the more menu.
@@ -57,6 +57,8 @@ extension PlayerView {
         if authService.isSignedIn { rows.append(.like) }
         rows.append(.sleepTimer)
         rows.append(.audioOnly)
+        if !vm.availableCaptions.isEmpty { rows.append(.captions) }
+        if vm.availableAudioTracks.count > 1 { rows.append(.audioTrack) }
         let desc = (vm.playerInfo?.video ?? video).description ?? ""
         if !desc.isEmpty { rows.append(.description) }
         rows.append(.comments)
@@ -89,7 +91,7 @@ extension PlayerView {
     /// When true, the player yields focus to the overlay so its buttons
     /// are reachable by the Siri Remote.
     var isAnyOverlayVisible: Bool {
-        showMoreMenu || showQualityPicker || showSpeedPicker || showSleepTimerPicker
+        showMoreMenu || showQualityPicker || showSpeedPicker || showSleepTimerPicker || showCaptionPicker || showAudioTrackPicker
     }
 
     /// True while a SponsorBlock skip toast is visible.

@@ -257,7 +257,6 @@ extension PlayerView {
 
     // MARK: - Caption picker overlay
 
-    #if !os(tvOS)
     var captionPickerOverlay: some View {
         ZStack(alignment: .bottom) {
             Color.black.opacity(0.5)
@@ -295,6 +294,9 @@ extension PlayerView {
                             .padding(.vertical, 12)
                         }
                         .buttonStyle(.plain)
+                        #if os(tvOS)
+                        .prefersDefaultFocus(in: captionPickerNamespace)
+                        #endif
                         Divider()
                         ForEach(vm.availableCaptions) { track in
                             Button {
@@ -331,16 +333,19 @@ extension PlayerView {
             .frame(maxWidth: moreMenuPortraitWidth)
             .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 16))
+            .accessibilityIdentifier("player.captionPicker")
+            #if os(tvOS)
+            .focusScope(captionPickerNamespace)
+            .onExitCommand { showCaptionPicker = false }
+            #endif
             .padding(.horizontal, 8)
             .padding(.bottom, 8)
         }
         .ignoresSafeArea()
     }
-    #endif
 
     // MARK: - Audio track picker overlay
 
-    #if !os(tvOS)
     var audioTrackPickerOverlay: some View {
         ZStack(alignment: .bottom) {
             Color.black.opacity(0.5)
@@ -378,6 +383,9 @@ extension PlayerView {
                             .padding(.vertical, 12)
                         }
                         .buttonStyle(.plain)
+                        #if os(tvOS)
+                        .prefersDefaultFocus(in: audioTrackPickerNamespace)
+                        #endif
                         Divider()
                         ForEach(vm.availableAudioTracks) { track in
                             Button {
@@ -414,14 +422,17 @@ extension PlayerView {
             .frame(maxWidth: moreMenuPortraitWidth)
             .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 16))
-            .padding(.horizontal, 8)
-            .padding(.bottom, 8)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("player.audioTrackPicker")
+            #if os(tvOS)
+            .focusScope(audioTrackPickerNamespace)
+            .onExitCommand { showAudioTrackPicker = false }
+            #endif
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
         }
         .ignoresSafeArea()
     }
-    #endif
 
     // MARK: - Share sheet
 

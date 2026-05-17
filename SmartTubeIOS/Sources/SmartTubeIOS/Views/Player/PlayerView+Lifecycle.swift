@@ -43,6 +43,9 @@ extension PlayerView {
                 PlayerAVLayerView(player: vm.player, videoGravity: store.settings.videoGravityMode.avGravity)
                 .ignoresSafeArea()
                 .accessibilityHidden(true)
+                if vm.isAudioOnlyMode {
+                    audioOnlyThumbnailOverlay
+                }
                 #else
                 Color.black.ignoresSafeArea()
                 #endif
@@ -328,6 +331,12 @@ extension PlayerView {
                     swipeLog.notice("[tv] sleepTimerPickerFocused set → true")
                 }
             }
+        }
+        .onChange(of: showCaptionPicker) { _, visible in
+            swipeLog.notice("[tv] showCaptionPicker changed → \(visible)")
+        }
+        .onChange(of: showAudioTrackPicker) { _, visible in
+            swipeLog.notice("[tv] showAudioTrackPicker changed → \(visible)")
         }
         .onChange(of: vm.currentToastSegment) { _, segment in
             swipeLog.notice("[tv] currentToastSegment changed → \(segment == nil ? "nil" : segment!.category.rawValue)")

@@ -82,6 +82,8 @@ public struct PlayerView: View {
     @Namespace var qualityPickerNamespace
     @Namespace var speedPickerNamespace
     @Namespace var sleepTimerNamespace
+    @Namespace var captionPickerNamespace
+    @Namespace var audioTrackPickerNamespace
     /// Explicitly routes Siri Remote focus when overlays open programmatically.
     /// `moreMenuFocusedRow` drives D-pad navigation within the more menu via explicit
     /// `.onMoveCommand` (SwiftUI's spatial engine cannot navigate ZStack overlays).

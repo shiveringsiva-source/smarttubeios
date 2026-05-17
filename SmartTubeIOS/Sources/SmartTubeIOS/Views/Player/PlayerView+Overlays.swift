@@ -42,7 +42,6 @@ extension PlayerView {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .animation(.easeOut(duration: 0.2), value: showQualityPicker)
         }
-        #if !os(tvOS)
         if showCaptionPicker {
             captionPickerOverlay
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -53,7 +52,6 @@ extension PlayerView {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .animation(.easeOut(duration: 0.2), value: showAudioTrackPicker)
         }
-        #endif
         if showSleepTimerPicker {
             sleepTimerPickerOverlay
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -544,7 +542,6 @@ extension PlayerView {
     }
 
     @ViewBuilder private var moreMenuCaptionsRow: some View {
-        #if !os(tvOS)
         if !vm.availableCaptions.isEmpty {
             Button {
                 showMoreMenu = false
@@ -563,13 +560,17 @@ extension PlayerView {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
+            .accessibilityIdentifier("player.moreMenu.captionsRow")
+            #if os(tvOS)
+            .background(moreMenuFocusedRow == .captions ? Color.white.opacity(0.15) : .clear)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .focused($moreMenuFocusedRow, equals: .captions)
+            #endif
             Divider()
         }
-        #endif
     }
 
     @ViewBuilder private var moreMenuAudioTrackRow: some View {
-        #if !os(tvOS)
         if vm.availableAudioTracks.count > 1 {
             Button {
                 showMoreMenu = false
@@ -589,9 +590,13 @@ extension PlayerView {
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
             .accessibilityIdentifier("player.moreMenu.audioTrackRow")
+            #if os(tvOS)
+            .background(moreMenuFocusedRow == .audioTrack ? Color.white.opacity(0.15) : .clear)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .focused($moreMenuFocusedRow, equals: .audioTrack)
+            #endif
             Divider()
         }
-        #endif
     }
 
     @ViewBuilder private var moreMenuDescriptionRow: some View {
