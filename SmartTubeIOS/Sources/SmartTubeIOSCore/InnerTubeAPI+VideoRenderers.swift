@@ -535,6 +535,19 @@ extension InnerTubeAPI {
         let thumbnails = (thumbVM?["image"] as? [String: Any])?["thumbnails"] as? [[String: Any]]
         let thumbURL = thumbnails?.last.flatMap { $0["url"] as? String }.flatMap { URL(string: $0) }
 
+        let publishedAt: Date? = {
+            for row in metaRows.dropFirst() {
+                guard let parts = row["metadataParts"] as? [[String: Any]] else { continue }
+                for part in parts {
+                    guard let text = part["text"] as? [String: Any],
+                          let str = text["content"] as? String ?? extractText(text)
+                    else { continue }
+                    if let date = parseRelativeDate(str) { return date }
+                }
+            }
+            return nil
+        }()
+
         return Video(
             id: videoId, title: title, channelTitle: channelTitle, channelId: channelId,
             thumbnailURL: thumbURL, duration: nil,
@@ -552,6 +565,7 @@ extension InnerTubeAPI {
                 }
                 return nil
             }(),
+            publishedAt: publishedAt,
             isLive: false, isShort: isShort, badges: []
         )
     }
@@ -686,6 +700,10 @@ extension InnerTubeAPI {
             return result
         }()
 
+        let publishedAt: Date? = (r["publishedTimeText"] as? [String: Any])
+            .flatMap { extractText($0) }
+            .flatMap { parseRelativeDate($0) }
+
         return Video(
             id: videoId,
             title: title,
@@ -694,6 +712,7 @@ extension InnerTubeAPI {
             thumbnailURL: thumbURL,
             duration: duration,
             viewCount: viewCount,
+            publishedAt: publishedAt,
             isLive: isLive,
             isShort: isShort,
             watchProgress: watchProgress,
@@ -743,6 +762,10 @@ extension InnerTubeAPI {
                 .flatMap { $0["percentDurationWatched"] as? Double } }
             .first.map { $0 / 100.0 }
 
+        let publishedAt: Date? = (r["publishedTimeText"] as? [String: Any])
+            .flatMap { extractText($0) }
+            .flatMap { parseRelativeDate($0) }
+
         return Video(
             id: videoId,
             title: title,
@@ -751,6 +774,7 @@ extension InnerTubeAPI {
             thumbnailURL: thumbURL,
             duration: duration,
             viewCount: viewCount,
+            publishedAt: publishedAt,
             isLive: false,
             isShort: false,
             watchProgress: watchProgress,
