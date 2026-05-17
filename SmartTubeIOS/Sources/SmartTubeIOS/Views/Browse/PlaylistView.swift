@@ -96,7 +96,14 @@ public struct PlaylistView: View {
                 LazyVStack(spacing: 0) {
                     ForEach(displayVideos) { video in
                         #if os(tvOS)
-                        VideoCardView(video: video, compact: true, onSelect: { selectedVideo = video })
+                        VideoCardView(video: video, compact: true, onSelect: {
+                                Task { @MainActor in
+                                    let captured = displayVideos
+                                    CurrentQueueStore.shared.replaceAll(with: captured)
+                                    let startIdx = video.playlistIndex ?? captured.firstIndex(where: { $0.id == video.id }) ?? 0
+                                    selectedVideo = CurrentQueueStore.shared.videoAt(index: startIdx) ?? video
+                                }
+                            })
                             .padding(.horizontal)
                             .padding(.vertical, 6)
                             .accessibilityIdentifier("video.card.\(video.id)")
@@ -108,7 +115,13 @@ public struct PlaylistView: View {
                             .accessibilityIdentifier("video.card.\(video.id)")
                             .onTapGesture {
                                 #if os(iOS)
-                                playerState.play(video: video)
+                                Task { @MainActor in
+                                    let captured = displayVideos
+                                    CurrentQueueStore.shared.replaceAll(with: captured)
+                                    let startIdx = video.playlistIndex ?? captured.firstIndex(where: { $0.id == video.id }) ?? 0
+                                    let toPlay = CurrentQueueStore.shared.videoAt(index: startIdx) ?? video
+                                    playerState.play(video: toPlay)
+                                }
                                 #else
                                 selectedVideo = video
                                 #endif
@@ -129,7 +142,14 @@ public struct PlaylistView: View {
                         let rowVideos = Array(displayVideos[startIdx..<min(startIdx + columnCount, displayVideos.count)])
                         HStack(alignment: .top, spacing: 12) {
                             ForEach(rowVideos) { video in
-                                VideoCardView(video: video, compact: false, onSelect: { selectedVideo = video })
+                                VideoCardView(video: video, compact: false, onSelect: {
+                                        Task { @MainActor in
+                                            let captured = displayVideos
+                                            CurrentQueueStore.shared.replaceAll(with: captured)
+                                            let startIdx = video.playlistIndex ?? captured.firstIndex(where: { $0.id == video.id }) ?? 0
+                                            selectedVideo = CurrentQueueStore.shared.videoAt(index: startIdx) ?? video
+                                        }
+                                    })
                                     .frame(maxWidth: .infinity)
                                     .accessibilityIdentifier("video.card.\(video.id)")
                             }
@@ -154,7 +174,13 @@ public struct PlaylistView: View {
                             .accessibilityIdentifier("video.card.\(video.id)")
                             .onTapGesture {
                                 #if os(iOS)
-                                playerState.play(video: video)
+                                Task { @MainActor in
+                                    let captured = displayVideos
+                                    CurrentQueueStore.shared.replaceAll(with: captured)
+                                    let startIdx = video.playlistIndex ?? captured.firstIndex(where: { $0.id == video.id }) ?? 0
+                                    let toPlay = CurrentQueueStore.shared.videoAt(index: startIdx) ?? video
+                                    playerState.play(video: toPlay)
+                                }
                                 #else
                                 selectedVideo = video
                                 #endif

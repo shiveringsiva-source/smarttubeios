@@ -230,4 +230,51 @@ struct CurrentQueueStoreTests {
         let count = await store.videos.count
         #expect(count == 500)
     }
+
+    // MARK: - replaceAll
+
+    @Test("replaceAll replaces existing videos with new set")
+    func replaceAllReplacesAllVideos() async {
+        let store = makeStore()
+        await store.append(makeVideo(id: "aaa11111111"))
+        await store.append(makeVideo(id: "bbb22222222"))
+        await store.append(makeVideo(id: "ccc33333333"))
+        let newVideos = [makeVideo(id: "ddd44444444"), makeVideo(id: "eee55555555")]
+        await store.replaceAll(with: newVideos)
+        let count = await store.videos.count
+        #expect(count == 2)
+        #expect(await store.videos[0].id == "ddd44444444")
+        #expect(await store.videos[1].id == "eee55555555")
+    }
+
+    @Test("replaceAll assigns correct playlistIndex via videoAt")
+    func replaceAllAssignsCorrectPlaylistIndexViaVideoAt() async {
+        let store = makeStore()
+        let v0 = makeVideo(id: "aaa11111111")
+        let v1 = makeVideo(id: "bbb22222222")
+        let v2 = makeVideo(id: "ccc33333333")
+        await store.replaceAll(with: [v0, v1, v2])
+        let queued = await store.videoAt(index: 1)
+        #expect(queued?.playlistIndex == 1)
+        #expect(queued?.playlistId == CurrentQueueStore.playlistID)
+    }
+
+    @Test("replaceAll respects maxCount")
+    func replaceAllRespectsMaxCount() async {
+        let store = makeStore()
+        let videos = (0..<501).map { makeVideo(id: String(format: "v%011d", $0)) }
+        await store.replaceAll(with: videos)
+        let count = await store.videos.count
+        #expect(count == 500)
+    }
+
+    @Test("replaceAll allows duplicate video IDs")
+    func replaceAllAllowsDuplicateVideoIds() async {
+        let store = makeStore()
+        let v = makeVideo(id: "aaa11111111")
+        await store.replaceAll(with: [v, v])
+        let count = await store.videos.count
+        #expect(count == 2)
+    }
 }
+

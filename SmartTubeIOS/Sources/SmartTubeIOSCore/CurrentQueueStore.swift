@@ -82,6 +82,14 @@ public actor CurrentQueueStore: UserDefaultsBackedStore {
         defaults.removeObject(forKey: Self.defaultsKey)
     }
 
+    /// Atomically replaces the queue with `newVideos`, preserving playlist order
+    /// and allowing duplicate video IDs (a real playlist can contain the same video
+    /// at two different positions). Caps at `maxCount`. Persists immediately.
+    public func replaceAll(with newVideos: [Video]) {
+        videos = Array(newVideos.prefix(Self.maxCount))
+        persist()
+    }
+
     // MARK: - Playlist adapter
 
     /// Returns the video at `index` tagged with the queue's synthetic `playlistId`

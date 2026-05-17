@@ -96,10 +96,14 @@ public final class PlaylistViewModel {
                 try await api.fetchPlaylistVideos(playlistId: self.playlistId, continuationToken: self.nextPageToken)
             }
             if !Task.isCancelled {
-                // Tag each video with the playlistId so the player can navigate next/prev.
-                let tagged = group.videos.map { v -> Video in
+                // Tag each video with the playlistId and its position so the player
+                // can navigate next/prev in the correct order. The offset accounts for
+                // previously-loaded pages so indices are monotonically increasing.
+                let offset = videos.count
+                let tagged = group.videos.enumerated().map { (idx, v) -> Video in
                     var copy = v
                     copy.playlistId = playlistId
+                    copy.playlistIndex = offset + idx
                     return copy
                 }
                 videos.append(contentsOf: tagged)
