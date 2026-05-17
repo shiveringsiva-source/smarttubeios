@@ -192,6 +192,19 @@ public final class HomeViewModel {
     // MARK: - Public API
 
     public func load() {
+        // UI-testing synchronous inject: if shorts were already injected at init,
+        // skip the full network load so injected data is not wiped.
+        // MUST be checked before the reset block below, which would clear shortsVideos.
+        if let arg = ProcessInfo.processInfo.arguments.first(where: {
+            $0.hasPrefix("--uitesting-inject-shorts-ids=")
+        }) {
+            let raw = String(arg.dropFirst("--uitesting-inject-shorts-ids=".count))
+            if !raw.split(separator: ",").filter({ !$0.isEmpty }).isEmpty {
+                homeLog.notice("UI-testing inject: load() skipped — data already injected at init")
+                return
+            }
+        }
+
         loadTask?.cancel()
         loadedAt = nil
         isRefreshing = true
@@ -202,18 +215,6 @@ public final class HomeViewModel {
             sections[i].isLoadingMore = false
             sections[i].hasFailed = false
             sections[i].nextPageToken = nil
-        }
-
-        // UI-testing synchronous inject: if shorts were already injected at init,
-        // skip the full network load so injected data is not wiped.
-        if let arg = ProcessInfo.processInfo.arguments.first(where: {
-            $0.hasPrefix("--uitesting-inject-shorts-ids=")
-        }) {
-            let raw = String(arg.dropFirst("--uitesting-inject-shorts-ids=".count))
-            if !raw.split(separator: ",").filter({ !$0.isEmpty }).isEmpty {
-                homeLog.notice("UI-testing inject: load() skipped — data already injected at init")
-                return
-            }
         }
 
         loadTask = Task {
@@ -243,10 +244,10 @@ public final class HomeViewModel {
             }
             shortsVideos = await fetchedShortsResult.0
             shortsNextPageToken = await fetchedShortsResult.1
-            // Auto-load next page if the Shorts row won’t fill 2 horizontal screens.
-            // Threshold: 6 items on iOS (3 cards/screen × 2 screens);
-            //            8 items on tvOS (4 cards/screen × 2 screens).
+            // Fill the initial threshold (6 iOS / 8 tvOS) quickly, then kick off
+            // background loading to fill the rest of the endless row.
             await loadMoreShortsIfNeeded()
+            loadNextShortsPage()   // continues loading all remaining pages in background
             isRefreshing = false
             loadedAt = Date()
             let merged = self.mergedVideos
@@ -313,6 +314,44 @@ public final class HomeViewModel {
     public func loadMoreMerged() {
         for state in sections where state.section.type == .home || state.section.type == .subscriptions {
             loadMore(sectionId: state.id)
+        }
+    }
+
+    /// Called by the view when the user scrolls to the last card in the Shorts row.
+    /// Loads the next page unconditionally — no minimum-count threshold — so the row
+    /// grows on demand as the user scrolls past the already-loaded cards.
+    public func loadNextShortsPage() {
+        homeLog.notice("loadNextShortsPage: called — count=\(shortsVideos.count) isLoading=\(isLoadingMoreShorts) hasToken=\(shortsNextPageToken != nil)")
+        guard !isLoadingMoreShorts, shortsNextPageToken != nil else {
+            homeLog.notice("loadNextShortsPage: skipped isLoading=\(isLoadingMoreShorts) hasToken=\(shortsNextPageToken != nil)")
+            return
+        }
+        Task { @MainActor [weak self] in
+            await self?.fetchAndAppendNextShortsPage()
+        }
+    }
+
+    private func fetchAndAppendNextShortsPage() async {
+        guard !isLoadingMoreShorts, shortsNextPageToken != nil else { return }
+        isLoadingMoreShorts = true
+        defer { isLoadingMoreShorts = false }
+        // Loop through ALL remaining pages so the row is truly endless.
+        // Each iteration appends one page; the loop stops when the API
+        // returns no continuation token or an empty page.
+        while let token = shortsNextPageToken {
+            homeLog.notice("loadNextShortsPage: fetching token=\(String(token.prefix(16)))\u{2026}")
+            do {
+                let more = try await api.fetchShortsMore(continuationToken: token)
+                let existingIDs = Set(shortsVideos.map(\.id))
+                let newVideos = more.videos.filter { !existingIDs.contains($0.id) }
+                shortsVideos.append(contentsOf: newVideos)
+                shortsNextPageToken = more.nextPageToken
+                homeLog.notice("loadNextShortsPage: added \(newVideos.count) total=\(shortsVideos.count) hasMore=\(more.nextPageToken != nil)")
+                if newVideos.isEmpty { break } // server returned empty page — stop
+            } catch {
+                homeLog.error("loadNextShortsPage: failed: \(error.localizedDescription)")
+                break
+            }
         }
     }
 

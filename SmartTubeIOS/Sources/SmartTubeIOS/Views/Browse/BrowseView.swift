@@ -408,6 +408,8 @@ struct ShortsRowSection: View {
     let videos: [Video]
     let onSelect: (Video) -> Void
     var accessibilityID: String = ""
+    /// Called when the last card becomes visible — triggers the next page load.
+    var loadMore: (() -> Void)? = nil
 
     /// Card width: ~120pt on iOS/iPadOS; ~200pt on tvOS.
     #if os(tvOS)
@@ -427,10 +429,16 @@ struct ShortsRowSection: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("shorts.card.\(video.id)")
+                    .onAppear {
+                        if video.id == videos.last?.id { loadMore?() }
+                    }
                     #else
                     ShortsCardView(video: video, onTap: { onSelect(video) })
                         .frame(width: cardWidth, height: cardWidth * 16 / 9)
                         .accessibilityIdentifier("shorts.card.\(video.id)")
+                        .onAppear {
+                            if video.id == videos.last?.id { loadMore?() }
+                        }
                     #endif
                 }
             }

@@ -276,7 +276,8 @@ public struct HomeView: View {
                             ShortsRowSection(
                                 videos: shortsVideos,
                                 onSelect: { selectVideo($0, from: shortsVideos) },
-                                accessibilityID: "home.shortsRow"
+                                accessibilityID: "home.shortsRow",
+                                loadMore: { homeVM.loadNextShortsPage() }
                             )
                         }
                     }

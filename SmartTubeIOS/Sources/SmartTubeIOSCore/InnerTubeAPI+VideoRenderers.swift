@@ -262,7 +262,20 @@ extension InnerTubeAPI {
         // Only parse video tiles — require the content type to be explicitly set.
         // Tiles with nil or non-video contentType (e.g. ads with customData/onFirstVisibleCommand)
         // are silently dropped. Android: TILE_CONTENT_TYPE_VIDEO
-        guard (tile["contentType"] as? String) == "TILE_CONTENT_TYPE_VIDEO" else { return nil }
+        // Also accept TILE_CONTENT_TYPE_REEL: FEshorts TVHTML5 response uses this type for
+        // Short videos. Silently dropping all REEL tiles is why the Shorts row shows 0 results
+        // from the dedicated FEshorts browse (only subs tiles, which are TILE_CONTENT_TYPE_VIDEO,
+        // survive). Log unrecognised types so future renderer changes can be diagnosed.
+        let contentType = tile["contentType"] as? String
+        switch contentType {
+        case "TILE_CONTENT_TYPE_VIDEO", "TILE_CONTENT_TYPE_REEL":
+            break // accepted
+        default:
+            if let ct = contentType {
+                tubeLog.notice("parseTileRenderer: dropping tile contentType=\(ct, privacy: .public)")
+            }
+            return nil
+        }
 
         // Newer TVHTML5 history/subs responses sometimes nest it under innertubeCommand, or use
         // navigationEndpoint instead of onSelectCommand — try all three paths so regular history
