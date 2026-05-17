@@ -19,16 +19,26 @@ extension PlaybackViewModel {
         do {
             playerLog.notice("Retrying playback with Android client for \(video.id)")
             let fallbackInfo = try await api.fetchPlayerInfoAndroid(videoId: video.id)
-            guard let fallbackURL = fallbackInfo.preferredStreamURL else {
+            guard let baseFallbackURL = fallbackInfo.preferredStreamURL else {
                 playerLog.error("❌ Fallback player: no stream URL")
                 self.error = originalError
                 return
             }
-            playerLog.notice("Fallback stream URL: \(fallbackURL.absoluteString.prefix(120))")
+            playerLog.notice("Fallback stream URL: \(baseFallbackURL.absoluteString.prefix(120))")
             // BUG-002 fix: propagate fetched info so format/caption pickers reflect the fallback response.
             playerInfo = fallbackInfo
             availableFormats = Self.deduplicatedVideoFormats(fallbackInfo.formats)
             availableCaptions = fallbackInfo.captionTracks
+            // Apply quality preference: fetch HLS variants if available, then select the correct stream.
+            var fallbackURL = baseFallbackURL
+            if let hlsURL = fallbackInfo.hlsURL {
+                let variantURLs = await fetchHLSVariantURLs(url: hlsURL)
+                if !variantURLs.isEmpty {
+                    hlsVariantURLs = variantURLs
+                    availableFormats = availableFormats.filter { variantURLs.keys.contains($0.height) }
+                }
+                fallbackURL = applyQualityPreference(to: baseFallbackURL)
+            }
             lastAttemptedStreamURL = fallbackURL
             let fallbackItem = AVPlayerItem(url: fallbackURL)
             // BUG-009 fix: replace the current item BEFORE setting up the observer so the
@@ -100,7 +110,7 @@ extension PlaybackViewModel {
     ///
     /// Falls back to `retryWithFallbackPlayer` (Android client) if composition setup fails.
     func retryWithAdaptiveComposition(video: Video, info: PlayerInfo, originalError: Error?) async {
-        guard let videoURL = info.bestAdaptiveVideoURL,
+        guard let videoURL = qualityCapVideoURL(from: info.formats),
               let audioURL = info.bestAdaptiveAudioURL else {
             playerLog.error("❌ Adaptive composition: no adaptive URLs in player info")
             await retryWithFallbackPlayer(video: video, originalError: originalError)
@@ -205,18 +215,28 @@ extension PlaybackViewModel {
             playerLog.notice("403 recovery — re-fetching iOS client player info for \(video.id)")
             let freshInfo = try await api.fetchPlayerInfo(videoId: video.id)
             await VideoPreloadCache.shared.store(playerInfo: freshInfo, for: video.id)
-            guard let freshURL = freshInfo.preferredStreamURL else {
+            guard let baseRecoveryURL = freshInfo.preferredStreamURL else {
                 playerLog.error("❌ 403 recovery: no stream URL in fresh iOS-client response")
                 await retryWithFallbackPlayer(video: video, originalError: originalError)
                 return
             }
-            playerLog.notice("403 recovery stream URL: \(freshURL.absoluteString.prefix(120))")
+            playerLog.notice("403 recovery stream URL: \(baseRecoveryURL.absoluteString.prefix(120))")
             // BUG-003 fix: propagate refreshed info so ViewModel state reflects fresh signed URLs.
             playerInfo = freshInfo
             availableFormats = Self.deduplicatedVideoFormats(freshInfo.formats)
             availableCaptions = freshInfo.captionTracks
-            lastAttemptedStreamURL = freshURL
-            let recoveryItem = AVPlayerItem(url: freshURL)
+            // Apply quality preference: fetch HLS variants if available, then select the correct stream.
+            var recoveryURL = baseRecoveryURL
+            if let hlsURL = freshInfo.hlsURL {
+                let variantURLs = await fetchHLSVariantURLs(url: hlsURL)
+                if !variantURLs.isEmpty {
+                    hlsVariantURLs = variantURLs
+                    availableFormats = availableFormats.filter { variantURLs.keys.contains($0.height) }
+                }
+                recoveryURL = applyQualityPreference(to: baseRecoveryURL)
+            }
+            lastAttemptedStreamURL = recoveryURL
+            let recoveryItem = AVPlayerItem(url: recoveryURL)
             // BUG-009 fix: replace before observing.
             player.replaceCurrentItem(with: recoveryItem)
             itemObserverTask?.cancel()
@@ -265,5 +285,27 @@ extension PlaybackViewModel {
             playerLog.error("❌ 403 recovery fetch failed: \(String(describing: error)) — falling back to Android client")
             await retryWithFallbackPlayer(video: video, originalError: originalError)
         }
+    }
+
+    // MARK: - Helpers
+
+    /// Returns the best adaptive video-only MP4 URL, respecting the user's quality preference.
+    /// When `preferredQuality != .auto`, filters to formats at or below `maxHeight`, sorts
+    /// by height descending then bitrate descending. Falls back to highest bitrate when no
+    /// format meets the height cap.
+    private func qualityCapVideoURL(from formats: [VideoFormat]) -> URL? {
+        let videoOnly = formats.filter {
+            $0.mimeType.hasPrefix("video/mp4") && !$0.mimeType.contains(", ") && $0.url != nil
+        }
+        guard settings.preferredQuality != .auto,
+              let maxH = settings.preferredQuality.maxHeight else {
+            return videoOnly.sorted { ($0.bitrate ?? 0) > ($1.bitrate ?? 0) }.first?.url
+        }
+        let capped = videoOnly.filter { $0.height <= maxH }
+        let sorted = capped.sorted {
+            if $0.height != $1.height { return $0.height > $1.height }
+            return ($0.bitrate ?? 0) > ($1.bitrate ?? 0)
+        }
+        return sorted.first?.url ?? videoOnly.sorted { ($0.bitrate ?? 0) > ($1.bitrate ?? 0) }.first?.url
     }
 }

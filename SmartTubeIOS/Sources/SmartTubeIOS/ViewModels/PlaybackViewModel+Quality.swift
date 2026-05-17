@@ -25,6 +25,10 @@ extension PlaybackViewModel {
         qualityManager.peakBitRate(for: height)
     }
 
+    func applyQualityPreference(to masterURL: URL) -> URL {
+        qualityManager.applyQualityPreference(to: masterURL)
+    }
+
     func reloadHLSItemH264Capped(seekTo time: TimeInterval) async {
         await qualityManager.reloadHLSItemH264Capped(seekTo: time)
     }

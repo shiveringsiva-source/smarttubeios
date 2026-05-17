@@ -150,6 +150,25 @@ final class PlaybackQualityManager {
         delegate?.isSwappingItem = false
     }
 
+    /// Selects the best stream URL for the current quality preference.
+    /// Mutates `selectedFormat` to reflect the chosen format and returns a direct
+    /// HLS variant URL when one is available, or `masterURL` otherwise.
+    func applyQualityPreference(to masterURL: URL) -> URL {
+        guard let settings = delegate?.settings,
+              settings.preferredQuality != .auto,
+              let maxH = settings.preferredQuality.maxHeight else {
+            return masterURL
+        }
+        let matchingFormat = availableFormats.first { $0.height <= maxH }
+        selectedFormat = matchingFormat
+        if let height = matchingFormat?.height, let variantURL = hlsVariantURLs[height] {
+            playerLog.notice("Quality \(maxH)p via direct variant playlist (fallback path)")
+            return variantURL
+        }
+        playerLog.notice("Quality \(maxH)p — no variant URL, using master (fallback path)")
+        return masterURL
+    }
+
     /// Fetches the HLS master manifest and returns a map of stream height → variant playlist URL.
     func fetchHLSVariantURLs(url: URL) async -> [Int: URL] {
         var request = URLRequest(url: url)

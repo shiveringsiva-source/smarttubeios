@@ -470,9 +470,10 @@ extension PlaybackViewModel {
             // non-1× speeds, reducing the tinny/phase artefacts audible on AirPods
             // compared to the default .timeDomain algorithm.
             item.audioTimePitchAlgorithm = .spectral
-            // Only use the preferredMaximumResolution hint when no direct variant URL was available.
+            // Only use the preferredMaximumResolution hint when no direct variant URL was available
+            // AND the stream is an HLS master manifest (hint is ignored for direct MP4 assets).
             if settings.preferredQuality != .auto, let maxH = settings.preferredQuality.maxHeight,
-               initialStreamURL == masterStreamURL {
+               initialStreamURL == masterStreamURL, info.hlsURL != nil {
                 let h = CGFloat(maxH)
                 item.preferredMaximumResolution = CGSize(width: h * 4, height: h)
                 item.preferredPeakBitRate = peakBitRate(for: maxH)
