@@ -114,9 +114,18 @@ public final class HomeViewModel {
     /// Used by `homeShelves` to populate the main grid (Shorts are shown separately).
     public var homeRegularVideos: [Video] { mergedVideos.filter { !$0.isShort } }
 
-    /// Short videos from FEshorts and from home-row responses.
-    /// Used by `homeShelves` to populate the dedicated Shorts row.
-    public var homeShortsVideos: [Video] { shortsVideos + mergedVideos.filter { $0.isShort } }
+    /// Short videos for the dedicated Shorts row.
+    /// Sources (in priority order, deduplicated by video ID):
+    ///  1. `shortsVideos` — from the FEshorts browse (when the API works)
+    ///  2. Subscriptions section shorts — pulled directly from the full subs list so
+    ///     they are not lost to the home/subs interleave ratio in `mergedVideos`
+    ///  3. `mergedVideos` shorts — catches any shorts from the home-rec feed
+    public var homeShortsVideos: [Video] {
+        let subsShorts = sections.first { $0.section.type == .subscriptions }?.videos.filter { $0.isShort } ?? []
+        var seen = Set<String>()
+        return (shortsVideos + subsShorts + mergedVideos.filter { $0.isShort })
+            .filter { seen.insert($0.id).inserted }
+    }
 
     // MARK: - Dependencies
 
@@ -132,6 +141,23 @@ public final class HomeViewModel {
         self.api = api
         self.sections = Self.shelfSections.map { SectionState(section: $0) }
         observeFeedHideNotifications()
+
+        // UI-testing synchronous inject: --uitesting-inject-shorts-ids=id1,id2,...
+        // Runs at init so the view renders with data immediately, without waiting
+        // for any auth token or network call. load() is skipped for this path.
+        if let arg = ProcessInfo.processInfo.arguments.first(where: {
+            $0.hasPrefix("--uitesting-inject-shorts-ids=")
+        }) {
+            let raw = String(arg.dropFirst("--uitesting-inject-shorts-ids=".count))
+            let ids = raw.split(separator: ",").map(String.init).filter { !$0.isEmpty }
+            if !ids.isEmpty {
+                shortsVideos = ids.map { Video(id: $0, title: $0, channelTitle: "Test", isShort: true) }
+                for i in sections.indices { sections[i].isLoading = false }
+                isRefreshing = false
+                loadedAt = Date()
+                homeLog.notice("UI-testing inject: populated \(ids.count) shorts at init")
+            }
+        }
     }
 
     // MARK: - Feed hide handling
@@ -177,6 +203,19 @@ public final class HomeViewModel {
             sections[i].hasFailed = false
             sections[i].nextPageToken = nil
         }
+
+        // UI-testing synchronous inject: if shorts were already injected at init,
+        // skip the full network load so injected data is not wiped.
+        if let arg = ProcessInfo.processInfo.arguments.first(where: {
+            $0.hasPrefix("--uitesting-inject-shorts-ids=")
+        }) {
+            let raw = String(arg.dropFirst("--uitesting-inject-shorts-ids=".count))
+            if !raw.split(separator: ",").filter({ !$0.isEmpty }).isEmpty {
+                homeLog.notice("UI-testing inject: load() skipped — data already injected at init")
+                return
+            }
+        }
+
         loadTask = Task {
             // Fetch shorts via FEshorts in parallel with the home/subs feed.
             // The TV home feed (FEwhat_to_watch) never includes a Shorts shelf.
@@ -286,24 +325,36 @@ public final class HomeViewModel {
         #else
         let threshold = 6
         #endif
-        guard shortsVideos.count < threshold,
-              let token = shortsNextPageToken,
-              !isLoadingMoreShorts else {
+        guard !isLoadingMoreShorts else {
+            homeLog.notice("loadMoreShortsIfNeeded: skipped — already loading")
+            return
+        }
+        guard shortsVideos.count < threshold, shortsNextPageToken != nil else {
             homeLog.notice("loadMoreShortsIfNeeded: skipped count=\(shortsVideos.count) hasToken=\(shortsNextPageToken != nil) loading=\(isLoadingMoreShorts)")
             return
         }
-        homeLog.notice("loadMoreShortsIfNeeded: auto-fetching next page count=\(shortsVideos.count) threshold=\(threshold)")
         isLoadingMoreShorts = true
         defer { isLoadingMoreShorts = false }
-        do {
-            let more = try await api.fetchShortsMore(continuationToken: token)
-            let existingIDs = Set(shortsVideos.map(\.id))
-            let newVideos = more.videos.filter { !existingIDs.contains($0.id) }
-            shortsVideos.append(contentsOf: newVideos)
-            shortsNextPageToken = more.nextPageToken
-            homeLog.notice("loadMoreShortsIfNeeded: added \(newVideos.count) total=\(shortsVideos.count)")
-        } catch {
-            homeLog.error("loadMoreShortsIfNeeded: fetch failed: \(error.localizedDescription)")
+        var loopIteration = 0
+        // Loop until we have at least `threshold` items or pages run out.
+        while shortsVideos.count < threshold, let token = shortsNextPageToken {
+            loopIteration += 1
+            homeLog.notice("loadMoreShortsIfNeeded: loop=\(loopIteration) count=\(shortsVideos.count) threshold=\(threshold) token=\(token.prefix(16))…")
+            do {
+                let more = try await api.fetchShortsMore(continuationToken: token)
+                let existingIDs = Set(shortsVideos.map(\.id))
+                let newVideos = more.videos.filter { !existingIDs.contains($0.id) }
+                shortsVideos.append(contentsOf: newVideos)
+                shortsNextPageToken = more.nextPageToken
+                homeLog.notice("loadMoreShortsIfNeeded: added \(newVideos.count) total=\(shortsVideos.count)")
+                if newVideos.isEmpty {
+                    // No new content on this page — avoid an infinite loop.
+                    break
+                }
+            } catch {
+                homeLog.error("loadMoreShortsIfNeeded: fetch failed: \(error.localizedDescription)")
+                break
+            }
         }
     }
 

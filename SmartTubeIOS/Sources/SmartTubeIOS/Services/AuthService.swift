@@ -78,6 +78,12 @@ public final class AuthService {
     public init() {
         tokenManager = TokenManager()
         loadFromKeychain()
+        // UI-testing override: treat the session as signed-in so the home feed
+        // renders its full shelves (including the injected Shorts row) without
+        // requiring real keychain credentials.
+        if ProcessInfo.processInfo.arguments.contains("--uitesting-signed-in") {
+            isSignedIn = true
+        }
         // If already signed in but no account info (e.g. stored before the
         // fetchUserInfo fix), refresh it silently in the background.
         if isSignedIn && accountName == nil {

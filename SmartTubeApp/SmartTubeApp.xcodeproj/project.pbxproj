@@ -59,6 +59,7 @@
 		E3F4A5B6C7D8E9F0A1B2C3D4 /* CategoryChipHTTP400UITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A5B6C7D8E9F0A1B2C3D4E5 /* CategoryChipHTTP400UITests.swift */; };
 		E5F6A7B8C9D0E1F2A3B4C5D6 /* SubscriptionsScrollRestorationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5E6F7A8B9C0D1E2F3A4B5C6 /* SubscriptionsScrollRestorationUITests.swift */; };
 		F1A2B3C4D5E6F7A8B9C0D1E2 /* HomeShortsRowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2F3A4B5C6D7E8F9A0B1C2D3 /* HomeShortsRowUITests.swift */; };
+			C4D5E6F7A8B9C0D1E2F3A4B5 /* HomeShortsCountUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5E6F7A8B9C0D1E2F3A4B5C6 /* HomeShortsCountUITests.swift */; };
 		F1CDC40190BFE18C52E5AD1B /* SmartTubeIOSCore in Frameworks */ = {isa = PBXBuildFile; productRef = 4D96747315A9E066D09F1F4E /* SmartTubeIOSCore */; };
 		FB01000000000000000000A1 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = FA01000000000000000000A1 /* GoogleService-Info.plist */; };
 		RS000000000000000000001B /* RSSFeedsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = RS000000000000000000001A /* RSSFeedsUITests.swift */; };
@@ -178,6 +179,7 @@
 		D5E6F7A8B9C0D1E2F3A4B5C6 /* SubscriptionsScrollRestorationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionsScrollRestorationUITests.swift; sourceTree = "<group>"; };
 		DA3810E40296738F4C5E0B95 /* SmartTubeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SmartTubeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2F3A4B5C6D7E8F9A0B1C2D3 /* HomeShortsRowUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeShortsRowUITests.swift; sourceTree = "<group>"; };
+			D5E6F7A8B9C0D1E2F3A4B5C6 /* HomeShortsCountUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeShortsCountUITests.swift; sourceTree = "<group>"; };
 		F4A5B6C7D8E9F0A1B2C3D4E5 /* CategoryChipHTTP400UITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryChipHTTP400UITests.swift; sourceTree = "<group>"; };
 		FA01000000000000000000A1 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		RS000000000000000000001A /* RSSFeedsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RSSFeedsUITests.swift; sourceTree = "<group>"; };
@@ -279,6 +281,7 @@
 				43AC502830145DD05002B5A2 /* PlaylistsNavigationUITests.swift */,
 				A9B0C1D2E3F4A5B6C7D8E9F0 /* ShortsNavigationUITests.swift */,
 				E2F3A4B5C6D7E8F9A0B1C2D3 /* HomeShortsRowUITests.swift */,
+						D5E6F7A8B9C0D1E2F3A4B5C6 /* HomeShortsCountUITests.swift */,
 				B2C3D4E5F6A7B8C9D0E1F2A3 /* PlayerNavigationUITests.swift */,
 				F4A5B6C7D8E9F0A1B2C3D4E5 /* CategoryChipHTTP400UITests.swift */,
 				C3E4F5A6B7C8D9E0F1A2B3C4 /* SubscriptionsPlaybackUITests.swift */,
@@ -736,6 +739,7 @@
 				D222FD43501FE20610A249CC /* PlaylistsNavigationUITests.swift in Sources */,
 				B0C1D2E3F4A5B6C7D8E9F0A1 /* ShortsNavigationUITests.swift in Sources */,
 				F1A2B3C4D5E6F7A8B9C0D1E2 /* HomeShortsRowUITests.swift in Sources */,
+						C4D5E6F7A8B9C0D1E2F3A4B5 /* HomeShortsCountUITests.swift in Sources */,
 				C1D2E3F4A5B6C7D8E9F0A1B2 /* PlayerNavigationUITests.swift in Sources */,
 				67AEAB0F2FAF96BC00820F4D /* VideoDownloadUITests.swift in Sources */,
 				E3F4A5B6C7D8E9F0A1B2C3D4 /* CategoryChipHTTP400UITests.swift in Sources */,

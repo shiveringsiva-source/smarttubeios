@@ -185,47 +185,53 @@ extension InnerTubeAPI {
 
     public func fetchShorts() async throws -> VideoGroup {
         // Strategy:
-        //  1. FEshorts browse with TV client + auth — the OAuth token issued by the TV
-        //     device-code flow is bound to TVHTML5; using WEB client + TV token returns 400.
-        //     postTV() uses TVHTML5 headers on youtubei.googleapis.com, which accepts the token.
-        //  2. Fall back to searching "shorts" — returns ~15 videoRenderers with
-        //     reelWatchEndpoint in their navigationEndpoint, so parseVideoRenderer
-        //     marks them isShort = true. Verified via curl.
-        let isAuth = authToken != nil
-        if isAuth {
-            do {
-                var body = makeBody(client: tvClientContext)
-                body["browseId"] = "FEshorts"
-                let data = try await postTV(endpoint: "browse", body: body)
-                let group = try parseVideoGroup(from: data, title: "Shorts")
-                let shorts = group.videos.filter { $0.isShort }
-                tubeLog.notice("fetchShorts browse (auth) \u{2192} \(group.videos.count, privacy: .public) videos, \(shorts.count, privacy: .public) shorts")
-                if !shorts.isEmpty {
-                    return VideoGroup(title: "Shorts", videos: shorts, nextPageToken: group.nextPageToken)
-                }
-            } catch {
-                tubeLog.notice("fetchShorts browse failed (\(error, privacy: .public)), falling back to search")
+        //  1. FEshorts browse via postTVCategory (www.youtube.com + TVHTML5 client headers).
+        //     FE* category browse IDs must go to www.youtube.com — they return 400 on
+        //     youtubei.googleapis.com even with a valid Bearer token. This matches how
+        //     fetchMusic() uses postTVCategory for FEmusic_home.
+        //  2. Fall back to searching "#shorts" — returns reelItemRenderer items whose
+        //     parseReelItemRenderer always sets isShort = true.
+        tubeLog.notice("fetchShorts: attempting FEshorts browse via postTVCategory")
+        do {
+            var body = makeBody(client: tvClientContext)
+            body["browseId"] = "FEshorts"
+            let data = try await postTVCategory(endpoint: "browse", body: body)
+            // Log the top-level response keys to reveal which renderer type FEshorts uses.
+            let topLevelKeys = (data as? [String: Any])?.keys.sorted().joined(separator: ", ") ?? "(not a dict)"
+            tubeLog.notice("fetchShorts browse raw topLevelKeys=[ \(topLevelKeys, privacy: .public) ]")
+            let group = try parseVideoGroup(from: data, title: "Shorts")
+            let shorts = group.videos.filter { $0.isShort }
+            let browseToken = group.nextPageToken.map { String($0.prefix(16)) + "…" } ?? "nil"
+            tubeLog.notice("fetchShorts browse \u{2192} \(group.videos.count, privacy: .public) videos, \(shorts.count, privacy: .public) shorts, nextPageToken=\(browseToken, privacy: .public)")
+            if !shorts.isEmpty {
+                return VideoGroup(title: "Shorts", videos: shorts, nextPageToken: group.nextPageToken)
             }
+            tubeLog.notice("fetchShorts browse returned 0 shorts out of \(group.videos.count, privacy: .public) — falling back to search")
+        } catch {
+            tubeLog.notice("fetchShorts browse failed (\(error, privacy: .public)), falling back to search")
         }
 
-        // Search fallback: "shorts" query returns ~15 Shorts-tagged videoRenderers
-        // (each has reelWatchEndpoint → isShort = true). Works unauthenticated.
-        let searchGroup = try await search(query: "shorts")
+        // Search fallback: "#shorts" returns reelItemRenderer items which parseReelItemRenderer
+        // always marks isShort = true. Works unauthenticated. "shorts" query stopped returning
+        // reel content reliably; "#shorts" is a hashtag search that consistently returns Shorts.
+        let searchGroup = try await search(query: "#shorts")
         let shorts = searchGroup.videos.filter { $0.isShort }
         tubeLog.notice("fetchShorts search fallback → \(searchGroup.videos.count, privacy: .public) total, \(shorts.count, privacy: .public) shorts")
         return VideoGroup(title: "Shorts", videos: shorts)
     }
 
     public func fetchShortsMore(continuationToken: String) async throws -> VideoGroup {
-        // Fetches the next page of FEshorts browse using the continuation token
-        // returned by a previous fetchShorts() call. Requires authentication.
-        // Must use postTV() — continuation tokens are client-scoped; the token
-        // from a TVHTML5 FEshorts response requires TVHTML5 client context.
+        // Continuation tokens from postTVCategory (www.youtube.com) FEshorts responses
+        // are scoped to that domain/client — must use postTVCategory here too.
+        tubeLog.notice("fetchShortsMore called token=\(continuationToken.prefix(16), privacy: .public)…")
         let body = makeBody(client: tvClientContext, continuationToken: continuationToken)
-        let data = try await postTV(endpoint: "browse", body: body)
+        let data = try await postTVCategory(endpoint: "browse", body: body)
+        let topLevelKeys = (data as? [String: Any])?.keys.sorted().joined(separator: ", ") ?? "(not a dict)"
+        tubeLog.notice("fetchShortsMore raw topLevelKeys=[ \(topLevelKeys, privacy: .public) ]")
         let group = try parseVideoGroup(from: data, title: "Shorts")
         let shorts = group.videos.filter { $0.isShort }
-        tubeLog.notice("fetchShortsMore → \(group.videos.count, privacy: .public) videos, \(shorts.count, privacy: .public) shorts token=\(continuationToken.prefix(12), privacy: .public)…")
+        let moreToken = group.nextPageToken.map { String($0.prefix(16)) + "…" } ?? "nil"
+        tubeLog.notice("fetchShortsMore \u{2192} \(group.videos.count, privacy: .public) videos, \(shorts.count, privacy: .public) shorts, nextPageToken=\(moreToken, privacy: .public) token=\(continuationToken.prefix(12), privacy: .public)…")
         return VideoGroup(title: "Shorts", videos: shorts, nextPageToken: group.nextPageToken)
     }
 
