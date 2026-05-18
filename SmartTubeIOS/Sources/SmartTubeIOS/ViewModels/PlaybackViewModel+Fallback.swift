@@ -35,6 +35,19 @@ extension PlaybackViewModel {
                 return
             }
 
+            // Fix #122: Android client sometimes returns no HLS manifest but adaptive streams
+            // are available. Using preferredStreamURL in this case returns the muxed itag=18
+            // URL, which fails immediately with AVFoundationErrorDomain -11828
+            // ("This media format is not supported"). Delegate to retryWithAdaptiveComposition
+            // instead, which composites the video-only and audio-only adaptive streams.
+            if fallbackInfo.hlsURL == nil,
+               fallbackInfo.bestAdaptiveVideoURL != nil,
+               fallbackInfo.bestAdaptiveAudioURL != nil {
+                playerLog.notice("Android fallback: no HLS but adaptive streams available — delegating to adaptive composition")
+                await retryWithAdaptiveComposition(video: video, info: fallbackInfo, originalError: originalError)
+                return
+            }
+
             guard let baseFallbackURL = fallbackInfo.preferredStreamURL else {
                 playerLog.error("❌ Fallback player: no stream URL")
                 self.error = originalError

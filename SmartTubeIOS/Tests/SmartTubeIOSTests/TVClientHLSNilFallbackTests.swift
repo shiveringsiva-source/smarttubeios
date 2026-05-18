@@ -205,4 +205,50 @@ struct TVClientHLSNilFallbackTests {
         #expect(shouldSkipAndroidMuxedFallback(info),
                 "Guard must fire so we don't pass the muxed URL to AVPlayer")
     }
+
+    // MARK: - Fix #122: Android no-HLS with adaptive streams → use adaptive composition
+
+    /// The new guard in retryWithFallbackPlayer (Fix #122):
+    ///   if fallbackInfo.hlsURL == nil,
+    ///      fallbackInfo.bestAdaptiveVideoURL != nil,
+    ///      fallbackInfo.bestAdaptiveAudioURL != nil { → use adaptive composition }
+    private func shouldDelegateToAdaptiveComposition(_ info: PlayerInfo) -> Bool {
+        info.hlsURL == nil &&
+        info.bestAdaptiveVideoURL != nil &&
+        info.bestAdaptiveAudioURL != nil
+    }
+
+    @Test("Fix #122: Android adaptive-only response triggers adaptive composition delegation")
+    func fix122AdaptiveOnlyTriggersDelegation() {
+        // Adaptive video + audio, no HLS — the new guard must route to adaptive composition
+        // instead of using preferredStreamURL (muxed URL) which would fail with -11828.
+        let info = makeAdaptivePlayerInfo()
+        #expect(shouldDelegateToAdaptiveComposition(info),
+                "Fix #122: guard must fire for no-HLS + adaptive Android response")
+    }
+
+    @Test("Fix #122: adaptive response preferredStreamURL returns nil (no muxed URL to fall back to)")
+    func fix122AdaptiveOnlyPreferredStreamURLIsNil() {
+        // When the Android response has only adaptive streams (no muxed MP4 with ", "),
+        // preferredStreamURL returns nil — confirming the muxed path cannot be used.
+        let info = makeAdaptivePlayerInfo()
+        #expect(info.preferredStreamURL == nil,
+                "Fix #122: adaptive-only response has no muxed URL — must use adaptive composition")
+    }
+
+    @Test("Fix #122: HLS Android response does NOT trigger adaptive composition delegation")
+    func fix122HLSResponseDoesNotTriggerDelegation() {
+        let info = makeHLSPlayerInfo()
+        #expect(!shouldDelegateToAdaptiveComposition(info),
+                "Fix #122: delegation must not fire when Android returns HLS")
+    }
+
+    @Test("Fix #122: muxed-only Android response does NOT trigger adaptive composition (caught by earlier guard)")
+    func fix122MuxedOnlyDoesNotTriggerDelegation() {
+        // Muxed-only has no adaptive streams, so the Fix #122 condition is false.
+        // The earlier NW-3-FIX guard catches it first.
+        let info = makeMuxedOnlyPlayerInfo()
+        #expect(!shouldDelegateToAdaptiveComposition(info),
+                "Fix #122: delegation must not fire for muxed-only — NW-3-FIX guard handles it")
+    }
 }
