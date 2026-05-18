@@ -40,6 +40,7 @@
 		AA1100000000000000000CA2 /* RecommendedChipUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1100000000000000000CA1 /* RecommendedChipUITests.swift */; };
 		AA1100000000000000000DA2 /* TVPlayerSettingsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1100000000000000000DA1 /* TVPlayerSettingsUITests.swift */; };
 		AA1100000000000000001202 /* TVSettingsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1100000000000000001201 /* TVSettingsUITests.swift */; };
+		AA1100000000000000001302 /* TVHomeFeedUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1100000000000000001401 /* TVHomeFeedUITests.swift */; };
 		AA1100000000000000000EA2 /* AudioOnlyModeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1100000000000000000EA1 /* AudioOnlyModeUITests.swift */; };
 		AA1100000000000000000FA2 /* PlayerMoreMenuLayoutUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1100000000000000000FA1 /* PlayerMoreMenuLayoutUITests.swift */; };
 		AA1100000000000000001002 /* PlayerPickerOverlayLayoutUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1100000000000000001001 /* PlayerPickerOverlayLayoutUITests.swift */; };
@@ -165,6 +166,7 @@
 		AA1100000000000000000CA1 /* RecommendedChipUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecommendedChipUITests.swift; sourceTree = "<group>"; };
 		AA1100000000000000000DA1 /* TVPlayerSettingsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPlayerSettingsUITests.swift; sourceTree = "<group>"; };
 		AA1100000000000000001201 /* TVSettingsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVSettingsUITests.swift; sourceTree = "<group>"; };
+		AA1100000000000000001401 /* TVHomeFeedUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVHomeFeedUITests.swift; sourceTree = "<group>"; };
 		AA1100000000000000000EA1 /* AudioOnlyModeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioOnlyModeUITests.swift; sourceTree = "<group>"; };
 		AA1100000000000000000FA1 /* PlayerMoreMenuLayoutUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerMoreMenuLayoutUITests.swift; sourceTree = "<group>"; };
 		AA1100000000000000001001 /* PlayerPickerOverlayLayoutUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerPickerOverlayLayoutUITests.swift; sourceTree = "<group>"; };
@@ -303,6 +305,7 @@
 				AA1100000000000000000CA1 /* RecommendedChipUITests.swift */,
 				AA1100000000000000000DA1 /* TVPlayerSettingsUITests.swift */,
 				AA1100000000000000001201 /* TVSettingsUITests.swift */,
+				AA1100000000000000001401 /* TVHomeFeedUITests.swift */,
 				AA1100000000000000000EA1 /* AudioOnlyModeUITests.swift */,
 				AA1100000000000000000FA1 /* PlayerMoreMenuLayoutUITests.swift */,
 				AA1100000000000000001001 /* PlayerPickerOverlayLayoutUITests.swift */,
@@ -711,6 +714,7 @@
 				1A2B3C4D5E6F1A2B3C4D5E63 /* TVFocusChainUITests.swift in Sources */,
 				AA1100000000000000000DA2 /* TVPlayerSettingsUITests.swift in Sources */,
 				AA1100000000000000001202 /* TVSettingsUITests.swift in Sources */,
+				AA1100000000000000001302 /* TVHomeFeedUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
