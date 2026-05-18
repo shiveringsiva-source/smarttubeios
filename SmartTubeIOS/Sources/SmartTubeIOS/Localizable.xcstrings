@@ -8355,6 +8355,7 @@
       }
     },
     "Landscape Always Play" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
