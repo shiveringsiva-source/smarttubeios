@@ -229,6 +229,15 @@ extension PlaybackViewModel {
                         let errDomain = nsErr?.domain ?? "?"
                         let errCode = nsErr?.code ?? -1
                         playerLog.error("❌ Adaptive composition AVPlayerItem failed: id=\(video.id) videoItag=\(videoItag) rqh=\(videoRqh) errorDomain=\(errDomain) code=\(errCode) httpStatus=\(httpStatus)")
+                        // NW-3-FIX-CACHE-COMP: Before giving up, try a fresh iOS-client fetch.
+                        // The cached response had hls=false; a fresh fetch may return hls=true.
+                        if !self.hasRetriedPlayback {
+                            self.hasRetriedPlayback = true
+                            playerLog.notice("⚠️ Adaptive composition AVPlayerItem failed — trying fresh iOS client for \(video.id)")
+                            await VideoPreloadCache.shared.invalidatePlayerInfo(for: video.id)
+                            await self.retryWith403Recovery(video: video, originalError: originalError)
+                            return
+                        }
                         // Do NOT retry with Android client — same rqh=1 adaptive streams
                         // would 403 again, creating an infinite loop.
                         self.error = APIError.unavailable("Unable to play this video")
@@ -258,15 +267,23 @@ extension PlaybackViewModel {
                 )
             }
         } catch {
-            // Do NOT call retryWithFallbackPlayer here — it re-fetches the Android client,
-            // which returns the same adaptive-only streams (now universally gated by rqh=1
-            // / pot token), causing an infinite loop of composition-setup failures.
-            // Use APIError.unavailable so the player shows "Unable to play this video"
-            // instead of the raw AVFoundation NSURLError localizedDescription ("unknown error").
             let nsErr = error as NSError
             let underlying = nsErr.userInfo[NSUnderlyingErrorKey] as? NSError
             let httpStatus = underlying?.code == -12660 ? 403 : nsErr.code
             playerLog.error("❌ Adaptive composition setup failed: id=\(video.id) videoItag=\(videoItag) rqh=\(videoRqh) errorDomain=\(nsErr.domain) code=\(nsErr.code) httpStatus=\(httpStatus) — stopping retry chain")
+            // NW-3-FIX-CACHE-COMP: Before giving up, try a fresh iOS-client fetch.
+            // The cached iOS response had hls=false; a fresh fetch may return hls=true
+            // (confirmed: background prefetch at line 1729 shows hls=true for J6J8vhIzfLo).
+            // Guard with hasRetriedPlayback to prevent a second cycle.
+            if !hasRetriedPlayback {
+                hasRetriedPlayback = true
+                playerLog.notice("⚠️ Adaptive composition failed (rqh=\(videoRqh)) — trying fresh iOS client for \(video.id)")
+                await VideoPreloadCache.shared.invalidatePlayerInfo(for: video.id)
+                await retryWith403Recovery(video: video, originalError: originalError)
+                return
+            }
+            // Do NOT call retryWithFallbackPlayer — Android returns the same rqh=1 adaptive
+            // streams which 403 again, causing an infinite loop.
             self.error = APIError.unavailable("Unable to play this video")
         }
     }
