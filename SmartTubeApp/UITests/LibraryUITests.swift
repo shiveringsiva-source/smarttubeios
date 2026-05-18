@@ -76,9 +76,9 @@ final class LibraryUITests: XCTestCase {
         guard picker.waitForExistence(timeout: 5) else {
             try captureAndSkip("library.sectionPicker did not appear — Library tab may not have loaded", in: app)
         }
-        let button = picker.buttons["Subscriptions"]
-        guard button.waitForExistence(timeout: 3) else {
-            try captureAndSkip("Subscriptions segment not found in library section picker", in: app)
+        let button = picker.buttons["Subs"]
+        guard button.waitForExistence(timeout: 5) else {
+            try captureAndSkip("Subs segment not found in library section picker", in: app)
         }
         button.tap()
     }
@@ -217,8 +217,8 @@ final class LibraryUITests: XCTestCase {
         let picker = app.segmentedControls["library.sectionPicker"]
         XCTAssertTrue(picker.waitForExistence(timeout: 5),
                       "library.sectionPicker should appear")
-        XCTAssertTrue(picker.buttons["Subscriptions"].exists,
-                      "'Subscriptions' segment must be present in the library picker")
+        XCTAssertTrue(picker.buttons["Subs"].exists,
+                      "'Subs' segment must be present in the library picker")
     }
 
     func testSubscriptionsNavigationDoesNotCrash() throws {

@@ -28,7 +28,7 @@ public struct LibraryView: View {
     #endif
 
     enum LibrarySection: String, CaseIterable, Identifiable {
-        case subscriptions = "Subscriptions"
+        case subscriptions = "Subs"
         case history       = "History"
         case playlists     = "Playlists"
         case rss           = "RSS Feeds"
