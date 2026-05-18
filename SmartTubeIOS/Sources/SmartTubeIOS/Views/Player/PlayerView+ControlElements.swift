@@ -376,8 +376,14 @@ extension PlayerControlsOverlay {
                 .renderingMode(.original)
                 .font(.system(size: 42 * controlScale))
                 .foregroundStyle(.white)
+                #if !os(tvOS)
+                .padding(12)
+                #endif
         }
         .buttonStyle(.plain)
+        #if !os(tvOS)
+        .contentShape(Rectangle())
+        #endif
         #if os(tvOS)
         .focusable(false)
         .scaleEffect(highlightedControl == .playPause ? 1.6 : 1.0)
@@ -397,8 +403,14 @@ extension PlayerControlsOverlay {
                 .renderingMode(.original)
                 .font(.system(size: 28 * controlScale))
                 .foregroundStyle(.white)
+                #if !os(tvOS)
+                .padding(12)
+                #endif
         }
         .buttonStyle(.plain)
+        #if !os(tvOS)
+        .contentShape(Rectangle())
+        #endif
         #if os(tvOS)
         .focusable(false)
         .scaleEffect(tvHighlighted ? 1.55 : 1.0)

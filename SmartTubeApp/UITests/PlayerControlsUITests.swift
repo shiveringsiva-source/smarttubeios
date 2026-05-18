@@ -56,6 +56,22 @@ final class PlayerControlsUITests: XCTestCase {
     // MARK: - Tests
 
     #if os(iOS)
+    func testPlayPauseButtonMeetsMinimumTapTarget() throws {
+        // Verify the play/pause button tap target is at least 44×44pt (Apple HIG minimum).
+        // Task #127 added .padding(12) + .contentShape(Rectangle()) to fix a ~42pt icon
+        // that had no padding and therefore fell below the minimum.
+        try openPlayerFromHome()
+        showControls()
+        guard playPauseButton.waitForExistence(timeout: 8) else {
+            try captureAndSkip("player.playPauseButton not found — cannot verify tap target size", in: app)
+        }
+        let frame = playPauseButton.frame
+        XCTAssertGreaterThanOrEqual(frame.width, 44,
+            "play/pause button width \(frame.width)pt is below the 44pt Apple HIG minimum")
+        XCTAssertGreaterThanOrEqual(frame.height, 44,
+            "play/pause button height \(frame.height)pt is below the 44pt Apple HIG minimum")
+    }
+
     func testPiPButtonStartsPiP() throws {
         // Re-launch with --uitesting-enable-pip to bypass the isPictureInPictureSupported()
         // guard on parallel clone simulators where the entitlement may not propagate.
