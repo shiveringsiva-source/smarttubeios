@@ -72,6 +72,28 @@ final class PlayerControlsUITests: XCTestCase {
             "play/pause button height \(frame.height)pt is below the 44pt Apple HIG minimum")
     }
 
+    func testCaptionCuePositionedAboveScrubBar() throws {
+        // Task #129: caption cue must appear above the scrub/progress bar, not overlap it.
+        // Verifies padding change from 72pt (fixed) to 130pt (when controls visible).
+        // Skips gracefully if the video has no captions or no cue is active.
+        try openPlayerFromHome()
+        showControls()
+        let scrubBar = app.otherElements["player.progressBar"].firstMatch
+        let captionCue = app.staticTexts.matching(identifier: "player.captionCue").firstMatch
+        guard scrubBar.waitForExistence(timeout: 8) else {
+            try captureAndSkip("Scrub bar not found — cannot verify caption position", in: app)
+        }
+        guard captionCue.waitForExistence(timeout: 5) else {
+            // No caption cue visible — video may not have captions or no cue is active.
+            // This is an acceptable skip; regression is only detectable when captions are on.
+            try captureAndSkip("player.captionCue not visible — video has no active caption cue", in: app)
+        }
+        let cueMaxY = captionCue.frame.maxY
+        let scrubMinY = scrubBar.frame.minY
+        XCTAssertLessThan(cueMaxY, scrubMinY,
+            "Caption cue bottom (\(cueMaxY)pt) must be above scrub bar top (\(scrubMinY)pt) — task #129")
+    }
+
     func testPiPButtonStartsPiP() throws {
         // Re-launch with --uitesting-enable-pip to bypass the isPictureInPictureSupported()
         // guard on parallel clone simulators where the entitlement may not propagate.

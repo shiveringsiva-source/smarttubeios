@@ -24,5 +24,6 @@ public struct CaptionCueView: View {
             .clipShape(RoundedRectangle(cornerRadius: 5))
             .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
             .padding(.horizontal, 24)
+            .accessibilityIdentifier("player.captionCue")
     }
 }

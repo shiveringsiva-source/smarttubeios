@@ -212,7 +212,11 @@ extension PlayerView {
                     VStack(spacing: 0) {
                         Spacer()
                         CaptionCueView(text: cue.text)
-                            .padding(.bottom, 72)
+                            // When controls are visible the scrub bar + bottom controls
+                            // occupy ~130pt. Push captions above that area. When controls
+                            // are hidden, a small margin from the safe-area bottom is enough.
+                            .padding(.bottom, vm.controlsVisible ? 130 : 24)
+                            .animation(.easeInOut(duration: 0.2), value: vm.controlsVisible)
                     }
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
