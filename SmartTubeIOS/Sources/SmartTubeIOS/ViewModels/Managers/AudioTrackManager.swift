@@ -76,6 +76,21 @@ final class AudioTrackManager {
                   !group.options.isEmpty else { return }
             var tracks: [AudioTrack] = []
             var optionMap: [String: AVMediaSelectionOption] = [:]
+
+            // Pre-compute which options carry isMainProgramContent so we can decide
+            // whether Phase 1 is discriminating before iterating.
+            let mainContentOptions = group.options.filter {
+                $0.hasMediaCharacteristic(.isMainProgramContent)
+            }
+            // Phase 1 is only useful when it discriminates: some (but not all) options
+            // carry the characteristic. YouTube sometimes sets isMainProgramContent on
+            // EVERY dubbed track, causing all to appear as "Original". In that case we
+            // fall through to Phase 2 (HLS DEFAULT=YES identity check).
+            let phase1Discriminates = !mainContentOptions.isEmpty
+                && mainContentOptions.count < group.options.count
+
+            playerLog.notice("AudioTrackManager: \(group.options.count) option(s), phase1Discriminates=\(phase1Discriminates) (mainContent=\(mainContentOptions.count))")
+
             for (_, option) in group.options.enumerated() {
                 let locale = option.locale?.identifier
                     ?? option.extendedLanguageTag
@@ -86,24 +101,13 @@ final class AudioTrackManager {
                     // Fall back to English locale when the device locale cannot resolve the code.
                     return Locale(identifier: "en_US").localizedString(forLanguageCode: loc.identifier)
                 } ?? locale
-                // Phase 1: use AVFoundation's authoritative "main program content" characteristic.
-                // YouTube sets CHARACTERISTICS="public.main-program-content" on the creator's
-                // original audio. AI-dubbed tracks receive DEFAULT=YES for locale matching but
-                // typically do NOT carry this characteristic.
-                let anyOptionHasMainContent = group.options.contains {
-                    $0.hasMediaCharacteristic(.isMainProgramContent)
-                }
-                let isOriginal: Bool
-                if anyOptionHasMainContent {
-                    isOriginal = option.hasMediaCharacteristic(.isMainProgramContent)
-                } else {
-                    // Phase 2: fall back to HLS DEFAULT=YES (existing behaviour for manifests
-                    // that do not use CHARACTERISTICS tags — e.g. older YouTube manifests).
-                    // Use object identity (===) instead of value equality (==): AVMediaSelectionOption
-                    // does not reliably implement Equatable and == can return true for multiple
-                    // options in the same group, causing all tracks to display "Original".
-                    isOriginal = group.defaultOption.map { $0 === option } ?? false
-                }
+                let isMainContent = option.hasMediaCharacteristic(.isMainProgramContent)
+                let isDefault = group.defaultOption.map { $0 === option } ?? false
+                playerLog.notice("  AudioOption: locale=\(locale) isMainContent=\(isMainContent) isDefault=\(isDefault) displayName=\(displayName)")
+                // Phase 1: use AVFoundation's authoritative "main program content" characteristic,
+                // but ONLY when it discriminates (not all tracks carry it).
+                // Phase 2: fall back to HLS DEFAULT=YES identity check.
+                let isOriginal: Bool = phase1Discriminates ? isMainContent : isDefault
                 let track = AudioTrack(id: locale, name: displayName,
                                        languageCode: locale, isOriginal: isOriginal)
                 tracks.append(track)

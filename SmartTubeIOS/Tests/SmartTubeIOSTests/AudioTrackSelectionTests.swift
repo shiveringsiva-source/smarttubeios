@@ -359,5 +359,69 @@ struct AudioTrackSelectionTests {
         #expect(tracks.allSatisfy { !$0.isOriginal },
                 "Fix #130: when no DEFAULT=YES exists, no track must show Original label")
     }
+
+    // MARK: - Phase 1 / Phase 2 detection logic (mirrors AudioTrackManager)
+
+    /// Mirrors the `isOriginal` detection in AudioTrackManager.loadAudioTracks,
+    /// replacing AVMediaSelectionOption with Bool flags to allow pure unit-testing.
+    ///
+    /// Parameters mirror the per-track state inside the for loop:
+    ///   mainContentCount  — number of tracks in the group that have isMainProgramContent
+    ///   totalCount        — total tracks in the group
+    ///   hasMainContent    — whether THIS option has isMainProgramContent
+    ///   isDefault         — whether THIS option is group.defaultOption (identity)
+    private func isOriginalMirror(
+        mainContentCount: Int,
+        totalCount: Int,
+        hasMainContent: Bool,
+        isDefault: Bool
+    ) -> Bool {
+        let phase1Discriminates = mainContentCount > 0 && mainContentCount < totalCount
+        return phase1Discriminates ? hasMainContent : isDefault
+    }
+
+    /// YouTube's common case: ALL tracks have isMainProgramContent (YouTube sets it
+    /// on every dubbed track). Phase 1 must NOT fire; Phase 2 (DEFAULT=YES) must be used.
+    @Test func fix130_allTracksHaveMainContent_fallsBackToDefault() {
+        // 6 dubbed tracks, all have isMainProgramContent — mirrors the screenshot bug.
+        let total = 6
+        let results = (0..<total).map { i in
+            isOriginalMirror(mainContentCount: total, totalCount: total,
+                             hasMainContent: true, isDefault: i == 0)
+        }
+        let originalCount = results.filter { $0 }.count
+        #expect(originalCount == 1,
+                "When all tracks have isMainProgramContent, exactly one must be Original (via DEFAULT=YES)")
+        #expect(results[0] == true,  "The DEFAULT=YES track must be Original")
+        #expect(results[1] == false, "Non-default tracks must not be Original")
+    }
+
+    /// Well-behaved manifest: exactly one track has isMainProgramContent (the creator's
+    /// original). Phase 1 fires and only that track is "Original".
+    @Test func fix130_oneTrackHasMainContent_phase1Fires() {
+        // Track 1 is original (has isMainProgramContent), tracks 2-5 are dubbed.
+        let total = 5
+        let results = (0..<total).map { i in
+            isOriginalMirror(mainContentCount: 1, totalCount: total,
+                             hasMainContent: i == 0, isDefault: i == 0)
+        }
+        let originalCount = results.filter { $0 }.count
+        #expect(originalCount == 1,
+                "Exactly one track has isMainProgramContent — Phase 1 should fire cleanly")
+        #expect(results[0] == true)
+        #expect(results[1] == false)
+    }
+
+    /// No tracks have isMainProgramContent (older manifest). Phase 2 (DEFAULT=YES) used.
+    @Test func fix130_noTracksHaveMainContent_usesDefault() {
+        let total = 3
+        let results = (0..<total).map { i in
+            isOriginalMirror(mainContentCount: 0, totalCount: total,
+                             hasMainContent: false, isDefault: i == 2)
+        }
+        let originalCount = results.filter { $0 }.count
+        #expect(originalCount == 1)
+        #expect(results[2] == true, "The DEFAULT=YES track must be Original when Phase 2 fires")
+    }
 }
 
