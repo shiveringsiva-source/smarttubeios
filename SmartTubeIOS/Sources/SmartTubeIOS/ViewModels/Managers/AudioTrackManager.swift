@@ -80,8 +80,11 @@ final class AudioTrackManager {
                 let locale = option.locale?.identifier
                     ?? option.extendedLanguageTag
                     ?? "unknown"
-                let displayName = option.locale.flatMap {
-                    Locale.current.localizedString(forLanguageCode: $0.identifier)
+                let displayName = option.locale.flatMap { loc -> String? in
+                    let name = Locale.current.localizedString(forLanguageCode: loc.identifier)
+                    if let name, !name.isEmpty { return name }
+                    // Fall back to English locale when the device locale cannot resolve the code.
+                    return Locale(identifier: "en_US").localizedString(forLanguageCode: loc.identifier)
                 } ?? locale
                 // Phase 1: use AVFoundation's authoritative "main program content" characteristic.
                 // YouTube sets CHARACTERISTICS="public.main-program-content" on the creator's
@@ -96,7 +99,10 @@ final class AudioTrackManager {
                 } else {
                     // Phase 2: fall back to HLS DEFAULT=YES (existing behaviour for manifests
                     // that do not use CHARACTERISTICS tags — e.g. older YouTube manifests).
-                    isOriginal = group.defaultOption != nil && group.defaultOption == option
+                    // Use object identity (===) instead of value equality (==): AVMediaSelectionOption
+                    // does not reliably implement Equatable and == can return true for multiple
+                    // options in the same group, causing all tracks to display "Original".
+                    isOriginal = group.defaultOption.map { $0 === option } ?? false
                 }
                 let track = AudioTrack(id: locale, name: displayName,
                                        languageCode: locale, isOriginal: isOriginal)
