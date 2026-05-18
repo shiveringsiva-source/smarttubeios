@@ -78,7 +78,8 @@ extension PlaybackViewModel {
             nominalBitrate: nominalBitrate,
             observedBitrate: observedBitrate,
             droppedFrames: droppedFrames,
-            stalls: stalls
+            stalls: stalls,
+            reportID: CrashlyticsLogger.sessionReportID
         )
     }
 
@@ -118,6 +119,10 @@ public struct StatsForNerdsSnapshot: Sendable {
     public var observedBitrate: String
     public var droppedFrames: Int
     public var stalls: Int
+    /// Session report ID — matches the `report_id` custom key stamped on Crashlytics
+    /// reports. Quote this when sending a diagnostic report so the developer can
+    /// locate the exact session in Firebase.
+    public var reportID: String
 
     public static let empty = StatsForNerdsSnapshot(
         videoId: "",
@@ -127,6 +132,7 @@ public struct StatsForNerdsSnapshot: Sendable {
         nominalBitrate: "",
         observedBitrate: "",
         droppedFrames: 0,
-        stalls: 0
+        stalls: 0,
+        reportID: CrashlyticsLogger.sessionReportID
     )
 }

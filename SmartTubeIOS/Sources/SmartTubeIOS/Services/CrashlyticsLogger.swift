@@ -7,6 +7,17 @@ import SmartTubeIOSCore
 /// Crashlytics as breadcrumbs so they appear in crash reports.
 /// `.debug` entries are only written to `os.log` — too verbose for crash reports.
 struct CrashlyticsLogger: Sendable {
+
+    /// Short identifier (8 hex chars) generated once per app session.
+    /// Stamped onto every sent diagnostic report as the `report_id` custom key
+    /// and displayed in the Stats for Nerds debug overlay so users can quote it
+    /// when describing an issue.
+    static let sessionReportID: String = {
+        let raw = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+        let id = String(raw.prefix(8)).uppercased()
+        Crashlytics.crashlytics().setCustomValue(id, forKey: "report_id")
+        return id
+    }()
     private let logger: Logger
     private let category: String
 
@@ -60,13 +71,17 @@ struct CrashlyticsLogger: Sendable {
     /// Records a user-triggered diagnostic non-fatal event in Crashlytics.
     /// All breadcrumbs accumulated during the session are attached to this event,
     /// giving a detailed picture of the app flow leading up to the user's report.
+    /// The `report_id` custom key matches the ID shown in the Stats for Nerds
+    /// debug overlay (two-finger tap in the player) so reports can be correlated
+    /// with user-provided IDs from support conversations.
     static func sendDiagnosticReport() {
         let crashlytics = Crashlytics.crashlytics()
-        crashlytics.log("[Diagnostic] User-requested diagnostic report — see breadcrumbs for session flow.")
+        crashlytics.setCustomValue(sessionReportID, forKey: "report_id")
+        crashlytics.log("[Diagnostic] User-requested diagnostic report — report_id=\(sessionReportID). Tip: two-finger tap the player to open the debug overlay and confirm this ID before sending.")
         let error = NSError(
             domain: "SmartTube.UserDiagnostic",
             code: 0,
-            userInfo: [NSLocalizedDescriptionKey: "User-requested diagnostic report"]
+            userInfo: [NSLocalizedDescriptionKey: "User-requested diagnostic report (ID: \(sessionReportID))"]
         )
         crashlytics.record(error: error)
     }

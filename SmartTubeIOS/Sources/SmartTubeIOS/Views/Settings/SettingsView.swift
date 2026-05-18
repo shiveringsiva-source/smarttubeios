@@ -308,8 +308,6 @@ public struct SettingsView: View {
                 .accessibilityIdentifier("settings.resetAllButton")
         } header: {
             Text("About")
-        } footer: {
-            Text("Diagnostic Report sends recent app logs to the developer to help investigate issues.")
         }
     }
 
