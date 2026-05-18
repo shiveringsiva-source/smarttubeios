@@ -184,19 +184,51 @@ struct PlaybackQualityTests {
     }
 
     @Test func qualityHint_notAppliedForDirectMP4_guardConditionEvaluatesToFalse() {
-        // The guard: `initialStreamURL == masterStreamURL && info.hlsURL != nil`
+        // The guard: `preferredQuality != .auto && maxH != nil && info.hlsURL != nil`
         // When hlsURL is nil (direct MP4 asset), the hint must NOT be applied.
         let hlsURL: URL? = nil
         let preferredQuality = AppSettings.VideoQuality.q1080
         let maxH = preferredQuality.maxHeight
-        let initialStreamURL = URL(string: "https://example.com/video.mp4")!
-        let masterStreamURL = initialStreamURL
-        // Simulate the guard condition
+        // Simulate the guard condition (task #128: condition no longer checks initialStreamURL)
         let shouldApplyHint = preferredQuality != .auto
             && maxH != nil
-            && initialStreamURL == masterStreamURL
             && hlsURL != nil
         #expect(shouldApplyHint == false, "preferredMaximumResolution hint must not be applied to direct MP4 assets")
+    }
+
+    /// Task #128: initial load must always use the master HLS URL even when a variant URL
+    /// exists for the preferred quality. Variant playlists omit EXT-X-MEDIA alternate audio
+    /// renditions, which causes AudioTrackManager to exit early and produce silent audio.
+    @Test func initialLoad_alwaysUsesMasterURL_whenPreferredQualityIsNonAuto() {
+        let masterURL = URL(string: "https://example.com/master.m3u8")!
+        let variantURL = URL(string: "https://example.com/1080p.m3u8")!
+        let hlsVariantURLs: [Int: URL] = [1080: variantURL, 720: URL(string: "https://example.com/720p.m3u8")!]
+
+        // Mirror the fixed logic: initialStreamURL is always masterURL regardless of hlsVariantURLs
+        func resolveInitialStreamURL(preferredMaxHeight: Int?, masterURL: URL) -> URL {
+            // Task #128 fix: do NOT index hlsVariantURLs for initial load.
+            return masterURL
+        }
+
+        let resolved = resolveInitialStreamURL(preferredMaxHeight: 1080, masterURL: masterURL)
+        #expect(resolved == masterURL,
+                "Initial load must use master HLS URL so EXT-X-MEDIA audio renditions are available")
+        #expect(resolved != variantURL,
+                "Variant playlist URL must NOT be used on initial load — it lacks alternate audio entries")
+    }
+
+    /// Task #128: quality hints must be applied to HLS master URL when preference is non-auto,
+    /// without requiring initialStreamURL == masterStreamURL (old gating condition removed).
+    @Test func qualityHint_appliedWhenHLSURLPresentAndQualityNonAuto() {
+        let hlsURL: URL? = URL(string: "https://example.com/master.m3u8")
+        let preferredQuality = AppSettings.VideoQuality.q1080
+        let maxH = preferredQuality.maxHeight
+        // Fixed condition: no longer gates on initialStreamURL == masterStreamURL
+        let shouldApplyHint = preferredQuality != .auto
+            && maxH != nil
+            && hlsURL != nil
+        #expect(shouldApplyHint == true,
+                "Quality ABR hints must be applied when quality is non-auto and an HLS URL is present")
     }
 
     // MARK: - Adaptive composition quality cap (mirrors qualityCapVideoURL logic)

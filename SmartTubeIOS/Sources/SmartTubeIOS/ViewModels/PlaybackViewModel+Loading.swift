@@ -436,20 +436,17 @@ extension PlaybackViewModel {
                 playerLog.error("❌ No stream URL after successful parse (should not happen)")
                 throw APIError.decodingError("No stream URL")
             }
-            // If a quality preference is saved, use the matching direct variant playlist URL
-            // so ABR cannot override the user's choice on fast connections (preferredMaximumResolution
-            // is advisory only and is routinely ignored by AVPlayer on the simulator).
-            // For Auto mode, use the master URL and let ABR pick the best variant.
+            // For initial load always use the master HLS manifest so that AVPlayer
+            // receives EXT-X-MEDIA alternate audio renditions (dubbed tracks, etc.).
+            // Variant playlists omit EXT-X-MEDIA entries, which causes AudioTrackManager
+            // to exit early and produce silent audio when a non-auto quality is preferred.
+            // Quality is steered via AVPlayerItem hints (preferredMaximumResolution /
+            // preferredPeakBitRate) which AVPlayer honours during ABR adaptation.
             var initialStreamURL = masterStreamURL
             if settings.preferredQuality != .auto, let maxH = settings.preferredQuality.maxHeight {
                 let matchingFormat = availableFormats.first { $0.height <= maxH }
                 selectedFormat = matchingFormat
-                if let height = matchingFormat?.height, let variantURL = hlsVariantURLs[height] {
-                    initialStreamURL = variantURL
-                    playerLog.notice("Initial quality \(maxH)p via direct variant playlist")
-                } else {
-                    playerLog.notice("Initial quality \(maxH)p — no variant URL, falling back to master")
-                }
+                playerLog.notice("Initial quality \(maxH)p — using master URL with ABR hints")
             }
             playerLog.notice("Starting AVPlayer with: \(initialStreamURL.absoluteString.prefix(120))")
             lastAttemptedStreamURL = initialStreamURL
@@ -462,14 +459,16 @@ extension PlaybackViewModel {
             // non-1× speeds, reducing the tinny/phase artefacts audible on AirPods
             // compared to the default .timeDomain algorithm.
             item.audioTimePitchAlgorithm = .spectral
-            // Only use the preferredMaximumResolution hint when no direct variant URL was available
-            // AND the stream is an HLS master manifest (hint is ignored for direct MP4 assets).
+            // Apply quality hints when a non-auto preference is set. These steer AVPlayer's
+            // ABR algorithm toward the user's preferred resolution without bypassing audio
+            // metadata (which variant URLs would lose). Hints are applied unconditionally
+            // to the master URL for all HLS streams.
             if settings.preferredQuality != .auto, let maxH = settings.preferredQuality.maxHeight,
-               initialStreamURL == masterStreamURL, info.hlsURL != nil {
+               info.hlsURL != nil {
                 let h = CGFloat(maxH)
                 item.preferredMaximumResolution = CGSize(width: h * 4, height: h)
                 item.preferredPeakBitRate = peakBitRate(for: maxH)
-                playerLog.notice("Initial quality \(maxH)p hint set (no variant URL)")
+                playerLog.notice("Initial quality \(maxH)p hint set (master with ABR)")
             }
             // Observe item status using async/await (withCheckedContinuation is not needed
             // here since we only need to react to status changes, not await them).
