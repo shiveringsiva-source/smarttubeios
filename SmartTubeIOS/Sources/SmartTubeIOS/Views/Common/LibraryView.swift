@@ -63,7 +63,7 @@ public struct LibraryView: View {
         #if os(iOS) || os(tvOS)
         .toolbar(.hidden, for: .navigationBar)
         #endif
-        #if os(tvOS)
+        #if !os(iOS)
         .navigationDestination(item: $selectedVideo) { video in
             PlayerView(video: video, api: api)
         }

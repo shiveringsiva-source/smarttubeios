@@ -64,7 +64,7 @@ public struct HomeView: View {
             Divider()
             #endif
             contentArea
-                #if os(tvOS)
+                #if !os(iOS)
                 .navigationDestination(item: $selectedVideo) { video in
                     PlayerView(video: video, api: api)
                 }

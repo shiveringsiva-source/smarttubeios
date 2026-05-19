@@ -53,6 +53,11 @@ public struct ChannelView: View {
             PlayerView(video: video, api: api)
         }
         #endif
+        #if os(macOS)
+        .navigationDestination(item: $selectedVideo) { video in
+            PlayerView(video: video, api: api)
+        }
+        #endif
         .navigationDestination(item: $channelDestination) { dest in
             ChannelView(channelId: dest.channelId)
         }
