@@ -212,27 +212,37 @@ public struct VideoCardView: View {
 
     public var body: some View {
         #if os(tvOS)
-        // Use a Button so that the Siri Remote's Select press fires the action.
-        // .focusable() + .onTapGesture does NOT reliably fire on Select because
-        // the focus engine (outermost wrapper) intercepts the event before the
-        // tap gesture recognizer (inner wrapper) can process it. Button handles
-        // Select natively and also cooperates correctly with .contextMenu (long
-        // press) so the two interactions don't conflict.
-        Button { onSelect?() } label: {
-            cardContent
-        }
-        .buttonStyle(.plain)
-        .focused($isFocused)
-        .onChange(of: isFocused) { _, newValue in
-            focusLog.info("[VideoCard] isFocused=\(newValue) id=\(self.video.id)")
-        }
-        .shadow(color: isFocused ? .white.opacity(0.9) : .clear, radius: 18, x: 0, y: 0)
-        .scaleEffect(isFocused ? 1.08 : 1.0)
-        .zIndex(isFocused ? 1 : 0)
-        .animation(.easeInOut(duration: 0.15), value: isFocused)
-        .alert(item: $watchLaterAlert) { item in
-            Alert(title: Text(item.title), message: Text(item.message), dismissButton: .default(Text("OK")))
-        }
+        // Modifier order is critical on tvOS:
+        //
+        //   cardContent  (contains .contextMenu — handles long press)
+        //       .focusable()          — registers view with focus engine (D-pad navigation)
+        //       .onTapGesture { }     — fires on Select press (outermost → receives event first)
+        //       .focused($isFocused)  — tracks focus state (does not consume events)
+        //
+        // Why this order works:
+        // • .onTapGesture outermost → Select button press fires the action.
+        //   (.focusable() outermost broke Select because the focus engine intercepted
+        //    the primary-action event before the inner tap gesture could see it.)
+        // • .contextMenu innermost, co-located in the same modifier chain as
+        //   .onTapGesture → SwiftUI's gesture arbiter can cancel the pending tap
+        //   recogniser when it detects a long press, so long press shows the menu
+        //   without also playing the video.
+        // • .focusable() between contextMenu and onTapGesture keeps the view in the
+        //   focus engine so D-pad UP/DOWN can reach it.
+        cardContent
+            .focusable()
+            .onTapGesture { onSelect?() }
+            .focused($isFocused)
+            .onChange(of: isFocused) { _, newValue in
+                focusLog.info("[VideoCard] isFocused=\(newValue) id=\(self.video.id)")
+            }
+            .shadow(color: isFocused ? .white.opacity(0.9) : .clear, radius: 18, x: 0, y: 0)
+            .scaleEffect(isFocused ? 1.08 : 1.0)
+            .zIndex(isFocused ? 1 : 0)
+            .animation(.easeInOut(duration: 0.15), value: isFocused)
+            .alert(item: $watchLaterAlert) { item in
+                Alert(title: Text(item.title), message: Text(item.message), dismissButton: .default(Text("OK")))
+            }
         #else
         cardContent
             .alert(item: $watchLaterAlert) { item in

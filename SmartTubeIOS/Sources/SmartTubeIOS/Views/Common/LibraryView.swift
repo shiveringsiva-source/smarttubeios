@@ -34,6 +34,14 @@ public struct LibraryView: View {
         case rss           = "RSS Feeds"
         case downloads     = "Downloads"
 
+        #if os(tvOS)
+        // Downloads saves to Photos library — not supported on tvOS.
+        // Exclude the chip by hiding it from allCases on tvOS.
+        static var allCases: [LibrarySection] {
+            [.subscriptions, .history, .playlists, .rss]
+        }
+        #endif
+
         var id: String { rawValue }
         var browseSectionType: BrowseSection.SectionType {
             switch self {
