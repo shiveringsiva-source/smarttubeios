@@ -60,26 +60,24 @@ final class TVShortsDownNavigationUITests: XCTestCase {
             try captureAndSkip("home.chipBar did not appear — Home tab not loaded", in: app)
         }
 
-        // Let the feed fully settle (shorts + video cards both rendered).
-        let videoCardPred = NSPredicate(format: "identifier BEGINSWITH 'video.card.'")
-        let videoCards = app.descendants(matching: .any).matching(videoCardPred)
-        _ = XCTWaiter().wait(
-            for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "count > 0"), object: videoCards)],
-            timeout: 20
+        // On tvOS the outer HStack's .accessibilityIdentifier("home.shortsRow")
+        // propagates to each Button child — so we look for that, not "shorts.card.*".
+        let shortsPred = NSPredicate(format: "identifier == 'home.shortsRow' AND elementType == 9")
+        let shortsCards = app.descendants(matching: .any).matching(shortsPred)
+        let shortsResult = XCTWaiter().wait(
+            for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "count > 0"), object: shortsCards)],
+            timeout: 30
         )
 
         // Capture initial state and accessibility tree before attempting navigation.
-        // This is useful even if shorts are not visible (e.g. not signed in).
         snap("0-initial")
         treeSnapshot("accessibility-tree-initial")
 
-        let shortsPred = NSPredicate(format: "identifier BEGINSWITH 'shorts.card.'")
-        let shortsCards = app.descendants(matching: .any).matching(shortsPred)
-        let shortsPresent = shortsCards.count > 0
-        XCTContext.runActivity(named: "Shorts present: \(shortsPresent) (count=\(shortsCards.count))") { _ in }
+        let shortsPresent = shortsResult == .completed
+        XCTContext.runActivity(named: "Shorts present: \(shortsPresent) (waiter=\(shortsResult.rawValue))") { _ in }
 
         guard shortsPresent else {
-            try captureAndSkip("No shorts.card.* elements — Shorts disabled or empty; captured initial state above", in: app)
+            try captureAndSkip("No 'home.shortsRow' buttons found after 30s — Shorts not in feed; captured initial state above", in: app)
         }
 
         // ── DOWN 1 ── tab-bar → chip-bar (or content if no chip-bar focus)
@@ -106,9 +104,15 @@ final class TVShortsDownNavigationUITests: XCTestCase {
         treeSnapshot("accessibility-tree-after-3-downs")
 
         // ── Assertions ──
+        // After 3 DOWNs: no home.shortsRow button should be focused,
+        // and a video.card.* element should be focused.
+        let shortsStillFocused: Bool = {
+            let pred = NSPredicate(format: "identifier == 'home.shortsRow' AND hasFocus == true")
+            return app.descendants(matching: .any).matching(pred).count > 0
+        }()
         XCTAssertFalse(
-            anyFocused(prefix: "shorts.card."),
-            "A Shorts card still has focus after 3 DOWNs — DOWN does NOT escape the Shorts row. " +
+            shortsStillFocused,
+            "A Shorts button (home.shortsRow) still has focus after 3 DOWNs — DOWN does NOT escape the Shorts row. " +
             "focused1=\(focused1) focused2=\(focused2) focused3=\(focused3)"
         )
         XCTAssertTrue(

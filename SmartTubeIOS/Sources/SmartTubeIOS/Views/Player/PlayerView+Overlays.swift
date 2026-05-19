@@ -85,62 +85,31 @@ extension PlayerView {
                     showMoreMenu = false
                 }
 
-            ScrollView {
-                VStack(spacing: 0) {
-                    #if os(tvOS)
-                    moreMenuSpeedRow
-                    moreMenuQualityRow
-                    #endif
-                    moreMenuLikeDislikeRow
-                    moreMenuShareRow
-                    #if os(tvOS)
-                    moreMenuSleepTimerRow
-                    moreMenuAudioOnlyRow
-                    #endif
-                    moreMenuDownloadRow
-                    moreMenuCaptionsRow
-                    moreMenuAudioTrackRow
-                    moreMenuDescriptionRow
-                    moreMenuCommentsRow
-                    moreMenuCancelRow
+            ViewThatFits(in: .vertical) {
+                moreMenuItems
+                ScrollView {
+                    moreMenuItems
                 }
-                .frame(maxWidth: .infinity)
-                .font(.subheadline)
+                .accessibilityIdentifier("player.moreMenu.scrollView")
             }
-            .accessibilityIdentifier("player.moreMenu.scrollView")
             .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             // Static max height avoids GeometryReader/containerRelativeFrame feedback
             // loops that crash SwiftUI's AttributeGraph (SIGSEGV/SIGBUS recursion).
+            // ViewThatFits uses the natural VStack height when it fits, falling back
+            // to a ScrollView capped at moreMenuMaxHeight when it overflows.
             .frame(maxWidth: moreMenuPortraitWidth, maxHeight: moreMenuMaxHeight)
             #if os(tvOS)
-            .onMoveCommand { direction in
-                let rows = moreMenuVisibleRows
-                let current = moreMenuFocusedRow ?? .speed
-                // Left/right within the Like ↔ Dislike pair.
-                if current == .like, direction == .right { moreMenuFocusedRow = .dislike; return }
-                if current == .dislike, direction == .left { moreMenuFocusedRow = .like; return }
-                // For up/down, treat .dislike as .like (same vertical row).
-                let verticalCurrent: MoreMenuRow = current == .dislike ? .like : current
-                guard let idx = rows.firstIndex(of: verticalCurrent) else {
-                    moreMenuFocusedRow = .speed
-                    return
-                }
-                switch direction {
-                case .down where idx < rows.count - 1:
-                    moreMenuFocusedRow = rows[idx + 1]
-                case .up where idx > 0:
-                    moreMenuFocusedRow = rows[idx - 1]
-                default:
-                    break
-                }
-            }
+            // Native SwiftUI focus handles D-pad navigation via the .focused() bindings
+            // on each row button. onMoveCommand was removed because it caused a double-step
+            // bug: both onMoveCommand and the native focus engine responded to the same
+            // D-pad event, advancing focus twice per press.
             .onExitCommand {
                 menuLog.notice("[moreMenu] onExitCommand fired — dismissing via Menu button")
                 showMoreMenu = false
             }
             .onAppear {
-                menuLog.notice("[moreMenu] overlay appeared — explicit D-pad navigation via onMoveCommand + moreMenuFocusedRow")
+                menuLog.notice("[moreMenu] overlay appeared — native tvOS focus via .focused() bindings")
             }
             .onDisappear {
                 menuLog.notice("[moreMenu] overlay disappeared")
@@ -157,6 +126,29 @@ extension PlayerView {
         #if os(tvOS)
         .focusScope(moreMenuNamespace)
         #endif
+    }
+
+    @ViewBuilder private var moreMenuItems: some View {
+        VStack(spacing: 0) {
+            #if os(tvOS)
+            moreMenuSpeedRow
+            moreMenuQualityRow
+            #endif
+            moreMenuLikeDislikeRow
+            moreMenuShareRow
+            #if os(tvOS)
+            moreMenuSleepTimerRow
+            moreMenuAudioOnlyRow
+            #endif
+            moreMenuDownloadRow
+            moreMenuCaptionsRow
+            moreMenuAudioTrackRow
+            moreMenuDescriptionRow
+            moreMenuCommentsRow
+            moreMenuCancelRow
+        }
+        .frame(maxWidth: .infinity)
+        .font(.subheadline)
     }
 
     private var moreMenuMaxHeight: CGFloat {
@@ -370,11 +362,12 @@ extension PlayerView {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
-            .disabled(true)
+            // Action is intentionally empty — quality picker not yet enabled on tvOS.
             .accessibilityIdentifier("player.moreMenu.qualityRow")
             #if os(tvOS)
-            .background(Color.clear)
+            .background(moreMenuFocusedRow == .quality ? Color.white.opacity(0.15) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 10))
+            .focused($moreMenuFocusedRow, equals: .quality)
             #endif
             Divider()
         }
@@ -398,6 +391,7 @@ extension PlayerView {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("player.moreMenu.likeRow")
                 #if os(tvOS)
                 .background(moreMenuFocusedRow == .like ? Color.white.opacity(0.15) : .clear)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -419,6 +413,7 @@ extension PlayerView {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("player.moreMenu.dislikeRow")
                 #if os(tvOS)
                 .background(moreMenuFocusedRow == .dislike ? Color.white.opacity(0.15) : .clear)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -610,6 +605,7 @@ extension PlayerView {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
+            .accessibilityIdentifier("player.moreMenu.descriptionRow")
             #if os(tvOS)
             .background(moreMenuFocusedRow == .description ? Color.white.opacity(0.15) : .clear)
             .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -634,6 +630,7 @@ extension PlayerView {
         }
         .buttonStyle(.plain)
         .foregroundStyle(.primary)
+        .accessibilityIdentifier("player.moreMenu.commentsRow")
         #if os(tvOS)
         .background(moreMenuFocusedRow == .comments ? Color.white.opacity(0.15) : .clear)
         .clipShape(RoundedRectangle(cornerRadius: 10))

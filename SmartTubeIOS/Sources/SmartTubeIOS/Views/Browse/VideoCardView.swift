@@ -52,7 +52,11 @@ public struct VideoCardView: View {
         self.onSelect = onSelect
     }
 
-    public var body: some View {
+    // MARK: - Shared card content (tasks + context menu)
+    // Extracted so the tvOS body can wrap it in a Button (which handles the
+    // Select button press natively) while iOS continues using the bare view.
+
+    private var cardContent: some View {
         Group {
             if compact {
                 compactLayout
@@ -201,8 +205,23 @@ public struct VideoCardView: View {
         // survives context menu dismiss animations that would otherwise reset
         // the card-level @State. Only the button label/disabled state is read here.
         .padding(0)  // zero-effect modifier to keep the view chain well-typed
-        #else
-        .onTapGesture { onSelect?() }
+        #endif
+    }
+
+    // MARK: - Body
+
+    public var body: some View {
+        #if os(tvOS)
+        // Use a Button so that the Siri Remote's Select press fires the action.
+        // .focusable() + .onTapGesture does NOT reliably fire on Select because
+        // the focus engine (outermost wrapper) intercepts the event before the
+        // tap gesture recognizer (inner wrapper) can process it. Button handles
+        // Select natively and also cooperates correctly with .contextMenu (long
+        // press) so the two interactions don't conflict.
+        Button { onSelect?() } label: {
+            cardContent
+        }
+        .buttonStyle(.plain)
         .focused($isFocused)
         .onChange(of: isFocused) { _, newValue in
             focusLog.info("[VideoCard] isFocused=\(newValue) id=\(self.video.id)")
@@ -211,10 +230,15 @@ public struct VideoCardView: View {
         .scaleEffect(isFocused ? 1.08 : 1.0)
         .zIndex(isFocused ? 1 : 0)
         .animation(.easeInOut(duration: 0.15), value: isFocused)
-        #endif
         .alert(item: $watchLaterAlert) { item in
             Alert(title: Text(item.title), message: Text(item.message), dismissButton: .default(Text("OK")))
         }
+        #else
+        cardContent
+            .alert(item: $watchLaterAlert) { item in
+                Alert(title: Text(item.title), message: Text(item.message), dismissButton: .default(Text("OK")))
+            }
+        #endif
     }
 
     // MARK: Grid layout (default)

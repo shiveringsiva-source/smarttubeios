@@ -53,8 +53,7 @@ extension PlayerView {
     /// reached via left/right D-pad, not up/down.
     var moreMenuVisibleRows: [MoreMenuRow] {
         var rows: [MoreMenuRow] = [.speed]
-        // Quality row hidden — quality selection disabled in this version.
-        // if !vm.availableFormats.isEmpty { rows.append(.quality) }
+        if !vm.availableFormats.isEmpty && !vm.isAudioOnlyMode { rows.append(.quality) }
         if authService.isSignedIn { rows.append(.like) }
         rows.append(.sleepTimer)
         rows.append(.audioOnly)

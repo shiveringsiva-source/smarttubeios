@@ -48,7 +48,6 @@
 		AA1100000000000000001502 /* TVLibraryUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1100000000000000001501 /* TVLibraryUITests.swift */; };
 		AA1100000000000000001602 /* TVPlayerControlsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1100000000000000001601 /* TVPlayerControlsUITests.swift */; };
 		AA1100000000000000001702 /* TVVideoPlaybackRegressionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1100000000000000001701 /* TVVideoPlaybackRegressionUITests.swift */; };
-		BE1E910C1C5E4CFBB7475AAE /* TVShortsDownNavigationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8937147FE98F4B8490EB7D0A /* TVShortsDownNavigationUITests.swift */; };
 		AA1100000000000000001802 /* TVAudioAndCaptionPickerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1100000000000000001801 /* TVAudioAndCaptionPickerUITests.swift */; };
 		AA1100000000000000001902 /* DownloadsPlaybackUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1100000000000000001901 /* DownloadsPlaybackUITests.swift */; };
 		AA1100000000000000001A02 /* HideShortsHomeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1100000000000000001A01 /* HideShortsHomeUITests.swift */; };
@@ -61,9 +60,11 @@
 		B0C1D2E3F4A5B6C7D8E9F0A1 /* ShortsNavigationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9B0C1D2E3F4A5B6C7D8E9F0 /* ShortsNavigationUITests.swift */; };
 		B4C8D3E4F5A6B7C8D9E0F1A2 /* PlayerAndMiniPlayerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3B7C2D4E5F6A7B8C9D0E1F2 /* PlayerAndMiniPlayerUITests.swift */; };
 		B8C9D0E1F2A3B4C5D6E7F8A9 /* HomeShortsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B8C9D0E1F2A3B4C5D6E7F8 /* HomeShortsUITests.swift */; };
+		BE1E910C1C5E4CFBB7475AAE /* TVShortsDownNavigationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8937147FE98F4B8490EB7D0A /* TVShortsDownNavigationUITests.swift */; };
 		C1D2E3F4A5B6C7D8E9F0A1B2 /* PlayerNavigationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F6A7B8C9D0E1F2A3 /* PlayerNavigationUITests.swift */; };
 		C4D5E6F7A8B9C0D1E2F3A4B5 /* HomeShortsCountUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52716A7F61A547A0959DAF30 /* HomeShortsCountUITests.swift */; };
 		CD550C82FB83F1B06A867F3F /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 161D597B9340722805A04592 /* Foundation.framework */; };
+		CF3A820B5D1E4A9F8E2C71BD /* TVMoreMenuNavigationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D9C6E73B2F4180960E52FA /* TVMoreMenuNavigationUITests.swift */; };
 		D222FD43501FE20610A249CC /* PlaylistsNavigationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43AC502830145DD05002B5A2 /* PlaylistsNavigationUITests.swift */; };
 		D4F5A6B7C8D9E0F1A2B3C4D5 /* SubscriptionsPlaybackUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3E4F5A6B7C8D9E0F1A2B3C4 /* SubscriptionsPlaybackUITests.swift */; };
 		D6E0F5A6B7C8D9E0F1A2B3C4 /* HomeFeedAndSettingsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5D9E4F5A6B7C8D9E0F1A2B3 /* HomeFeedAndSettingsUITests.swift */; };
@@ -153,7 +154,9 @@
 		67E6B67B2F9535CD00CD372F /* Smart Tube.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Smart Tube.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		6ACA5CEA633CF065619F786C /* SmartTube.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SmartTube.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		79E77E6DD18B12CA7A5341D0 /* SmartTubeDownloadWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SmartTubeDownloadWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		8937147FE98F4B8490EB7D0A /* TVShortsDownNavigationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVShortsDownNavigationUITests.swift; sourceTree = "<group>"; };
 		A3B7C2D4E5F6A7B8C9D0E1F2 /* PlayerAndMiniPlayerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerAndMiniPlayerUITests.swift; sourceTree = "<group>"; };
+		A4D9C6E73B2F4180960E52FA /* TVMoreMenuNavigationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVMoreMenuNavigationUITests.swift; sourceTree = "<group>"; };
 		A7B8C9D0E1F2A3B4C5D6E7F8 /* HomeShortsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeShortsUITests.swift; sourceTree = "<group>"; };
 		A9B0C1D2E3F4A5B6C7D8E9F0 /* ShortsNavigationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortsNavigationUITests.swift; sourceTree = "<group>"; };
 		AA01000000000000000000A1 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
@@ -185,7 +188,6 @@
 		AA1100000000000000001501 /* TVLibraryUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVLibraryUITests.swift; sourceTree = "<group>"; };
 		AA1100000000000000001601 /* TVPlayerControlsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVPlayerControlsUITests.swift; sourceTree = "<group>"; };
 		AA1100000000000000001701 /* TVVideoPlaybackRegressionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVVideoPlaybackRegressionUITests.swift; sourceTree = "<group>"; };
-		8937147FE98F4B8490EB7D0A /* TVShortsDownNavigationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVShortsDownNavigationUITests.swift; sourceTree = "<group>"; };
 		AA1100000000000000001801 /* TVAudioAndCaptionPickerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVAudioAndCaptionPickerUITests.swift; sourceTree = "<group>"; };
 		AA1100000000000000001901 /* DownloadsPlaybackUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadsPlaybackUITests.swift; sourceTree = "<group>"; };
 		AA1100000000000000001A01 /* HideShortsHomeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HideShortsHomeUITests.swift; sourceTree = "<group>"; };
@@ -334,6 +336,7 @@
 				AA1100000000000000001601 /* TVPlayerControlsUITests.swift */,
 				AA1100000000000000001701 /* TVVideoPlaybackRegressionUITests.swift */,
 				8937147FE98F4B8490EB7D0A /* TVShortsDownNavigationUITests.swift */,
+				A4D9C6E73B2F4180960E52FA /* TVMoreMenuNavigationUITests.swift */,
 				AA1100000000000000001801 /* TVAudioAndCaptionPickerUITests.swift */,
 				AA1100000000000000000EA1 /* AudioOnlyModeUITests.swift */,
 				AA1100000000000000000FA1 /* PlayerMoreMenuLayoutUITests.swift */,
@@ -752,6 +755,7 @@
 				AA1100000000000000001602 /* TVPlayerControlsUITests.swift in Sources */,
 				AA1100000000000000001702 /* TVVideoPlaybackRegressionUITests.swift in Sources */,
 				BE1E910C1C5E4CFBB7475AAE /* TVShortsDownNavigationUITests.swift in Sources */,
+				CF3A820B5D1E4A9F8E2C71BD /* TVMoreMenuNavigationUITests.swift in Sources */,
 				AA1100000000000000001802 /* TVAudioAndCaptionPickerUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -995,7 +999,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -1014,7 +1018,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MARKETING_VERSION = 2.9;
+				MARKETING_VERSION = 3.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1425,7 +1429,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -1438,7 +1442,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MARKETING_VERSION = 2.9;
+				MARKETING_VERSION = 3.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
