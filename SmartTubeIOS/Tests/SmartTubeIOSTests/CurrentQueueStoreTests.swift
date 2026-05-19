@@ -276,5 +276,36 @@ struct CurrentQueueStoreTests {
         let count = await store.videos.count
         #expect(count == 2)
     }
+
+    @Test("queue populated from search results: videoAt returns queue-tagged video and next advances in order")
+    func queueFromSearchResultsAdvancesInOrder() async {
+        let store = makeStore()
+        let videos = [
+            makeVideo(id: "aaa11111111"),
+            makeVideo(id: "bbb22222222"),
+            makeVideo(id: "ccc33333333"),
+        ]
+        // Simulate SearchView.resultsView onSelect: replaceAll with visible results, play index 1
+        await store.replaceAll(with: videos)
+        let startIdx = videos.firstIndex(where: { $0.id == "bbb22222222" }) ?? 0
+        let toPlay = await store.videoAt(index: startIdx)
+        #expect(toPlay?.id == "bbb22222222")
+        #expect(toPlay?.playlistId == CurrentQueueStore.playlistID)
+        #expect(toPlay?.playlistIndex == 1)
+        // Simulate handlePlaybackEnd: next video is index + 1
+        let next = await store.videoAt(index: (toPlay?.playlistIndex ?? 0) + 1)
+        #expect(next?.id == "ccc33333333")
+        #expect(next?.playlistIndex == 2)
+    }
+
+    @Test("queue populated from search results: videoAt tags video with queue playlistId not raw search playlistId")
+    func queueFromSearchResultsUsesQueuePlaylistId() async {
+        let store = makeStore()
+        var v = makeVideo(id: "aaa11111111")
+        v.playlistId = "some_raw_playlist_id"  // as if fetched from YouTube search
+        await store.replaceAll(with: [v])
+        let queued = await store.videoAt(index: 0)
+        #expect(queued?.playlistId == CurrentQueueStore.playlistID)
+    }
 }
 

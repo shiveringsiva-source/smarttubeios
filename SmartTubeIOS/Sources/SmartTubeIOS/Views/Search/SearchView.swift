@@ -163,12 +163,18 @@ public struct SearchView: View {
             }
             VideoGridSection(
                 videos: displayResults,
-                onSelect: {
-                    #if os(iOS)
-                    playerState.play(video: $0)
-                    #else
-                    selectedVideo = $0
-                    #endif
+                onSelect: { video in
+                    let captured = displayResults
+                    Task { @MainActor in
+                        await CurrentQueueStore.shared.replaceAll(with: captured)
+                        let startIdx = captured.firstIndex(where: { $0.id == video.id }) ?? 0
+                        let toPlay = await CurrentQueueStore.shared.videoAt(index: startIdx) ?? video
+                        #if os(iOS)
+                        playerState.play(video: toPlay)
+                        #else
+                        selectedVideo = toPlay
+                        #endif
+                    }
                 },
                 loadMore: vm.loadMore
             )

@@ -182,7 +182,12 @@ public struct PlaylistView: View {
                                     playerState.play(video: toPlay)
                                 }
                                 #else
-                                selectedVideo = video
+                                Task { @MainActor in
+                                    let captured = displayVideos
+                                    await CurrentQueueStore.shared.replaceAll(with: captured)
+                                    let startIdx = video.playlistIndex ?? captured.firstIndex(where: { $0.id == video.id }) ?? 0
+                                    selectedVideo = await CurrentQueueStore.shared.videoAt(index: startIdx) ?? video
+                                }
                                 #endif
                             }
                             .onAppear { vm.loadMoreIfNeeded(lastVideo: video) }
