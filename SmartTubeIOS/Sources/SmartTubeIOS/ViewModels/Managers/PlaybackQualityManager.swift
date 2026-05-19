@@ -254,14 +254,19 @@ final class PlaybackQualityManager {
         return result
     }
 
+    static let bitRateCaps: [Int: Double] = [
+        2160: 45_000_000,
+        1440: 20_000_000,
+        1080: 15_000_000,
+         720:  8_000_000,
+         480:  4_000_000,
+    ]
+
     func peakBitRate(for height: Int) -> Double {
-        switch height {
-        case 2160:  return 20_000_000
-        case 1440:  return 12_000_000
-        case 1080:  return  8_000_000
-        case  720:  return  5_000_000
-        default:    return  8_000_000
-        }
+        if let exact = Self.bitRateCaps[height] { return exact }
+        let sortedKeys = Self.bitRateCaps.keys.sorted()
+        let lower = sortedKeys.last(where: { $0 <= height }) ?? sortedKeys.first ?? 480
+        return Self.bitRateCaps[lower] ?? 4_000_000
     }
 
     func reloadHLSItemH264Capped(seekTo time: TimeInterval) async {
@@ -274,7 +279,7 @@ final class PlaybackQualityManager {
         let item = AVPlayerItem(asset: asset)
         item.audioTimePitchAlgorithm = .spectral
         item.preferredMaximumResolution = CGSize(width: 1920, height: 1080)
-        item.preferredPeakBitRate = 8_000_000
+        item.preferredPeakBitRate = peakBitRate(for: 1080)
         delegate?.itemObserverTask?.cancel()
         delegate?.itemObserverTask = Task { [weak self] in
             for await status in item.statusStream {

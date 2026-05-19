@@ -13,36 +13,54 @@ struct PlaybackQualityTests {
 
     // MARK: - peakBitRate
 
-    /// Mirrors peakBitRate(for:) in PlaybackViewModel+Quality.swift.
+    /// Mirrors the bitRateCaps dictionary and fallback logic in PlaybackQualityManager.
+    private let bitRateCaps: [Int: Double] = [
+        2160: 45_000_000,
+        1440: 20_000_000,
+        1080: 15_000_000,
+         720:  8_000_000,
+         480:  4_000_000,
+    ]
+
     private func peakBitRate(for height: Int) -> Double {
-        switch height {
-        case 2160:  return 20_000_000
-        case 1440:  return 12_000_000
-        case 1080:  return  8_000_000
-        case  720:  return  5_000_000
-        default:    return  8_000_000
-        }
+        if let exact = bitRateCaps[height] { return exact }
+        let sortedKeys = bitRateCaps.keys.sorted()
+        let lower = sortedKeys.last(where: { $0 <= height }) ?? sortedKeys.first ?? 480
+        return bitRateCaps[lower] ?? 4_000_000
     }
 
-    @Test func peakBitRate_2160p_returns20Mbps() {
-        #expect(peakBitRate(for: 2160) == 20_000_000)
+    @Test func peakBitRate_2160p_returns45Mbps() {
+        #expect(peakBitRate(for: 2160) == 45_000_000)
     }
 
-    @Test func peakBitRate_1440p_returns12Mbps() {
-        #expect(peakBitRate(for: 1440) == 12_000_000)
+    @Test func peakBitRate_1440p_returns20Mbps() {
+        #expect(peakBitRate(for: 1440) == 20_000_000)
     }
 
-    @Test func peakBitRate_1080p_returns8Mbps() {
-        #expect(peakBitRate(for: 1080) == 8_000_000)
+    @Test func peakBitRate_1080p_returns15Mbps() {
+        #expect(peakBitRate(for: 1080) == 15_000_000)
     }
 
-    @Test func peakBitRate_720p_returns5Mbps() {
-        #expect(peakBitRate(for: 720) == 5_000_000)
+    @Test func peakBitRate_720p_returns8Mbps() {
+        #expect(peakBitRate(for: 720) == 8_000_000)
     }
 
-    @Test func peakBitRate_unknownHeight_returnsDefault() {
-        #expect(peakBitRate(for: 360) == 8_000_000)
-        #expect(peakBitRate(for: 480) == 8_000_000)
+    @Test func peakBitRate_480p_returns4Mbps() {
+        #expect(peakBitRate(for: 480) == 4_000_000)
+    }
+
+    @Test func peakBitRate_unlistedHeight_usesNextLowerKey() {
+        // 800p → 720 cap (8M)
+        #expect(peakBitRate(for: 800) == 8_000_000)
+        // 600p → 480 cap (4M)
+        #expect(peakBitRate(for: 600) == 4_000_000)
+        // 4320p → 2160 cap (45M)
+        #expect(peakBitRate(for: 4320) == 45_000_000)
+    }
+
+    @Test func peakBitRate_belowAllKeys_usesLowestCap() {
+        // 360p → nothing <= 360 exists, fall back to lowest key (480 = 4M)
+        #expect(peakBitRate(for: 360) == 4_000_000)
     }
 
     // MARK: - HLS variant selection (platform-agnostic logic)
