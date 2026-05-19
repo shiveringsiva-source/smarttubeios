@@ -16,7 +16,6 @@ protocol QualityDelegate: AnyObject {
     var toastMessage: String? { get set }
     var isPlaying: Bool { get set }
     var isSwappingItem: Bool { get set }
-    var itemObserverTask: Task<Void, Never>? { get set }
     func seek(to seconds: Double)
     func loadAudioTracks(from item: AVPlayerItem)
     func retryWith403Recovery(video: Video, originalError: Error?) async
@@ -37,6 +36,7 @@ final class PlaybackQualityManager {
     var hlsVariantURLs: [Int: URL] = [:]
     var hasAppliedH264Cap: Bool = false
     @ObservationIgnored var qualityTask: Task<Void, Never>? = nil
+    @ObservationIgnored private var itemObserverTask: Task<Void, Never>? = nil
 
     // MARK: - Dependencies
 
@@ -58,12 +58,16 @@ final class PlaybackQualityManager {
         hasAppliedH264Cap = false
         qualityTask?.cancel()
         qualityTask = nil
+        itemObserverTask?.cancel()
+        itemObserverTask = nil
     }
 
     func cancel() {
         qualityTask?.cancel()
         qualityTask = nil
         hasAppliedH264Cap = false
+        itemObserverTask?.cancel()
+        itemObserverTask = nil
     }
 
     /// Switch to a specific quality. Pass `nil` to return to Auto (no resolution cap).
@@ -94,7 +98,7 @@ final class PlaybackQualityManager {
             streamURL = hlsURL
             playerLog.notice("Quality → \(qualityCap.map { "\($0)p" } ?? "Auto") via HLS master (reloaded)")
         }
-        delegate?.itemObserverTask?.cancel()
+        itemObserverTask?.cancel()
         let asset = AVURLAsset(url: streamURL, options: uaOpts)
         let item = AVPlayerItem(asset: asset)
         item.audioTimePitchAlgorithm = .spectral
@@ -103,7 +107,7 @@ final class PlaybackQualityManager {
             item.preferredMaximumResolution = CGSize(width: h * 4, height: h)
             item.preferredPeakBitRate = peakBitRate(for: cap)
         }
-        delegate?.itemObserverTask = Task { [weak self] in
+        itemObserverTask = Task { [weak self] in
             for await status in item.statusStream {
                 guard let self, !Task.isCancelled else { return }
                 switch status {
@@ -281,8 +285,8 @@ final class PlaybackQualityManager {
         item.audioTimePitchAlgorithm = .spectral
         item.preferredMaximumResolution = CGSize(width: 1920, height: 1080)
         item.preferredPeakBitRate = peakBitRate(for: 1080)
-        delegate?.itemObserverTask?.cancel()
-        delegate?.itemObserverTask = Task { [weak self] in
+        itemObserverTask?.cancel()
+        itemObserverTask = Task { [weak self] in
             for await status in item.statusStream {
                 guard let self, !Task.isCancelled else { return }
                 switch status {
