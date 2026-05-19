@@ -12,8 +12,8 @@
 		1A2B3C4D5E6F1A2B3C4D5E63 /* TVFocusChainUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F1A2B3C4D5E62 /* TVFocusChainUITests.swift */; };
 		494A17316084B602873D7C05 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AE55B486AFD7F51FEF1874FF /* Assets.xcassets */; };
 		53352CFF63CF0A5B34A1998B /* SpinnerDismissalUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CD3DC338DC0106A0F179BC1 /* SpinnerDismissalUITests.swift */; };
-		673C1D012F7F20340021583B /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 673C1D002F7F20340021583B /* Launch Screen.storyboard */; };
-		67A5E80B2FB3932400C53D61 /* SafariExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 67A5E7F32FB3932400C53D61 /* SafariExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		673C1D012F7F20340021583B /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 673C1D002F7F20340021583B /* Launch Screen.storyboard */; platformFilter = ios; };
+		67A5E80B2FB3932400C53D61 /* SafariExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 67A5E7F32FB3932400C53D61 /* SafariExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		67AEAB0F2FAF96BC00820F4D /* VideoDownloadUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67AEAB0E2FAF96BC00820F4D /* VideoDownloadUITests.swift */; };
 		67B1B1732FA5384E0059D847 /* VideoPlaybackRegressionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B1B1722FA5384E0059D847 /* VideoPlaybackRegressionUITests.swift */; };
 		67E2B0742FAD1BBE005F70E6 /* MiniPlayerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67E2B0732FAD1BBE005F70E6 /* MiniPlayerUITests.swift */; };
@@ -22,7 +22,7 @@
 		7AECD855592A4E3EA60955D6 /* FallbackVideoPlaybackUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29446E9C8CE04B2FBCDD8A2E /* FallbackVideoPlaybackUITests.swift */; };
 		AA01000000000000000000A4 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01000000000000000000A1 /* ShareViewController.swift */; };
 		AA01000000000000000000A5 /* SmartTubeIOSCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA01000000000000000000B1 /* SmartTubeIOSCore */; };
-		AA01000000000000000000A6 /* SmartTubeShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AA01000000000000000000A3 /* SmartTubeShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AA01000000000000000000A6 /* SmartTubeShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AA01000000000000000000A3 /* SmartTubeShareExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AA02000000000000000000B2 /* SiriShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA02000000000000000000B1 /* SiriShortcuts.swift */; };
 		AA02000000000000000001B2 /* SiriShortcutsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA02000000000000000001B1 /* SiriShortcutsUITests.swift */; };
 		AA11000000000000000001A2 /* UITestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11000000000000000001A1 /* UITestHelpers.swift */; };
@@ -68,7 +68,7 @@
 		D222FD43501FE20610A249CC /* PlaylistsNavigationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43AC502830145DD05002B5A2 /* PlaylistsNavigationUITests.swift */; };
 		D4F5A6B7C8D9E0F1A2B3C4D5 /* SubscriptionsPlaybackUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3E4F5A6B7C8D9E0F1A2B3C4 /* SubscriptionsPlaybackUITests.swift */; };
 		D6E0F5A6B7C8D9E0F1A2B3C4 /* HomeFeedAndSettingsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5D9E4F5A6B7C8D9E0F1A2B3 /* HomeFeedAndSettingsUITests.swift */; };
-		D9B2E782B8D7E9E750193022 /* SmartTubeDownloadWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 79E77E6DD18B12CA7A5341D0 /* SmartTubeDownloadWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		D9B2E782B8D7E9E750193022 /* SmartTubeDownloadWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 79E77E6DD18B12CA7A5341D0 /* SmartTubeDownloadWidget.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		DD2551477B9F9B6D89AE6FCB /* AppEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29356C9641042E3DA5F16175 /* AppEntry.swift */; };
 		E3F4A5B6C7D8E9F0A1B2C3D4 /* CategoryChipHTTP400UITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A5B6C7D8E9F0A1B2C3D4E5 /* CategoryChipHTTP400UITests.swift */; };
 		E5F6A7B8C9D0E1F2A3B4C5D6 /* SubscriptionsScrollRestorationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5E6F7A8B9C0D1E2F3A4B5C6 /* SubscriptionsScrollRestorationUITests.swift */; };
@@ -901,7 +901,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Smart Tube";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LAUNCH_STORYBOARD_NAME = "Launch Screen";
+				"LAUNCH_STORYBOARD_NAME[sdk=iphoneos*]" = "Launch Screen";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -910,7 +910,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.void.smarttube.app;
 				PRODUCT_NAME = SmartTube;
 				SDKROOT = auto;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
@@ -1376,7 +1376,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Smart Tube";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LAUNCH_STORYBOARD_NAME = "Launch Screen";
+				"LAUNCH_STORYBOARD_NAME[sdk=iphoneos*]" = "Launch Screen";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1385,7 +1385,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.void.smarttube.app;
 				PRODUCT_NAME = SmartTube;
 				SDKROOT = auto;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
