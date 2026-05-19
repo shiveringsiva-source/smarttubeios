@@ -152,6 +152,14 @@ extension PlayerView {
                 .accessibilityHidden(true)
                 #endif
 
+                #if os(macOS)
+                // Transparent click layer for macOS — toggles controls overlay on click.
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { if !vm.hasVisibleEndCards { vm.toggleControls() } }
+                    .ignoresSafeArea()
+                #endif
+
                 // Loading spinner
                 if vm.isLoading {
                     ProgressView()
@@ -467,6 +475,7 @@ extension PlayerView {
                 .toolbar(.hidden, for: .tabBar)
             #else
             playerContentView
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             #endif
         }
         // Always-visible title badge so XCUITest can read the current video title
