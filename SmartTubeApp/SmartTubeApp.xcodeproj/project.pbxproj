@@ -897,6 +897,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 5A4JA438MW;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = SmartTubeApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Smart Tube";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
@@ -1372,6 +1373,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 5A4JA438MW;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = SmartTubeApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Smart Tube";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
