@@ -349,7 +349,7 @@ extension PlayerView {
         .foregroundStyle(.primary)
         .accessibilityIdentifier("player.moreMenu.speedRow")
         #if os(tvOS)
-        .background(moreMenuFocusedRow == .speed ? Color.white.opacity(0.15) : .clear)
+        .background(moreMenuFocusedRow == .speed ? Color.gray.opacity(0.35) : .clear)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .focused($moreMenuFocusedRow, equals: .speed)
         .prefersDefaultFocus(in: moreMenuNamespace)
@@ -374,7 +374,7 @@ extension PlayerView {
             // Action is intentionally empty — quality picker not yet enabled on tvOS.
             .accessibilityIdentifier("player.moreMenu.qualityRow")
             #if os(tvOS)
-            .background(moreMenuFocusedRow == .quality ? Color.white.opacity(0.15) : Color.clear)
+            .background(moreMenuFocusedRow == .quality ? Color.gray.opacity(0.35) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .focused($moreMenuFocusedRow, equals: .quality)
             #endif
@@ -402,7 +402,7 @@ extension PlayerView {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("player.moreMenu.likeRow")
                 #if os(tvOS)
-                .background(moreMenuFocusedRow == .like ? Color.white.opacity(0.15) : .clear)
+                .background(moreMenuFocusedRow == .like ? Color.gray.opacity(0.35) : .clear)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .focused($moreMenuFocusedRow, equals: .like)
                 #endif
@@ -424,7 +424,7 @@ extension PlayerView {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("player.moreMenu.dislikeRow")
                 #if os(tvOS)
-                .background(moreMenuFocusedRow == .dislike ? Color.white.opacity(0.15) : .clear)
+                .background(moreMenuFocusedRow == .dislike ? Color.gray.opacity(0.35) : .clear)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .focused($moreMenuFocusedRow, equals: .dislike)
                 #endif
@@ -476,7 +476,7 @@ extension PlayerView {
         .foregroundStyle(.primary)
         .accessibilityIdentifier("player.moreMenu.sleepTimerRow")
         #if os(tvOS)
-        .background(moreMenuFocusedRow == .sleepTimer ? Color.white.opacity(0.15) : .clear)
+        .background(moreMenuFocusedRow == .sleepTimer ? Color.gray.opacity(0.35) : .clear)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .focused($moreMenuFocusedRow, equals: .sleepTimer)
         #endif
@@ -510,7 +510,7 @@ extension PlayerView {
         .foregroundStyle(.primary)
         .accessibilityIdentifier("player.moreMenu.audioOnlyRow")
         #if os(tvOS)
-        .background(moreMenuFocusedRow == .audioOnly ? Color.white.opacity(0.15) : .clear)
+        .background(moreMenuFocusedRow == .audioOnly ? Color.gray.opacity(0.35) : .clear)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .focused($moreMenuFocusedRow, equals: .audioOnly)
         #endif
@@ -563,7 +563,7 @@ extension PlayerView {
             .foregroundStyle(.primary)
             .accessibilityIdentifier("player.moreMenu.captionsRow")
             #if os(tvOS)
-            .background(moreMenuFocusedRow == .captions ? Color.white.opacity(0.15) : .clear)
+            .background(moreMenuFocusedRow == .captions ? Color.gray.opacity(0.35) : .clear)
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .focused($moreMenuFocusedRow, equals: .captions)
             #endif
@@ -592,7 +592,7 @@ extension PlayerView {
             .foregroundStyle(.primary)
             .accessibilityIdentifier("player.moreMenu.audioTrackRow")
             #if os(tvOS)
-            .background(moreMenuFocusedRow == .audioTrack ? Color.white.opacity(0.15) : .clear)
+            .background(moreMenuFocusedRow == .audioTrack ? Color.gray.opacity(0.35) : .clear)
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .focused($moreMenuFocusedRow, equals: .audioTrack)
             #endif
@@ -616,7 +616,7 @@ extension PlayerView {
             .foregroundStyle(.primary)
             .accessibilityIdentifier("player.moreMenu.descriptionRow")
             #if os(tvOS)
-            .background(moreMenuFocusedRow == .description ? Color.white.opacity(0.15) : .clear)
+            .background(moreMenuFocusedRow == .description ? Color.gray.opacity(0.35) : .clear)
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .focused($moreMenuFocusedRow, equals: .description)
             #endif
@@ -641,7 +641,7 @@ extension PlayerView {
         .foregroundStyle(.primary)
         .accessibilityIdentifier("player.moreMenu.commentsRow")
         #if os(tvOS)
-        .background(moreMenuFocusedRow == .comments ? Color.white.opacity(0.15) : .clear)
+        .background(moreMenuFocusedRow == .comments ? Color.gray.opacity(0.35) : .clear)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .focused($moreMenuFocusedRow, equals: .comments)
         #endif
@@ -669,7 +669,7 @@ extension PlayerView {
         .foregroundStyle(.primary)
         .accessibilityIdentifier("player.moreMenu.statsForNerds")
         #if os(tvOS)
-        .background(moreMenuFocusedRow == .cancel ? Color.white.opacity(0.15) : .clear)
+        .background(moreMenuFocusedRow == .cancel ? Color.gray.opacity(0.35) : .clear)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         #endif
         Divider()
@@ -687,7 +687,7 @@ extension PlayerView {
         .foregroundStyle(.primary)
         .accessibilityIdentifier("player.moreMenu.cancel")
         #if os(tvOS)
-        .background(moreMenuFocusedRow == .cancel ? Color.white.opacity(0.15) : .clear)
+        .background(moreMenuFocusedRow == .cancel ? Color.gray.opacity(0.35) : .clear)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .focused($moreMenuFocusedRow, equals: .cancel)
         #endif
