@@ -321,9 +321,11 @@ extension PlaybackViewModel {
             .queryItems?.first(where: { $0.name == "itag" })?.value ?? "?"
         let audioItag = URLComponents(url: audioURL, resolvingAgainstBaseURL: false)?
             .queryItems?.first(where: { $0.name == "itag" })?.value ?? "?"
-        playerLog.notice("[quality/DASH] rebuilding composition — videoItag=\(videoItag) audioItag=\(audioItag)")
+        // Infer the correct User-Agent from the URL's `c=` parameter so that
+        // Android-client-signed URLs (c=ANDROID) are served with the Android UA.
+        let ua = Self.userAgent(for: videoURL)
+        playerLog.notice("[quality/DASH] rebuilding composition — videoItag=\(videoItag) audioItag=\(audioItag) ua=\(ua == InnerTubeClients.Android.userAgent ? "Android" : "iOS")")
 
-        let ua = InnerTubeClients.iOS.userAgent
         let videoAsset = AVURLAsset(url: videoURL, options: ["AVURLAssetHTTPHeaderFieldsKey": ["User-Agent": ua]])
         let audioAsset = AVURLAsset(url: audioURL, options: ["AVURLAssetHTTPHeaderFieldsKey": ["User-Agent": ua]])
 
@@ -387,6 +389,15 @@ extension PlaybackViewModel {
     }
 
     // MARK: - Helpers
+
+    /// Returns the AVFoundation User-Agent matching the client that signed `url`.
+    /// YouTube adaptive streams are client-signed: an Android-signed URL (`c=ANDROID`)
+    /// returns HTTP 403 when requested with an iOS User-Agent, and vice versa.
+    static func userAgent(for url: URL) -> String {
+        let client = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "c" })?.value ?? ""
+        return client.hasPrefix("ANDROID") ? InnerTubeClients.Android.userAgent : InnerTubeClients.iOS.userAgent
+    }
 
     /// Returns the best adaptive video-only MP4 URL, respecting the user's quality preference.
     /// When `preferredQuality != .auto`, filters to formats at or below `maxHeight`, sorts
