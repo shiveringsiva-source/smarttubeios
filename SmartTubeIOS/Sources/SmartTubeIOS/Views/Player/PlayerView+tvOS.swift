@@ -92,6 +92,7 @@ extension PlayerView {
     /// are reachable by the Siri Remote.
     var isAnyOverlayVisible: Bool {
         showMoreMenu || showQualityPicker || showSpeedPicker || showSleepTimerPicker || showCaptionPicker || showAudioTrackPicker
+            || showDescriptionSheet || showCommentsSheet
     }
 
     /// True while a SponsorBlock skip toast is visible.

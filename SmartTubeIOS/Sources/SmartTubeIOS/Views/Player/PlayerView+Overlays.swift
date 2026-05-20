@@ -227,6 +227,10 @@ extension PlayerView {
             }
             .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 16))
+            #if os(tvOS)
+            .focusScope(descriptionOverlayNamespace)
+            .onExitCommand { showDescriptionSheet = false }
+            #endif
             .padding(.horizontal, 8)
             .padding(.bottom, 8)
         }
@@ -294,6 +298,10 @@ extension PlayerView {
             }
             .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 16))
+            #if os(tvOS)
+            .focusScope(commentsOverlayNamespace)
+            .onExitCommand { showCommentsSheet = false }
+            #endif
             .padding(.horizontal, 8)
             .padding(.bottom, 8)
         }

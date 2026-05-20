@@ -236,5 +236,40 @@ final class TVPlayerControlsUITests: XCTestCase {
                        "More menu must be dismissed after selecting the cancel row")
         XCTAssertTrue(titleLabel.exists, "player.titleLabel must still exist after dismissing the more menu")
     }
+
+    /// Regression test for #150: pressing Menu/Back while the description panel is open
+    /// must close the panel, not exit the app.
+    func testDescriptionPanelClosesWithMenu() throws {
+        try waitForMoreMenu()
+        let descriptionRow = element(identifier: "player.moreMenu.descriptionRow")
+        guard descriptionRow.waitForExistence(timeout: 5) else {
+            try captureAndSkip("player.moreMenu.descriptionRow not found", in: app)
+        }
+        // Navigate down to find the description row (position varies).
+        var reached = false
+        for _ in 0..<8 {
+            remote.press(.down)
+            Thread.sleep(forTimeInterval: 0.35)
+            if descriptionRow.hasFocus { reached = true; break }
+        }
+        guard reached else {
+            try captureAndSkip("#150 regression: description row did not receive focus", in: app)
+        }
+        remote.press(.select)
+        Thread.sleep(forTimeInterval: 1.0)
+        // Description overlay must be visible.
+        let xButton = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'player.descriptionOverlay' OR label == 'Description'"))
+            .firstMatch
+        guard xButton.waitForExistence(timeout: 6) else {
+            try captureAndSkip("#150 regression: description panel did not open", in: app)
+        }
+        // Press Menu (Back) — must dismiss the panel, not exit the app.
+        remote.press(.menu)
+        Thread.sleep(forTimeInterval: 1.0)
+        // Player title must still be present — app must not have exited.
+        XCTAssertTrue(titleLabel.waitForExistence(timeout: 5),
+                      "#150 regression: player.titleLabel must still exist after pressing Menu to close description panel")
+    }
 }
 #endif
