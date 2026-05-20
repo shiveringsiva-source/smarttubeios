@@ -124,5 +124,20 @@ final class TVSettingsUITests: XCTestCase {
             "settings.resetAllButton must be in the accessibility tree"
         )
     }
+
+    /// Regression test for #149: the Settings tab must open on the first select press.
+    /// Before the fix, MainTVTabView used an unbound TabView which made the tvOS focus
+    /// engine require two presses — the first focused the tab, the second activated it.
+    func testSettingsTabOpensSingleSelectPress() throws {
+        // setUpWithError already calls openSettings() which presses select exactly once.
+        // If the sentinel was found (setup succeeded), Settings opened on a single press.
+        let sentinel = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier == 'settings.resetAllButton'"))
+            .firstMatch
+        XCTAssertTrue(
+            sentinel.waitForExistence(timeout: 10),
+            "#149 regression: Settings tab must open after a single select press, not two"
+        )
+    }
 }
 #endif
