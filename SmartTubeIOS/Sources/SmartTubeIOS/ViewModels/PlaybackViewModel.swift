@@ -39,6 +39,7 @@ public final class PlaybackViewModel {
     /// reloads can wait the full CDN time without being cut short.
     var needsQuickStartup: Bool = false
     public internal(set) var isPlaying: Bool = false
+    public internal(set) var videoEnded: Bool = false
     public internal(set) var currentTime: TimeInterval = 0
     public internal(set) var duration: TimeInterval = 0
 

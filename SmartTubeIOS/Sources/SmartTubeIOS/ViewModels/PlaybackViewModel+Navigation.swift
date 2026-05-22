@@ -78,6 +78,7 @@ extension PlaybackViewModel {
                 } else {
                     playerLog.notice("Autoplay (queue): exhausted, clearing")
                     await CurrentQueueStore.shared.clear()
+                    videoEnded = true
                 }
             }
             return
@@ -88,7 +89,10 @@ extension PlaybackViewModel {
             load(video: pick)
             return
         }
-        guard settings.autoplayEnabled, let next = relatedVideos.first else { return }
+        guard settings.autoplayEnabled, let next = relatedVideos.first else {
+            videoEnded = true
+            return
+        }
         playerLog.notice("Autoplay: loading next video id=\(next.id)")
         load(video: next)
     }

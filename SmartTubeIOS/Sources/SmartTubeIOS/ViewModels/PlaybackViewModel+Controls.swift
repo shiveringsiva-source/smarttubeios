@@ -12,6 +12,17 @@ private let playerLog = CrashlyticsLogger(category: "Player")
 extension PlaybackViewModel {
 
     public func togglePlayPause() {
+        if videoEnded {
+            videoEnded = false
+            seek(to: 0)
+            player.rate = Float(settings.playbackSpeed)
+            isPlaying = true
+            showControls()
+            #if canImport(UIKit)
+            updateNowPlayingPlayback()
+            #endif
+            return
+        }
         if isPlaying { player.pause() } else { player.rate = Float(settings.playbackSpeed) }
         isPlaying.toggle()
         showControls()

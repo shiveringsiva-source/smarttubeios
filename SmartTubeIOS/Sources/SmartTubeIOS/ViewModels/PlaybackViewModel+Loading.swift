@@ -51,6 +51,7 @@ extension PlaybackViewModel {
         player.pause()
         player.replaceCurrentItem(with: nil)
         isPlaying = false
+        videoEnded = false
         wasPlayingBeforeSuspend = false
         currentTime = 0
         duration = 0

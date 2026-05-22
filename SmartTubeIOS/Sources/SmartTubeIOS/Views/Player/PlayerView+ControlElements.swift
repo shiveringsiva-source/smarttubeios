@@ -374,7 +374,7 @@ extension PlayerControlsOverlay {
 
     var playPauseButton: some View {
         Button { vm.togglePlayPause() } label: {
-            Image(systemName: vm.isPlaying ? "pause.fill" : "play.fill")
+            Image(systemName: vm.videoEnded ? "arrow.counterclockwise" : (vm.isPlaying ? "pause.fill" : "play.fill"))
                 // .original preserves the white foreground on tvOS even when the focus
                 // engine or button state tries to apply a system tint colour.
                 .renderingMode(.original)
