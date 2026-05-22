@@ -166,6 +166,7 @@ extension PlaybackViewModel {
         isPlaying = false
         controlsTimer?.cancel()
         #if canImport(UIKit)
+        UIApplication.shared.isIdleTimerDisabled = false
         updateNowPlayingPlayback()
         // Deregister from the global command center so a suspended VM never
         // handles lock screen Play while another VM is the active player.
@@ -196,6 +197,7 @@ extension PlaybackViewModel {
         isPlaying = true
         showControls()
         #if canImport(UIKit)
+        UIApplication.shared.isIdleTimerDisabled = true
         updateNowPlayingPlayback()
         #endif
     }
