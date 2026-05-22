@@ -183,6 +183,11 @@ public struct SearchView: View {
             }
         }
         .accessibilityIdentifier("search.results")
+        #if os(iOS)
+        .scrollDismissesKeyboard(.immediately)
+        .contentShape(Rectangle())
+        .onTapGesture { isSearchFocused = false }
+        #endif
     }
 
     // MARK: - Suggestions list (history + recommended/live)
@@ -293,6 +298,10 @@ public struct SearchView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
+        #if os(iOS)
+        .contentShape(Rectangle())
+        .onTapGesture { isSearchFocused = false }
+        #endif
     }
 }
 
