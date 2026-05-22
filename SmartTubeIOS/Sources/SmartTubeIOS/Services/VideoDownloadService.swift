@@ -1,6 +1,8 @@
 import Foundation
 import AVFoundation
+#if os(iOS)
 import Photos
+#endif
 import Observation
 import os
 import SmartTubeIOSCore
@@ -429,6 +431,7 @@ public final class VideoDownloadService {
     }
 
     private func requestPhotoAddAccess() async -> Bool {
+        #if os(iOS)
         let current = PHPhotoLibrary.authorizationStatus(for: .addOnly)
         switch current {
         case .authorized, .limited:
@@ -439,6 +442,9 @@ public final class VideoDownloadService {
         default:
             return false
         }
+        #else
+        return false
+        #endif
     }
 
     /// Copies `mergedFileURL` to the DownloadStore destination and registers the download.
@@ -484,6 +490,7 @@ public final class VideoDownloadService {
     // isolation — Photos calls them on its own serial queue and would crash if
     // the closures were actor-isolated (libdispatch queue assertion).
     private nonisolated func saveToPhotoLibrary(fileURL: URL) async throws {
+        #if os(iOS)
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             PHPhotoLibrary.shared().performChanges({
                 PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: fileURL)
@@ -497,5 +504,8 @@ public final class VideoDownloadService {
                 }
             })
         }
+        #else
+        throw URLError(.unsupportedURL)
+        #endif
     }
 }
