@@ -101,6 +101,7 @@ struct DownloadsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("downloads.emptyState")
     }
 }

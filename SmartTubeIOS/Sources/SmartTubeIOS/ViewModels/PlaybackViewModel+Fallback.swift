@@ -437,12 +437,13 @@ extension PlaybackViewModel {
                     raceCont.yield(box)
                     raceCont.finish()
                 }
-                // Apply the 8-second timeout only during the initial load sequence
-                // and only for clients whose CDN URLs carry rqh=1 (iOS, Android).
-                // rqh=1-free clients (Android VR, WebCreator) are exempt from bot-detection
-                // enforcement and may legitimately need >8 s for the first loadTracks call.
-                // Quality-switch retries (needsQuickStartup=false) always skip this timeout.
-                if needsQuickStartup && !isRqhFreeClient {
+                // Apply the 8-second timeout during initial load so that slow/hung CDN
+                // responses don't stall the entire fallback chain. All clients — including
+                // rqh-free ones (Android VR, WebCreator) — benefit from this cap: legitimate
+                // adaptive streams load well under 8 s, and hung connections (bot-detect,
+                // login-required, slow CDN) are cut off before the 20 s test startup window
+                // is exceeded. Quality-switch retries (needsQuickStartup=false) skip this.
+                if needsQuickStartup {
                     Task.detached {
                         try? await Task.sleep(for: .seconds(8))
                         raceCont.yield(nil)
@@ -455,7 +456,7 @@ extension PlaybackViewModel {
                     vTracks = box.video
                     aTracks = box.audio
                 } else {
-                    let reason = needsQuickStartup && !isRqhFreeClient ? "timed out after 8s" : "no result"
+                    let reason = needsQuickStartup ? "timed out after 8s" : "no result"
                     playerLog.error("❌ [\(label)/adaptive] loadTracks \(reason) (rqh=\(videoRqh))")
                     return false
                 }
