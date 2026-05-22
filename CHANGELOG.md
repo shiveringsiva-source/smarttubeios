@@ -4,6 +4,75 @@ All notable changes to SmartTube are documented here.
 
 ---
 
+## [3.0] – 2026-05-22
+
+### Added
+- **DASH adaptive quality switching** — selecting a quality tier for DASH streams rebuilds `AVMutableComposition` with the matching video track; a pending quality label is shown during the switch; the initial load is capped to the display's native resolution; VP9 variants excluded for device compatibility
+- **macOS (Mac Catalyst) support** — `NSViewRepresentable` AVPlayerLayer renders in the macOS window; App Sandbox, Hardened Runtime, and `PrivacyInfo.xcprivacy` (network/API usage declarations) added; `SUPPORTED_PLATFORMS` updated; macOS build succeeds
+- **TV client attestation token** — `fetchAttestationToken` injected into the TVHTML5 client authentication payload to satisfy YouTube's enhanced bot-detection for signed-in sessions
+- **"Remove from Watch Later" action** — video cards inside the Watch Later playlist show a destructive remove option in the context menu; cards outside the playlist continue to show "Save to Watch Later"
+- **Stats for Nerds** added to the player overflow menu on all platforms
+
+### Fixed
+- **tvOS settings tab required double-click to open** — `MainTVTabView` `TabView` now uses a selection binding; a single remote press selects the tab
+- **tvOS video description and comments panels could not be closed** — `isAnyOverlayVisible` now includes both panel states so the player no longer intercepts the Menu button; each panel has its own `.focusScope` + `.onExitCommand`
+- **tvOS quality preference reset to Auto on every launch** — `SettingsStore.init()` was unconditionally overwriting `preferredQuality` at startup
+- **tvOS overflow menu text low contrast** — focused row highlight changed from `white.opacity(0.15)` to `gray.opacity(0.35)`
+- **Playlist auto-advance not working from Search results** — `SearchView` now populates `CurrentQueueStore` before starting playback; macOS compact-grid path also fixed
+- **HLS manifest cache** TTL raised from 5 min to 30 min; cache entry correctly invalidated on a 403 recovery path to prevent stale variant URLs
+
+---
+
+## [2.8] – 2026-05-19
+
+### Added
+- **Audio language selector in iOS fullscreen player** — speed, quality, and audio-track pill buttons in the quick-access row below the scrub bar for one-tap access without opening the overflow menu
+- **tvOS player overflow menu expanded** — Captions and Audio Track rows added; Audio Only toggle available on tvOS; picker overlays no longer restricted to iOS
+- **tvOS UI test coverage** — six new test suites: Settings (7 tests), Home Feed (5 tests), Library Navigation (8 tests), Player Controls (9 tests), Playback Regression (5 tests), Audio & Caption Pickers (6 tests)
+- Library Subscriptions chip shortened to **"Subs"**
+
+### Fixed
+- **No audio after quality change in fullscreen** — quality-reload paths now call `loadAudioTracks(from:)` on every new `AVPlayerItem`
+- **No audio when quality is not set to Auto** — audio track configuration was bypassed in manual quality selection paths
+- **All audio tracks showing as "Original"** — `isOriginal` detection uses `hasMediaCharacteristic(.isMainProgramContent)` with `DEFAULT=YES` as fallback; per-track logging added
+- **Caption track not remembered between videos** — last selected caption language persisted in `AppSettings` and re-applied on load
+- **Captions obscuring the scrub bar** — caption overlay repositioned above the progress bar
+- **Player controls hiding too quickly in fullscreen** — auto-hide timeout increased by 50%
+- **Play/pause and navigation button tap targets too small** — enlarged from 44 pt to 68 pt
+- **1440p quality not applied on initial load** — HLS variant fetch and `applyQualityPreference` added to all fallback entry points
+- **tvOS settings missing seek-interval picker and preferred audio language selector** — `#if !os(tvOS)` guard removed from both pickers
+- **tvOS long-press triggering both context menu and playback** — `onSelect` closure added to `VideoCardView`; `.onTapGesture` co-located with `.contextMenu` so the gesture arbiter suppresses playback on long-press
+- **tvOS settings navigation bar hidden after scroll-down-then-up** — `.toolbar(.hidden)` guard changed from `#if os(iOS)` to `#if !os(macOS)`
+- **tvOS SponsorBlock skip button not focusable** — `isSkipToastActive` gate routes focus to the skip button when a segment is detected and restores player focus on dismiss
+- **Audio track selector missing from iOS overflow menu** — `moreMenuAudioTrackRow` restored (accidentally removed in a prior refactor)
+- **Watch Later playlist playing videos in wrong order** — `CurrentQueueStore.replaceAll(with:)` now called before starting playback in all playlist entry points
+- **Hide Shorts not filtering Subscriptions feed** — three detection gaps fixed: `parseVideoRenderer` Shorts signals, RSS feed detection via playlist enrichment, History view was incorrectly filtering non-Shorts
+- **Intermittent "first video cannot be played" on launch** — stale iOS-client preload cache now invalidated before a fresh client fetch in the muxed-only fallback path
+- **"Original Track" missing from tvOS preferred audio language picker**
+- **Firebase network hardening**: VPN/IP-block banner suppresses "Try Again" button; Android muxed-only fallthrough no longer records a non-fatal; `NSURLError -999` (cancelled) added to transient-suppression list; request timeout raised from 20 s to 30 s
+
+---
+
+## [2.7] – 2026-05-16
+
+### Added
+- **Quick-access player controls** (iOS) — speed, quality, audio-track, and sleep-timer pill buttons below the scrub bar for one-tap access without opening the overflow menu
+- **iCloud sync for local data** — subscriptions, watch state, current queue, and RSS feeds sync via `NSUbiquitousKeyValueStore`; opt-in toggle in Settings → General
+- **Video publish date in search results** — upload age label shown in grid and compact card layouts for search results and playlist views
+- **Shorts auto-pagination** — the home feed Shorts section automatically loads a second page when the initial batch is below 6 (iPhone) or 8 (tvOS)
+- **Downloads screen** — Library → Downloads lists locally downloaded videos; tap to play offline, swipe to delete
+
+### Fixed
+- **OrientationManager crash on iOS 26** (EXC_BREAKPOINT, Crashlytics 1bce7ef1) — `requestGeometryUpdate` error handler was inheriting `@MainActor` isolation and invoked on a background GCD queue on iOS 26+; extracted as an explicit `nonisolated` file-scope function
+- **Watch history not updating for signed-in users** — `PlaybackViewModel`'s own `InnerTubeAPI` instance was not receiving token refreshes; `WatchtimeTracker` was sending anonymous pings
+- **Streaming spinner not dismissing after video loads** — `isLoading = false` moved into the `.readyToPlay` observer; audio-only path also fixed
+- **App launch interrupting background audio** — premature `AVAudioSession.setActive(true)` removed from `PlaybackViewModel.init()`
+- **Shorts not loading on cold launch** — `fetchShorts` and `fetchShortsMore` now use `postTV()` (TVHTML5 client) to match the TV OAuth token scope; WEB client was returning HTTP 400
+- **Mini-player overlapping bottom tab bar** (iPhone portrait) — mini-player now rendered as `overlay(alignment: .bottom)` above the `TabView` safe area; `TabBarBottomInsetKey` preference captures the actual tab bar height
+- **16 QPB-identified bugs**: `extractNumber` undercounting K/M/B view-count suffixes; `viewCount` always `nil` in all renderers; fallback paths (`retryWithFallbackPlayer`, `retryWith403Recovery`, `retryWithAdaptiveComposition`) dropping `playerInfo` / `availableFormats` / `availableCaptions`; `loadAsync` race on superseded tasks; `pingTrackingURL` silently discarding errors; `evictAuthSensitiveData` skipping `VideoDiskCache`; auth token captured at prefetch-task creation time (stale after refresh); `WatchtimeTracker` using stale URLs post-eviction; `phase2Task` skipped in all fallback paths; `tryLoadAudioURL` unconditionally resetting audio-only mode on any error; `itemObserverTask` race on item replacement; `endObserverTask` not restarted in audio-only mode; `parsePlaylistVideoRenderer` not implemented
+
+---
+
 ## [2.6] – 2026-05-14
 
 ### Added
@@ -26,6 +95,26 @@ All notable changes to SmartTube are documented here.
 - **Audio track selection not working after fallback recovery** — `audioSelectionGroup` and `audioOptionsByID` were never refreshed when the Android fallback player, adaptive composition fallback, or 403-recovery path created a new `AVPlayerItem`; `retryWithFallbackPlayer`, `retryWithAdaptiveComposition`, and `retryWith403Recovery` in `PlaybackViewModel+Fallback` now call `loadAudioTracks(from:)` in their `.readyToPlay` observers, matching the existing pattern in the normal load and quality-change paths
 - **More menu overflowing and unusable in landscape mode** (GitHub issue #45, contributor say4n) — `.frame(maxHeight: 520)` was too tall for compact vertical size class; `moreMenuOverlay` now uses 320 pt max-height in `verticalSizeClass == .compact`, adds `.safeAreaPadding(.horizontal)` plus 36 pt extra horizontal padding when landscape, keeping the menu within the live area and scrollable to the Cancel row; `player.moreMenu.scrollView` accessibility identifier added
 - **"Hide Shorts" setting not filtering Shorts in Search, Library, and Channel views** (GitHub issue #41) — `AppSettings.hideShorts` was applied only in `HomeView` and `BrowseView`; `SearchView` and `LibraryView` now inject `SettingsStore` via `@Environment` and filter results before passing to `VideoGridSection`; `ChannelView.filteredVideos` extended to apply the same predicate; `RSSFeedsView.videoList` also updated for consistency; `HideShortsFilterTests` (6 tests) added
+
+---
+
+## [2.5] – 2026-05-12
+
+### Added
+- **Landscape lock button** (iOS) — rotation icon in the player top bar locks orientation in landscape; the "Landscape Always Play" toggle was removed from Settings
+- **Audio-only button in player controls** (iOS) — waveform icon in the bottom player bar toggles audio-only mode; the Settings toggle was removed; tvOS retains the overflow menu row
+- **Toast on mode switches** — "Audio-Only Mode" / "Video Mode" notification shown when toggling playback mode
+- **DeArrow titles and thumbnails** — cached branding applied in `VideoCardView` grid and compact layouts and to `currentVideo` on load; respects the `deArrowEnabled` setting
+
+### Fixed
+- **Mini player "X" button not stopping audio** — `AVAudioSession.setActive(false)` called in `PlaybackViewModel.stop()` on dismiss
+- **Overflow menu too wide and large in portrait** — `.font(.subheadline)` applied to all rows; max width constrained to 80% of screen width
+- **Portrait player next/back buttons had small tap targets** — enlarged to 68 pt with circular background matching other control buttons
+- **Shorts incorrectly included in playlists** — `displayVideos` filter added to `PlaylistView`
+- **Video not reloading after stop and replay** — `itemObserverTask` and `endObserverTask` now cancelled in `stop()`
+- **Preferred audio language ignored on AI-dubbed videos** — `DEFAULT=YES` HLS track priority corrected; device language preference evaluated before YouTube's marked default
+- **Shorts visible despite "Hide Shorts" being enabled** — `parseLockupViewModel` guard relaxed to correctly detect `reelWatchEndpoint` as `isShort = true`
+- **Pagination failing on transient network errors** — all 5 pagination entry points wrapped with `retryWithBackoff` (up to 3 attempts, 1–2 s exponential delay)
 
 ---
 

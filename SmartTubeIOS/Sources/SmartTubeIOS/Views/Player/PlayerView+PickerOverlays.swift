@@ -49,6 +49,7 @@ extension PlayerView {
                             store.settings.preferredQuality = .auto
                             vm.updateSettings(store.settings)
                             showQualityPicker = false
+                            qualityToastMessage = "Auto quality"
                         } label: {
                             HStack {
                                 Text("Auto")
@@ -81,6 +82,7 @@ extension PlayerView {
                                 }
                                 vm.updateSettings(store.settings)
                                 showQualityPicker = false
+                                qualityToastMessage = "\(fmt.qualityLabel) · may take up to 30s"
                             } label: {
                                 HStack {
                                     Text(fmt.qualityLabel)

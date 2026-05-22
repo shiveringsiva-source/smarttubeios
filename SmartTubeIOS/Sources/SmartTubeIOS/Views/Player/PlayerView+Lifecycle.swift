@@ -277,6 +277,7 @@ extension PlayerView {
         #if os(iOS)
         .toast(message: $scaleToast)
         .toast(message: $seekToastMessage)
+        .toast(message: $qualityToastMessage)
         .toast(message: Binding(get: { vm.toastMessage }, set: { vm.toastMessage = $0 }))
         #endif
     }

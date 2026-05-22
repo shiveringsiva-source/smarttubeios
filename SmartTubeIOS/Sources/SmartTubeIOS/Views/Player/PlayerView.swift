@@ -67,6 +67,8 @@ public struct PlayerView: View {
     /// Drives the brief seek-direction toast shown after a double-tap in the left/right zone.
     @State var seekToastMessage: String?
     #endif
+    /// Drives the quality-change toast shown after the user picks a resolution.
+    @State var qualityToastMessage: String?
     #if os(tvOS)
     @FocusState var playerFocused: Bool
     /// Which playback control is visually highlighted in the overlay.

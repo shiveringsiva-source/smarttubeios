@@ -280,6 +280,10 @@ public final class PlaybackViewModel {
     /// Phase 2 background work: nextInfo, endCards, trackingURLs, neighbour prefetch.
     /// Cancelled at the start of every new load() and in stop().
     var phase2Task: Task<Void, Never>?
+    /// Background prefetch task: either fetches AndroidVR playerInfo (muxed fallback)
+    /// or pre-warms AVAssetTrack arrays for the user's preferred quality tier.
+    /// Cancelled on every new video load.
+    var prefetchTask: Task<Void, Never>?
 
     // MARK: - Now Playing cache
     // Never read nowPlayingInfo back from MPNowPlayingInfoCenter — doing a

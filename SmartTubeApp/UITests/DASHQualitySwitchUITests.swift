@@ -57,6 +57,18 @@ final class DASHQualitySwitchUITests: XCTestCase {
     /// Confirms quality switching + pendingQualityLabel persistence on a different video.
     private static let videoID_logTxt = "GZzsJMSQKAs"
 
+    /// Third test video: "This discovery changed human history" by The British Museum.
+    ///   [store] playerInfo _-ZuS0m1Oso formats=127 hls=false
+    ///
+    /// This video exposes a class of bug where:
+    ///   1. All adaptive URLs have rqh=true → exhaustiveRetry falls back to Android muxed 360p.
+    ///   2. Quality-switch composition rebuild uses ua=iOS on rqh=1 URLs → loadTracks times out
+    ///      silently, replaceCurrentItem is never called, player stays at 640×360 forever.
+    ///
+    /// Assertion 1 (selectFormat called) PASSES — pendingQualityLabel is set synchronously.
+    /// Assertion 2 (resolution actually changes) FAILS — catches the silent regression.
+    private static let videoID_BritishMuseum = "_-ZuS0m1Oso"
+
     /// Resolution label separator character: U+00D7 MULTIPLICATION SIGN, as used in
     /// PlaybackViewModel+StatsForNerds.swift: "\(width)×\(height)"
     private static let cross = "\u{00D7}"
@@ -99,6 +111,19 @@ final class DASHQualitySwitchUITests: XCTestCase {
     /// Confirms quality-button persistence fix works across different videos.
     func testQualityCycleOnDASHVideo_GZzsJMSQKAs() throws {
         launchWithVideo(Self.videoID_logTxt)
+        try runQualityCycle()
+    }
+
+    /// Quality cycle on The British Museum video (_-ZuS0m1Oso, formats=127).
+    ///
+    /// Regression test for: selecting any quality always shows 360p in Stats for Nerds.
+    /// Root cause: rqh=1 adaptive URLs cause loadTracks timeouts in the DASH composition
+    /// rebuild, so replaceCurrentItem is never called and the muxed-360p fallback keeps playing.
+    ///
+    /// This test FAILS until the composition rebuild correctly handles rqh=1 URLs
+    /// (e.g. by using the AndroidVR UA or retrying with a fresh AndroidVR player response).
+    func testQualityCycleOnDASHVideo_BritishMuseum() throws {
+        launchWithVideo(Self.videoID_BritishMuseum)
         try runQualityCycle()
     }
 

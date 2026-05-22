@@ -76,6 +76,9 @@ extension PlaybackViewModel {
         qualityManager.reset()
         phase2Task?.cancel()
         phase2Task = nil
+        prefetchTask?.cancel()
+        prefetchTask = nil
+        AVAssetTrackCache.shared.clear()
 
         // UI-testing synchronous inject for related videos.
         // Checked here (before the Task is created) so that hasNext = true is set
@@ -644,6 +647,9 @@ extension PlaybackViewModel {
         isLoading = false
         phase2Task?.cancel()
         phase2Task = nil
+        prefetchTask?.cancel()
+        prefetchTask = nil
+        AVAssetTrackCache.shared.clear()
         itemObserverTask?.cancel()
         itemObserverTask = nil
         endObserverTask?.cancel()
