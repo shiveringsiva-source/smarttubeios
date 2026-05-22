@@ -85,13 +85,16 @@ extension PlayerView {
                     showMoreMenu = false
                 }
 
-            ViewThatFits(in: .vertical) {
+            // ScrollView capped at moreMenuMaxHeight to avoid GeometryReader/containerRelativeFrame
+            // feedback loops that crash SwiftUI's AttributeGraph (SIGSEGV/SIGBUS recursion).
+            // Previously this used ViewThatFits with duplicate moreMenuItems references; that pattern
+            // causes AttributeGraph EXC_BAD_ACCESS when SwiftUI evaluates both alternatives and the
+            // shared @ViewBuilder identity produces a graph cycle. Using a single ScrollView path
+            // is safe because .frame(maxHeight:) already caps the height appropriately.
+            ScrollView {
                 moreMenuItems
-                ScrollView {
-                    moreMenuItems
-                }
-                .accessibilityIdentifier("player.moreMenu.scrollView")
             }
+            .accessibilityIdentifier("player.moreMenu.scrollView")
             .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             // Static max height avoids GeometryReader/containerRelativeFrame feedback
