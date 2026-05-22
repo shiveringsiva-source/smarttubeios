@@ -80,16 +80,23 @@ extension InnerTubeAPI {
         return try parsePlayerInfo(from: data, videoId: videoId)
     }
 
-    /// Fetches player info using the TVHTML5_SIMPLY_EMBEDDED_PLAYER client.
-    /// This embedded-player client returns an HLS manifest for most videos without
-    /// requiring a PO token — used in `exhaustiveRetry` to obtain a working HLS URL
-    /// when iOS/Android adaptive CDN URLs have `rqh=1` enforcement active.
+    /// Fetches player info using the WEB_EMBEDDED_PLAYER client (nameID=56).
+    /// Replaced the deprecated TVHTML5_SIMPLY_EMBEDDED_PLAYER (nameID=85) which YouTube
+    /// blocked in 2026 with "no longer supported in this application or device".
+    /// Returns an HLS manifest for most embeddable videos without requiring a PO token.
+    /// `thirdParty.embedUrl` is required — without it YouTube returns the same rejection.
     public func fetchPlayerInfoTVEmbedded(videoId: String) async throws -> PlayerInfo {
         var body = makeBody(client: tvEmbeddedClientContext)
         body["videoId"] = videoId
         body["racyCheckOk"] = true
         body["contentCheckOk"] = true
-        // Embed context — mirrors yt-dlp's tv_embedded player request.
+        // thirdParty.embedUrl: required by WEB_EMBEDDED_PLAYER to prove legitimate embed.
+        // yt-dlp's _fix_embedded_ytcfg() injects this for any *_embedded client variant.
+        // Without it, YouTube returns "no longer supported in this application or device".
+        // Use the standard YouTube embed URL for this video as the embedUrl.
+        body["thirdParty"] = [
+            "embedUrl": "https://www.youtube.com/embed/\(videoId)"
+        ]
         var comps = URLComponents(string: "https://www.youtube.com/watch")!
         comps.queryItems = [URLQueryItem(name: "v", value: videoId)]
         let referer = comps.url?.absoluteString ?? "https://www.youtube.com"

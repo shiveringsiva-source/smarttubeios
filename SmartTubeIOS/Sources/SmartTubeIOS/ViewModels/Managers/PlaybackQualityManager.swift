@@ -299,6 +299,17 @@ final class PlaybackQualityManager {
             return
         }
 
+        // Fix 1B / 3B: detect rqh=1 CDN enforcement before attempting composition.
+        // These URLs hold TCP connections indefinitely — AVURLAsset.loadTracks never returns.
+        // Skip the doomed rebuild immediately and revert to Auto instead of hanging for 10s.
+        if Self.urlHasRqhEnforcement(videoURL) || Self.urlHasRqhEnforcement(audioURL) {
+            playerLog.notice("[quality] rqh=1 detected in DASH URL — skipping doomed rebuild, reverting to Auto")
+            selectedFormat = nil
+            pendingQualityLabel = ""
+            delegate?.toastMessage = "Quality unavailable (CDN restriction)"
+            return
+        }
+
         let codecLabel = format?.codecShortLabel ?? ""
         playerLog.notice("[quality] DASH switch → \(label)\(codecLabel.isEmpty ? "" : " (\(codecLabel))") videoURL=\(videoURL.lastPathComponent.prefix(60))")
         await delegate?.qualitySelectDASHFormat(videoURL: videoURL, audioURL: audioURL, seekTo: time)
@@ -393,6 +404,14 @@ final class PlaybackQualityManager {
         let capped = videoOnly.filter { $0.height <= maxH }
         return capped.sorted(by: sortKey).first
             ?? videoOnly.sorted(by: sortKey).first
+    }
+
+    /// Returns `true` when `url` contains `rqh=1`, indicating YouTube CDN Proof-of-Origin
+    /// enforcement. Without a PO token, the CDN holds the TCP connection open indefinitely
+    /// instead of rejecting the request — `AVURLAsset.loadTracks` hangs forever on these.
+    static func urlHasRqhEnforcement(_ url: URL) -> Bool {
+        URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.contains(where: { $0.name == "rqh" && $0.value == "1" }) == true
     }
 
     static let bitRateCaps: [Int: Double] = [

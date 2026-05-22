@@ -367,10 +367,9 @@ extension InnerTubeAPI {
         return json
     }
 
-    /// TV Embedded (TVHTML5_SIMPLY_EMBEDDED_PLAYER) player request on www.youtube.com.
-    /// Uses the correct client headers (nameID=85, version=2.0) required for this client —
-    /// the generic `post` function sends Web client headers which cause YouTube to return
-    /// "no longer supported" rejections for this client ID.
+    /// WEB_EMBEDDED_PLAYER (nameID=56) player request on www.youtube.com.
+    /// Replaced the deprecated TVHTML5_SIMPLY_EMBEDDED_PLAYER (nameID=85) which YouTube
+    /// blocked in 2026. Uses client headers matching nameID=56 / version from InnerTubeClients.
     func postTVEmbedded(body: [String: Any]) async throws -> [String: Any] {
         guard var comps = URLComponents(url: baseURL.appendingPathComponent("player"),
                                         resolvingAgainstBaseURL: false) else {

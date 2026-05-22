@@ -135,9 +135,11 @@ public actor InnerTubeAPI {
         ]
     ]
 
-    /// The TVHTML5_SIMPLY_EMBEDDED_PLAYER client context used for embedded player requests.
-    /// Returns an HLS manifest for most videos without requiring a PO token —
-    /// preferred over adaptive DASH when rqh=1 CDN enforcement is active.
+    /// The WEB_EMBEDDED_PLAYER client context for embedded iframe player requests.
+    /// Replaces the deprecated TVHTML5_SIMPLY_EMBEDDED_PLAYER (nameID=85). YouTube blocked
+    /// nameID=85 in 2026; yt-dlp removed `tv_embedded` and now uses `web_embedded` (nameID=56).
+    /// IMPORTANT: requests must include `thirdParty.embedUrl` — without it YouTube returns
+    /// "no longer supported in this application or device" (the same error nameID=85 gave).
     let tvEmbeddedClientContext: [String: Any] = [
         "client": [
             "hl": "en",

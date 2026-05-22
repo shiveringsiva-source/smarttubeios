@@ -552,7 +552,7 @@ extension PlaybackViewModel {
                 await self?.fetchAndCacheAdaptivePlayerInfo(video: video, muxedInfo: info)
             }
         } else if settings.preferredQuality != .auto {
-            prefetchTask = Task(priority: .background) { [weak self] in
+            prefetchTask = Task(priority: .utility) { [weak self] in
                 await self?.prefetchPreferredQualityTracks(info: info)
             }
         }
@@ -635,6 +635,45 @@ extension PlaybackViewModel {
         }
     }
 
+    /// Prefetches `AVAssetTrack` metadata for ALL available quality tiers at `.userInitiated`
+    /// priority. Call this when the quality picker opens so that by the time the user taps a
+    /// quality, the tracks are already cached and the switch completes in < 100ms (Fix 2A).
+    func prefetchAllQualityTracks() async {
+        guard let info = playerInfo else { return }
+        guard info.hlsURL == nil else { return } // HLS doesn't need DASH track prefetch
+        guard let audioURL = info.bestAdaptiveAudioURL else { return }
+        guard !PlaybackQualityManager.urlHasRqhEnforcement(audioURL) else { return }
+
+        let formats = Self.deduplicatedVideoFormats(info.formats)
+        let ua = InnerTubeClients.iOS.userAgent
+
+        // Load audio tracks once — shared across all video qualities.
+        let audioTracks: [AVAssetTrack]
+        if let cached = AVAssetTrackCache.shared.audioTracks(for: audioURL), !cached.isEmpty {
+            audioTracks = cached
+        } else {
+            let audioAsset = AVURLAsset(url: audioURL, options: ["AVURLAssetHTTPHeaderFieldsKey": ["User-Agent": ua]])
+            guard let loaded = try? await audioAsset.loadTracks(withMediaType: .audio), !loaded.isEmpty else { return }
+            audioTracks = loaded
+        }
+
+        for fmt in formats.prefix(6) {
+            guard !Task.isCancelled else { return }
+            guard let videoURL = fmt.url else { continue }
+            guard !PlaybackQualityManager.urlHasRqhEnforcement(videoURL) else { continue }
+            guard AVAssetTrackCache.shared.videoTracks(for: videoURL) == nil else { continue }
+            let itag = URLComponents(url: videoURL, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "itag" })?.value ?? "?"
+            let videoAsset = AVURLAsset(url: videoURL, options: ["AVURLAssetHTTPHeaderFieldsKey": ["User-Agent": ua]])
+            playerLog.notice("[prefetch/picker] pre-warming \(fmt.height)p itag=\(itag)")
+            if let vTracks = try? await videoAsset.loadTracks(withMediaType: .video), !vTracks.isEmpty {
+                AVAssetTrackCache.shared.store(videoTracks: vTracks, audioTracks: audioTracks,
+                                               videoURL: videoURL, audioURL: audioURL)
+                playerLog.notice("⚡ [prefetch/picker] cached \(fmt.height)p itag=\(itag)")
+            }
+        }
+    }
+
     /// Rebuilds the `AVMutableComposition` during a quality switch for DASH/MP4-only videos
     /// (where `hlsURL == nil`). Mirrors `attemptComposition` but does not reset `playerInfo`
     /// or `availableFormats` and does not call `launchPhase2` — this is a mid-playback swap.
@@ -685,7 +724,7 @@ extension PlaybackViewModel {
                     raceCont.finish()
                 }
                 Task.detached {
-                    try? await Task.sleep(for: .seconds(60))
+                    try? await Task.sleep(for: .seconds(10))
                     raceCont.yield(nil)
                     raceCont.finish()
                 }
@@ -696,7 +735,7 @@ extension PlaybackViewModel {
                     AVAssetTrackCache.shared.store(videoTracks: vTracks, audioTracks: aTracks,
                                                     videoURL: videoURL, audioURL: audioURL)
                 } else {
-                    playerLog.error("❌ [quality/DASH] loadTracks timed out after 60s (rqh CDN hold) — triggering 403 recovery retry")
+                    playerLog.error("❌ [quality/DASH] loadTracks timed out after 10s — triggering 403 recovery retry")
                     selectedFormat = nil
                     if statsForNerdsVisible { updateStatsSnapshot() }
                     if let video = currentVideo {

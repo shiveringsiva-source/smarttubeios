@@ -117,6 +117,11 @@ extension PlayerView {
             .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .accessibilityIdentifier("player.qualityPicker")
+            .task {
+                // Fix 2A: pre-warm all quality tiers the moment the picker opens so that
+                // by the time the user taps a resolution, tracks are cached (< 100ms switch).
+                await vm.prefetchAllQualityTracks()
+            }
             #if os(tvOS)
             .focusScope(qualityPickerNamespace)
             #endif

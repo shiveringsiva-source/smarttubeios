@@ -58,13 +58,15 @@ package enum InnerTubeClients {
         package static let userAgent = "com.google.android.apps.youtube.vr.oculus/\(version) (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip"
     }
 
-    /// TV Embedded client (TVHTML5_SIMPLY_EMBEDDED_PLAYER) — used for YouTube iframe embeds.
-    /// Returns an HLS manifest for most videos without requiring a PO token, making it
-    /// ideal as a fallback when iOS/Android adaptive streams have rqh=1 enforcement.
+    /// Web Embedded Player client — the current YouTube iframe embedded player.
+    /// Replaces the deprecated TVHTML5_SIMPLY_EMBEDDED_PLAYER (nameID=85) which was
+    /// removed from yt-dlp in 2026 after YouTube blocked it with "no longer supported".
+    /// Requires `thirdParty.embedUrl` in the request body — yt-dlp's `_fix_embedded_ytcfg`
+    /// injects this automatically; our `fetchPlayerInfoTVEmbedded` sets it explicitly.
     package enum TVEmbedded {
-        package static let name    = "TVHTML5_SIMPLY_EMBEDDED_PLAYER"
-        package static let nameID  = "85"
-        package static let version = "2.0"
+        package static let name    = "WEB_EMBEDDED_PLAYER"
+        package static let nameID  = "56"
+        package static let version = "1.20260115.01.00"
     }
 
     /// YouTube Studio (creator) web client. Per yt-dlp research, this client is exempt

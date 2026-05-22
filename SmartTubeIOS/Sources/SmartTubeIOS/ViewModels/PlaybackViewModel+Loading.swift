@@ -484,6 +484,14 @@ extension PlaybackViewModel {
             // non-1× speeds, reducing the tinny/phase artefacts audible on AirPods
             // compared to the default .timeDomain algorithm.
             item.audioTimePitchAlgorithm = .spectral
+            // Fix 4C: start playback as soon as 2s of content is buffered rather than
+            // waiting for the default 30s forward buffer. After 5s, reset to system
+            // default so seek/scrubbing has enough buffer for smooth operation.
+            item.preferredForwardBufferDuration = 2.0
+            Task { [weak item] in
+                try? await Task.sleep(for: .seconds(5))
+                item?.preferredForwardBufferDuration = 0
+            }
             // Apply quality hints when a non-auto preference is set. These steer AVPlayer's
             // ABR algorithm toward the user's preferred resolution without bypassing audio
             // metadata (which variant URLs would lose). Hints are applied unconditionally
