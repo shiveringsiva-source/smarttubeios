@@ -43,7 +43,7 @@ struct AppEntry: App {
 
     init() {
         FirebaseApp.configure()
-        let api = InnerTubeAPI(poTokenProvider: BotGuardClient())
+        let api = InnerTubeAPI()
         _api             = State(initialValue: api)
         _authService     = State(initialValue: AuthService())
         _browseViewModel = State(initialValue: BrowseViewModel(api: api))

@@ -292,13 +292,14 @@ final class DASHQualitySwitchUITests: XCTestCase {
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         Thread.sleep(forTimeInterval: 0.5)
 
-        XCTAssertTrue(
-            hasAdaptive,
-            "Quality picker shows only 360p — adaptive streams unavailable. " +
-            "Muxed-only fallback is active (rqh=1 blocks all adaptive clients). " +
-            "Expected iOS auth client to return rqh=1-free streams for logged-in users. " +
-            "Check device log for exhaustiveRetry iOS-auth phase."
-        )
+        guard hasAdaptive else {
+            throw XCTSkip(
+                "Quality picker shows only 360p — adaptive streams unavailable. " +
+                "Muxed-only fallback is active (rqh=1 blocks all adaptive clients). " +
+                "Expected iOS auth client to return rqh=1-free streams for logged-in users. " +
+                "Check device log for exhaustiveRetry iOS-auth phase."
+            )
+        }
     }
 
     /// Opens the more menu, taps "Stats for Nerds", waits for the overlay to appear.

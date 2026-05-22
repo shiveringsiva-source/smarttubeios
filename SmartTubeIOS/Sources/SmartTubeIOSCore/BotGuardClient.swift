@@ -120,6 +120,7 @@ public final class BotGuardClient: PoTokenProvider, @unchecked Sendable {
               outer.count >= 2 else {
             throw BotGuardError.challengeParseError("outer array missing")
         }
+        bgLog.notice("[BotGuard] outer array count=\(outer.count) types=\(outer.map { type(of: $0) }, privacy: .public)")
         let inner: [Any]
         if let candidate = outer[1] as? [Any] {
             bgLog.notice("[BotGuard] outer[1] count=\(candidate.count) firstIsArray=\(candidate.first is [Any])")
@@ -134,9 +135,104 @@ public final class BotGuardClient: PoTokenProvider, @unchecked Sendable {
                 bgLog.notice("[BotGuard] candidate.count=\(candidate.count) and first is not [Any]")
                 throw BotGuardError.challengeParseError("inner array too short (\(candidate.count))")
             }
+        } else if let b64str = outer[1] as? String {
+            // ──────────────────────────────────────────────────────────────────
+            // JSPB format: outer[1] is a base64-encoded binary protobuf message
+            // (application/json+protobuf response from the real YouTube WAA API).
+            // Decode it and extract challenge fields using binary proto parsing.
+            // ──────────────────────────────────────────────────────────────────
+            bgLog.notice("[BotGuard] outer[1] is String len=\(b64str.count) — JSPB binary proto")
+
+            // Standard base64, no padding (JSPB omits trailing '=' chars).
+            let rem = b64str.count % 4
+            let padded = rem == 0 ? b64str : b64str + String(repeating: "=", count: 4 - rem)
+            guard let protoBytes = Data(base64Encoded: padded, options: .ignoreUnknownCharacters) else {
+                throw BotGuardError.challengeParseError("JSPB: base64 decode failed (len=\(b64str.count))")
+            }
+
+            // Log first 80 bytes as hex to help identify the binary structure.
+            let hex80 = protoBytes.prefix(80).map { String(format: "%02X", $0) }.joined(separator: " ")
+            bgLog.notice("[BotGuard] JSPB binary count=\(protoBytes.count) hex80=[\(hex80, privacy: .public)]")
+
+            // Check if outer array has more elements (outer[2] = interpreterUrl, outer[3] = globalName).
+            if outer.count >= 4,
+               let urlRaw = outer[2] as? String, !urlRaw.isEmpty,
+               let program = outer[1] as? String, !program.isEmpty,
+               let globalName = outer[3] as? String, !globalName.isEmpty {
+                bgLog.notice("[BotGuard] JSPB outer[2/3] schema: url=\(String(urlRaw.prefix(60)), privacy: .public) globalName=\(globalName, privacy: .public)")
+                let js = try await fetchInterpreterJS(from: urlRaw)
+                return BotGuardChallenge(interpreterJS: js, program: program, globalName: globalName)
+            }
+            if outer.count >= 3 {
+                bgLog.notice("[BotGuard] outer[2]=\(String(describing: outer[2]).prefix(120), privacy: .public)")
+            }
+            if outer.count >= 4 {
+                bgLog.notice("[BotGuard] outer[3]=\(String(describing: outer[3]).prefix(120), privacy: .public)")
+            }
+
+            // Scan binary for embedded https:// URLs (interpreter URL may be inside).
+            let httpSig: [UInt8] = [0x68, 0x74, 0x74, 0x70, 0x73, 0x3A, 0x2F, 0x2F]
+            let rawBytes = [UInt8](protoBytes)
+            var urlScanPos = 0
+            while urlScanPos <= rawBytes.count - httpSig.count {
+                if rawBytes[urlScanPos..<urlScanPos + httpSig.count].elementsEqual(httpSig) {
+                    var urlEnd = urlScanPos + httpSig.count
+                    while urlEnd < rawBytes.count && rawBytes[urlEnd] > 0x20 && rawBytes[urlEnd] < 0x80 {
+                        urlEnd += 1
+                    }
+                    if let foundURL = String(bytes: rawBytes[urlScanPos..<urlEnd], encoding: .utf8) {
+                        bgLog.notice("[BotGuard] embedded URL at byte \(urlScanPos): \(foundURL, privacy: .public)")
+                    }
+                }
+                urlScanPos += 1
+            }
+
+            // Parse binary proto fields at the top level.
+            let topFields = Self.readProtoFields(protoBytes)
+            for (num, fdata) in topFields.sorted(by: { $0.key < $1.key }) {
+                let s = String(data: fdata, encoding: .utf8)
+                bgLog.notice("[BotGuard] JSPB top field[\(num)] len=\(fdata.count) utf8=\(s.map { String($0.prefix(80)) } ?? "<binary>", privacy: .public)")
+            }
+
+            // Field mapping for BGChallengeData (bgutils-js proto schema):
+            //   field 1  = messageId   (optional string)
+            //   field 2  = interpreterUrl
+            //   field 4  = interpreterHash
+            //   field 5  = program
+            //   field 6  = globalName
+            let topStr = topFields.compactMapValues { String(data: $0, encoding: .utf8) }
+
+            // Strategy A: flat top-level fields (fields 2, 5, 6 present directly).
+            if let urlRaw = topStr[2], !urlRaw.isEmpty,
+               let program = topStr[5], !program.isEmpty,
+               let globalName = topStr[6], !globalName.isEmpty {
+                bgLog.notice("[BotGuard] JSPB flat schema → url=\(String(urlRaw.prefix(60)), privacy: .public)")
+                let js = try await fetchInterpreterJS(from: urlRaw)
+                return BotGuardChallenge(interpreterJS: js, program: program, globalName: globalName)
+            }
+
+            // Strategy B: outer field 1 wraps inner BGChallengeData message.
+            if let innerData = topFields[1] {
+                bgLog.notice("[BotGuard] JSPB nested: parsing top field[1] (\(innerData.count) bytes) as inner")
+                let innerFields = Self.readProtoFields(innerData)
+                for (num, fdata) in innerFields.sorted(by: { $0.key < $1.key }) {
+                    let s = String(data: fdata, encoding: .utf8)
+                    bgLog.notice("[BotGuard] JSPB inner field[\(num)] len=\(fdata.count) utf8=\(s.map { String($0.prefix(80)) } ?? "<binary>", privacy: .public)")
+                }
+                let innerStr = innerFields.compactMapValues { String(data: $0, encoding: .utf8) }
+                if let urlRaw = innerStr[2], !urlRaw.isEmpty,
+                   let program = innerStr[5], !program.isEmpty,
+                   let globalName = innerStr[6], !globalName.isEmpty {
+                    bgLog.notice("[BotGuard] JSPB nested schema → url=\(String(urlRaw.prefix(60)), privacy: .public)")
+                    let js = try await fetchInterpreterJS(from: urlRaw)
+                    return BotGuardChallenge(interpreterJS: js, program: program, globalName: globalName)
+                }
+            }
+
+            throw BotGuardError.challengeParseError("JSPB binary: no matching field schema (check logs)")
         } else {
-            bgLog.notice("[BotGuard] outer[1] is not [Any]")
-            throw BotGuardError.challengeParseError("inner array missing at outer[1]")
+            bgLog.notice("[BotGuard] outer[1] type=\(type(of: outer[1])) — unrecognised")
+            throw BotGuardError.challengeParseError("outer[1] is neither Array nor String")
         }
 
         // inner layout (BgUtils parseChallengeData):
@@ -152,15 +248,7 @@ public final class BotGuardClient: PoTokenProvider, @unchecked Sendable {
 
         var interpreterJS = ""
         if let raw = inner[urlIdx] as? String, !raw.isEmpty {
-            let urlStr = raw.hasPrefix("//") ? "https:\(raw)" : raw
-            if let jsURL = URL(string: urlStr), jsURL.scheme != nil, jsURL.host != nil {
-                // Fetch interpreter script from URL
-                let (jsData, _) = try await session.data(from: jsURL)
-                interpreterJS = String(data: jsData, encoding: .utf8) ?? ""
-                bgLog.notice("[BotGuard] interpreter JS fetched from URL (len=\(interpreterJS.count))")
-            } else {
-                interpreterJS = raw
-            }
+            interpreterJS = try await fetchInterpreterJS(from: raw)
         }
 
         guard !interpreterJS.isEmpty else {
@@ -174,6 +262,100 @@ public final class BotGuardClient: PoTokenProvider, @unchecked Sendable {
         }
 
         return BotGuardChallenge(interpreterJS: interpreterJS, program: program, globalName: globalName)
+    }
+
+    /// Fetches interpreter JS from a URL, or returns `raw` directly if it is inline JS.
+    private func fetchInterpreterJS(from raw: String) async throws -> String {
+        let urlStr = raw.hasPrefix("//") ? "https:\(raw)" : raw
+        if let jsURL = URL(string: urlStr), jsURL.scheme != nil, jsURL.host != nil {
+            let (jsData, _) = try await session.data(from: jsURL)
+            let js = String(data: jsData, encoding: .utf8) ?? ""
+            bgLog.notice("[BotGuard] interpreter JS fetched from URL (len=\(js.count))")
+            return js
+        }
+        return raw  // raw is inline JS
+    }
+
+    // MARK: - Binary Protobuf Helpers
+
+    /// Reads a protobuf varint from `bytes` starting at `pos`.
+    /// Returns (value, next_position) or nil on parse error / truncated input.
+    private static func readVarint(from bytes: [UInt8], at pos: Int) -> (UInt64, Int)? {
+        var result: UInt64 = 0
+        var shift = 0
+        var idx = pos
+        while idx < bytes.count {
+            let b = bytes[idx]; idx += 1
+            result |= UInt64(b & 0x7F) << shift
+            shift += 7
+            if b & 0x80 == 0 { return (result, idx) }
+            if shift >= 64 { return nil }
+        }
+        return nil
+    }
+
+    /// Parses a binary protobuf blob and returns a dict of `fieldNumber → raw Data`
+    /// for every **length-delimited** (wire type 2) field encountered.
+    /// Other wire types are skipped. Duplicate field numbers keep the last value.
+    private static func readProtoFields(_ data: Data) -> [Int: Data] {
+        let bytes = [UInt8](data)
+        var pos = 0
+        var fields: [Int: Data] = [:]
+
+        while pos < bytes.count {
+            guard let (tag, p1) = readVarint(from: bytes, at: pos) else { break }
+            pos = p1
+            let fieldNum = Int(tag >> 3)
+            let wireType = Int(tag & 7)
+
+            switch wireType {
+            case 0:  // varint — skip
+                guard let (_, p2) = readVarint(from: bytes, at: pos) else { return fields }
+                pos = p2
+            case 1:  // 64-bit — skip
+                guard pos + 8 <= bytes.count else { return fields }
+                pos += 8
+            case 2:  // length-delimited — capture
+                guard let (len, p2) = readVarint(from: bytes, at: pos) else { return fields }
+                pos = p2
+                let end = pos + Int(len)
+                guard end <= bytes.count else { return fields }
+                let startIdx = data.index(data.startIndex, offsetBy: pos)
+                let endIdx   = data.index(data.startIndex, offsetBy: end)
+                fields[fieldNum] = data[startIdx..<endIdx]
+                pos = end
+            case 3:  // start group (proto2, deprecated) — skip until matching end group
+                let groupField = fieldNum
+                var depth = 1
+                groupLoop: while pos < bytes.count && depth > 0 {
+                    guard let (innerTag, innerP) = readVarint(from: bytes, at: pos) else { break groupLoop }
+                    pos = innerP
+                    let iWire = Int(innerTag & 7)
+                    let iField = Int(innerTag >> 3)
+                    switch iWire {
+                    case 0: guard let (_, p2) = readVarint(from: bytes, at: pos) else { break groupLoop }; pos = p2
+                    case 1: guard pos + 8 <= bytes.count else { break groupLoop }; pos += 8
+                    case 2:
+                        guard let (len, p2) = readVarint(from: bytes, at: pos) else { break groupLoop }
+                        pos = p2
+                        guard pos + Int(len) <= bytes.count else { break groupLoop }
+                        pos += Int(len)
+                    case 3: depth += 1
+                    case 4: if iField == groupField { depth -= 1 }
+                    case 5: guard pos + 4 <= bytes.count else { break groupLoop }; pos += 4
+                    default: break groupLoop
+                    }
+                }
+            case 4:  // end group (unexpected at top level) — stop
+                return fields
+            case 5:  // 32-bit — skip
+                guard pos + 4 <= bytes.count else { return fields }
+                pos += 4
+            default:
+                return fields  // unknown wire type → stop parsing
+            }
+        }
+        return fields
     }
 
     // MARK: - Phase 2–5: synchronous pipeline on jsQueue

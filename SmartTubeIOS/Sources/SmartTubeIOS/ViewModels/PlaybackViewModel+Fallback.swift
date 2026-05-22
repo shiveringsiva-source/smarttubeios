@@ -278,13 +278,14 @@ extension PlaybackViewModel {
 
         playerInfo = info
         let newFormats = Self.deduplicatedVideoFormats(info.formats)
-        // Never reduce quality options — preserve the richest availableFormats seen so far.
-        // When muxed fallback (360p) plays after adaptive failure, Android formats may have
-        // height=0 or url=nil for adaptive entries, giving fewer picker options than the initial
-        // iOS-unauth response. Keep whichever set has more entries.
+        // Never reduce quality options for adaptive/HLS streams — preserve the richest set seen.
+        // Exception: muxed fallback (label contains "/muxed") always resets availableFormats to
+        // the muxed-only formats. This prevents stale rqh=1-blocked adaptive formats from
+        // appearing in the quality picker when they can never actually play.
         let maxCurrentHeight = availableFormats.map(\.height).max() ?? 0
         let maxNewHeight = newFormats.map(\.height).max() ?? 0
-        if newFormats.count > availableFormats.count || maxNewHeight > maxCurrentHeight || availableFormats.isEmpty {
+        let isMuxedFallback = label.contains("/muxed")
+        if isMuxedFallback || newFormats.count > availableFormats.count || maxNewHeight > maxCurrentHeight || availableFormats.isEmpty {
             availableFormats = newFormats
         }
         playerLog.notice("[\(label)] availableFormats after dedup: input=\(info.formats.count) output=\(newFormats.count) kept=\(availableFormats.count) maxH=\(availableFormats.map(\.height).max() ?? 0)")
@@ -321,7 +322,19 @@ extension PlaybackViewModel {
         }
 
         lastAttemptedStreamURL = effectiveURL
-        let item = AVPlayerItem(url: effectiveURL)
+        // Use AVURLAsset so the iOS User-Agent is sent with every HLS manifest and
+        // segment request — matches the quality-switch path in PlaybackQualityManager.
+        let uaOpts: [String: Any] = ["AVURLAssetHTTPHeaderFieldsKey": ["User-Agent": InnerTubeClients.iOS.userAgent]]
+        let asset = AVURLAsset(url: effectiveURL, options: uaOpts)
+        let item = AVPlayerItem(asset: asset)
+        item.audioTimePitchAlgorithm = .spectral
+        // Reduce startup latency: begin playback after 2 s of buffered content,
+        // then reset to system default so scrubbing has a comfortable forward buffer.
+        item.preferredForwardBufferDuration = 2.0
+        Task { [weak item] in
+            try? await Task.sleep(for: .seconds(5))
+            item?.preferredForwardBufferDuration = 0
+        }
         if applyHLSHints {
             let maxH: Int
             if settings.preferredQuality != .auto, let h = settings.preferredQuality.maxHeight {
@@ -443,7 +456,8 @@ extension PlaybackViewModel {
                 // adaptive streams load well under 8 s, and hung connections (bot-detect,
                 // login-required, slow CDN) are cut off before the 20 s test startup window
                 // is exceeded. Quality-switch retries (needsQuickStartup=false) skip this.
-                if needsQuickStartup {
+                // TEMP DISABLED: timeout removed to allow rqh=1 streams more time to resolve.
+                if false && needsQuickStartup {
                     Task.detached {
                         try? await Task.sleep(for: .seconds(8))
                         raceCont.yield(nil)
@@ -579,7 +593,14 @@ extension PlaybackViewModel {
             let vrFormats = Self.deduplicatedVideoFormats(vrInfo.formats)
             let maxCurrentH = availableFormats.map(\.height).max() ?? 0
             let maxVRH = vrFormats.map(\.height).max() ?? 0
-            if vrFormats.count > availableFormats.count || maxVRH > maxCurrentH {
+            // Only update availableFormats (quality-picker options) when at least one format
+            // is rqh-free. rqh=1 formats are immediately reverted by reloadDASHItem's rqh guard
+            // and should not appear in the picker.
+            let hasRqhFreeFormat = vrFormats.contains { fmt in
+                guard let url = fmt.url else { return false }
+                return !PlaybackQualityManager.urlHasRqhEnforcement(url)
+            }
+            if hasRqhFreeFormat && (vrFormats.count > availableFormats.count || maxVRH > maxCurrentH) {
                 availableFormats = vrFormats
             }
             playerLog.notice("⚡ [prefetch] playerInfo upgraded to AndroidVR (\(vrFormats.count) formats) — quality switches skip 403 recovery")

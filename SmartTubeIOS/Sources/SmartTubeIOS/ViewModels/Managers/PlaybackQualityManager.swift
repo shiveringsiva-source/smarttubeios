@@ -185,6 +185,12 @@ final class PlaybackQualityManager {
         let asset = AVURLAsset(url: hlsURL, options: uaOpts)
         let item = AVPlayerItem(asset: asset)
         item.audioTimePitchAlgorithm = .spectral
+        // Reduce startup latency after a quality switch: play as soon as 2 s is buffered.
+        item.preferredForwardBufferDuration = 2.0
+        Task { [weak item] in
+            try? await Task.sleep(for: .seconds(5))
+            item?.preferredForwardBufferDuration = 0
+        }
         if let cap = quality.maxHeight {
             let h = CGFloat(cap)
             let peakBR = peakBitRate(for: cap)
@@ -417,8 +423,7 @@ final class PlaybackQualityManager {
             return false
         }
         let hasRqh = items.contains(where: { $0.name == "rqh" && $0.value == "1" })
-        let hasPot = items.contains(where: { $0.name == "pot" })
-        return hasRqh && !hasPot
+        return hasRqh
     }
 
     static let bitRateCaps: [Int: Double] = [

@@ -493,13 +493,14 @@ extension PlaybackViewModel {
             // ABR algorithm toward the user's preferred resolution without bypassing audio
             // metadata (which variant URLs would lose). Hints are applied unconditionally
             // to the master URL for all HLS streams.
-            // TEMP DISABLED: HLS ABR hints skipped
-            // if info.hlsURL != nil {
-            //     let h = CGFloat(initialMaxH)
-            //     item.preferredMaximumResolution = CGSize(width: h * 4, height: h)
-            //     item.preferredPeakBitRate = peakBitRate(for: initialMaxH)
-            //     playerLog.notice("Initial quality \(initialMaxH)p hint set (master with ABR)")
-            // }
+            // Apply ABR hints so AVPlayer selects the right variant immediately.
+            // Consistent with the quality-switch path in PlaybackQualityManager.
+            if info.hlsURL != nil {
+                let h = CGFloat(initialMaxH)
+                item.preferredMaximumResolution = CGSize(width: h * 4, height: h)
+                item.preferredPeakBitRate = peakBitRate(for: initialMaxH)
+                playerLog.notice("Initial quality \(initialMaxH)p hint set (master with ABR)")
+            }
             // Observe item status using async/await (withCheckedContinuation is not needed
             // here since we only need to react to status changes, not await them).
             // BUG-009 fix: replaceCurrentItem BEFORE wiring the observer to avoid a race
