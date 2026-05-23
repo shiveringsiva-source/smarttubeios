@@ -23,6 +23,10 @@ let package = Package(
             url: "https://github.com/firebase/firebase-ios-sdk",
             from: "12.0.0"
         ),
+        .package(
+            url: "https://github.com/superuser404notfound/AetherEngine",
+            revision: "dcc1c570b964c9988e6adfa66408cb765b4c2e25"  // 1.3.0
+        ),
     ],
     targets: [
         // MARK: Core – iOS, macOS (Foundation only)
@@ -37,6 +41,7 @@ let package = Package(
             name: "SmartTubeIOS",
             dependencies: [
                 "SmartTubeIOSCore",
+                .product(name: "AetherEngine", package: "AetherEngine"),
                 .product(name: "FirebaseCrashlytics", package: "firebase-ios-sdk"),
             ],
             path: "Sources/SmartTubeIOS",

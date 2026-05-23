@@ -182,27 +182,6 @@ actor YouTubeNDescrambler {
         }.value
     }
 
-    // MARK: - yt-dlp HLS URL helper
-
-    /// Runs yt-dlp to obtain a pre-descrambled HLS variant playlist URL for `videoId`.
-    ///
-    /// yt-dlp internally descrambles the n parameter before returning the URL, so AVPlayer
-    /// can request segments directly without hitting CDN 403 from a scrambled n value.
-    /// Returns nil if yt-dlp is unavailable or produces no output.
-    nonisolated static func ytDlpHLSVariantURL(videoId: String) async -> URL? {
-        let ytdlp = "/opt/homebrew/bin/yt-dlp"
-        guard FileManager.default.fileExists(atPath: ytdlp) else { return nil }
-        // Prefer 1080p muxed HLS (format 96), fall back to 720p (format 95).
-        let args = [ytdlp, "--quiet", "--no-warnings", "-f", "96/95",
-                    "-g", "https://www.youtube.com/watch?v=\(videoId)"]
-        let output = await Task.detached(priority: .userInitiated) {
-            spawnAndRead(path: ytdlp, args: args)
-        }.value
-        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let url = URL(string: trimmed) else { return nil }
-        return url
-    }
-
     // MARK: - posix_spawn helper
 
     /// Launches `path` with `args`, captures stdout, and returns it as a String.

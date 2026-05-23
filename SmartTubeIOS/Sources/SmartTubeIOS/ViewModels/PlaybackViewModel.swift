@@ -208,6 +208,10 @@ public final class PlaybackViewModel {
     // MARK: - AVPlayer
 
     public let player = AVPlayer()
+    /// Boxed AetherEngine instance (stored as AnyObject to avoid importing AetherEngine here,
+    /// which would introduce an ambiguous VideoFormat type into this file's public API).
+    /// Accessed via the typed `aetherEngine` computed property in PlaybackViewModel+Fallback.swift.
+    var _aetherEngineBox: AnyObject?
     @ObservationIgnored nonisolated(unsafe) var timeObserver: Any?
     @ObservationIgnored nonisolated(unsafe) var audioSessionObserver: Any?
     @ObservationIgnored nonisolated(unsafe) var rateObserver: NSKeyValueObservation?

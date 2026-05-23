@@ -1,9 +1,15 @@
 @preconcurrency import AVFoundation
+import AetherEngine
 import os
 #if canImport(UIKit)
 import UIKit
 #endif
 import SmartTubeIOSCore
+
+// Disambiguate SmartTubeIOSCore.VideoFormat (stream format: height/bitrate/URL)
+// from AetherEngine.VideoFormat (dynamic range: sdr/hdr10/dolbyVision).
+// All VideoFormat uses in this file are in private functions, so private typealias is fine.
+private typealias VideoFormat = SmartTubeIOSCore.VideoFormat
 
 private let playerLog = CrashlyticsLogger(category: "Player")
 
@@ -317,9 +323,6 @@ extension PlaybackViewModel {
 
         var effectiveURL = url
         var applyHLSHints = false
-        #if targetEnvironment(simulator)
-        var simulatorHLSProxy: HLSVariantProxy? = nil
-        #endif
         if let hlsURL = info.hlsURL, url == hlsURL {
             let videoId = video.id
             let variantURLs: [Int: URL]
@@ -346,21 +349,7 @@ extension PlaybackViewModel {
                     .flatMap { h in variantURLs.filter { $0.key <= h }.max(by: { $0.key < $1.key }) }
                     ?? variantURLs.max(by: { $0.key < $1.key })
                 if let chosen {
-                    var variantURL = chosen.value
-                    #if targetEnvironment(simulator)
-                    // yt-dlp pre-descrambles the n parameter before returning HLS URLs, so
-                    // its URLs bypass the CDN 403 that our own InnerTube-derived URLs produce
-                    // in the iOS Simulator. Try yt-dlp first; fall back to the JS-solver
-                    // proxy path if yt-dlp is unavailable or returns no output.
-                    if let ytURL = await YouTubeNDescrambler.ytDlpHLSVariantURL(videoId: video.id) {
-                        variantURL = ytURL
-                        playerLog.notice("[\(label)] HLS: using yt-dlp pre-descrambled variant URL")
-                    } else {
-                        let (proxyURL, proxy) = await descrambledVariantURL(chosen.value, label: label)
-                        variantURL = proxyURL
-                        simulatorHLSProxy = proxy
-                    }
-                    #endif
+                    let variantURL = chosen.value
                     effectiveURL = variantURL
                     playerLog.notice("[\(label)] HLS: selected variant \(chosen.key)p")
                 }
@@ -374,41 +363,43 @@ extension PlaybackViewModel {
         }
 
         lastAttemptedStreamURL = effectiveURL
-        // Use AVURLAsset so the correct User-Agent is sent with every HLS manifest and
-        // segment request. HLS manifests are signed by WEB_EMBEDDED_PLAYER (a web client),
-        // so use the browser UA; muxed/adaptive URLs are signed by the iOS client.
         let isHLSManifest = label.contains("/HLS")
-        // Use a stable hardcoded iOS UA for HLS requests. InnerTubeClients.iOS.userAgent
-        // builds the UA dynamically from the RUNNING OS version (ProcessInfo), which on
-        // the iOS 26 simulator returns "iOS 26_5" — a beta version that YouTube CDN does
-        // not recognise, causing HTTP 403 for variant playlist and segment requests.
-        // The hardcoded UA matches yt-dlp's known-good iOS YouTube UA and always returns
-        // HTTP 200 for manifest.googlevideo.com + rr*.googlevideo.com segment requests.
         let hlsUA = "com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X)"
-        // For HLS manifests from WEB_EMBEDDED_PLAYER, send Origin + Referer so the CDN
-        // treats the request as a legitimate browser embed — may unlock higher-quality variants.
         var hlsHeaders: [String: String] = ["User-Agent": hlsUA]
         if isHLSManifest && !label.contains("WebSafari") {
             hlsHeaders["Origin"] = "https://www.youtube.com"
             hlsHeaders["Referer"] = "https://www.youtube.com/"
         }
-        let uaOpts: [String: Any] = ["AVURLAssetHTTPHeaderFieldsKey": hlsHeaders]
-        #if targetEnvironment(simulator)
-        let asset: AVURLAsset
-        if let proxy = simulatorHLSProxy {
-            // Custom scheme: AVAssetResourceLoader intercepts the playlist fetch and returns
-            // the pre-rewritten content. CDN segments (https://) are fetched by AVPlayer
-            // normally. Since any User-Agent works for descrambled segments, no headers needed.
-            asset = AVURLAsset(url: effectiveURL, options: nil)
-            asset.resourceLoader.setDelegate(proxy, queue: .global(qos: .userInitiated))
-            playerLog.notice("[\(label)] n-probe: asset resourceLoader delegate set")
+
+        let item: AVPlayerItem
+        if applyHLSHints {
+            // AetherEngine path: proxy HLS through a local HLS-fMP4 server (127.0.0.1) with
+            // the iOS YouTube UA on every FFmpeg request. AVPlayer never touches CDN URLs, so
+            // CDN signing validation and UA fingerprinting become irrelevant.
+            do {
+                aetherEngine?.stop()
+                let engine = try AetherEngine()
+                aetherEngine = engine
+                let options = LoadOptions(httpHeaders: hlsHeaders)
+                try await engine.load(url: effectiveURL, options: options)
+                guard let aep = engine.currentAVPlayer,
+                      let localhostAsset = aep.currentItem?.asset as? AVURLAsset else {
+                    playerLog.error("❌ [\(label)] AetherEngine loaded but no localhost URL available")
+                    return false
+                }
+                // Pause the engine's internal player — our player drives playback.
+                engine.pause()
+                playerLog.notice("[\(label)] AetherEngine serving HLS from \(localhostAsset.url.host ?? "?")")
+                item = AVPlayerItem(url: localhostAsset.url)
+            } catch {
+                playerLog.error("❌ [\(label)] AetherEngine load failed: \(error)")
+                return false
+            }
         } else {
-            asset = AVURLAsset(url: effectiveURL, options: uaOpts)
+            // Non-HLS (muxed / DASH): direct AVURLAsset with iOS UA headers.
+            let uaOpts: [String: Any] = ["AVURLAssetHTTPHeaderFieldsKey": hlsHeaders]
+            item = AVPlayerItem(asset: AVURLAsset(url: effectiveURL, options: uaOpts))
         }
-        #else
-        let asset = AVURLAsset(url: effectiveURL, options: uaOpts)
-        #endif
-        let item = AVPlayerItem(asset: asset)
         item.audioTimePitchAlgorithm = .spectral
         // Reduce startup latency: begin playback after 2 s of buffered content,
         // then reset to system default so scrubbing has a comfortable forward buffer.

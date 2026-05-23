@@ -3,7 +3,9 @@
 A native Swift/SwiftUI YouTube client for **iPhone**, **iPad**, **macOS**, and **Apple TV**.  
 Zero ads. SponsorBlock auto-skip. DeArrow community titles. Google sign-in. Up to 8K.
 
-[![Download on the App Store](https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg)](https://apps.apple.com/us/app/smart-tube-bdp/id6761388918) [![Support on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/milikadelic)
+[![iOS 17+](https://img.shields.io/badge/iOS-17%2B-black?logo=apple)](https://apps.apple.com/us/app/smart-tube-bdp/id6761388918) [![tvOS 17+](https://img.shields.io/badge/tvOS-17%2B-black?logo=apple)](https://apps.apple.com/us/app/smart-tube-bdp/id6761388918) [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)](https://apps.apple.com/us/app/smart-tube-bdp/id6761388918) [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange?logo=swift)](https://swift.org)
+
+[![Download on the App Store](https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg)](https://apps.apple.com/us/app/smart-tube-bdp/id6761388918)
 
 Inspired by the original [SmartTube Android app](https://github.com/yuliskov/SmartTube).
 
@@ -123,6 +125,12 @@ Please ensure `Secrets.xcconfig` and `GoogleService-Info.plist` are **never** in
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for a full version history.
+
+---
+
+## Support
+
+If SmartTube is useful to you and you'd like to support its development, there's a [Ko-fi](https://ko-fi.com/milikadelic).
 
 ---
 
