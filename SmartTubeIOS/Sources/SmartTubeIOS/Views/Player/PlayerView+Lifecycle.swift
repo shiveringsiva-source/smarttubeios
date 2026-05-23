@@ -513,6 +513,7 @@ extension PlayerView {
             vm.setPlaybackSpeed(store.settings.playbackSpeed)
             vm.updateSettings(store.settings)
             vm.updateAuthToken(authService.accessToken)
+            vm.updateSAPISID(authService.sapisid)
             if ProcessInfo.processInfo.arguments.contains("--uitesting-open-more-menu") {
                 swipeLog.notice("[PlayerView] --uitesting-open-more-menu launch arg detected — scheduling showMoreMenu=true")
                 Task { @MainActor in

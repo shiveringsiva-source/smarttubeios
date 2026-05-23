@@ -160,6 +160,11 @@ public actor VideoPreloadCache {
         await api.setAuthToken(token)
     }
 
+    /// Forward the SAPISID cookie so prefetch WEB_CREATOR requests use SAPISIDHASH auth.
+    public func setSAPISID(_ value: String?) async {
+        await api.setSAPISID(value)
+    }
+
     // MARK: - Public: prefetch
 
     /// Enqueues a background prefetch for all data types for `videoId`.

@@ -66,6 +66,9 @@ extension AuthService {
                 authLog.notice("✅ Token exchanged — fetching user info")
                 try await fetchUserInfo()
                 authLog.notice("✅ Signed in as \(self.accountName ?? "unknown")")
+                // Fetch YouTube.com SAPISID cookie for WEB_CREATOR SAPISIDHASH auth.
+                // Best-effort: runs in background, failure doesn't block sign-in.
+                Task { await self.fetchYouTubeWebCookies() }
                 pendingActivation = nil
                 pollTask = nil
                 return

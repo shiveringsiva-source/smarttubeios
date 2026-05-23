@@ -99,6 +99,9 @@ struct AppEntry: App {
                         await browseViewModel.updateAuthToken(newToken)
                     }
                 }
+                .onChange(of: authService.sapisid, initial: true) { _, newSapisid in
+                    Task { await api.setSAPISID(newSapisid) }
+                }
                 .onChange(of: settingsStore.settings.enabledSections) { _, newSections in
                     browseViewModel.configureSections(newSections)
                 }
@@ -137,6 +140,9 @@ struct AppEntry: App {
                         await api.setAuthToken(newToken)
                         await browseViewModel.updateAuthToken(newToken)
                     }
+                }
+                .onChange(of: authService.sapisid, initial: true) { _, newSapisid in
+                    Task { await api.setSAPISID(newSapisid) }
                 }
                 .onChange(of: settingsStore.settings.enabledSections) { _, newSections in
                     browseViewModel.configureSections(newSections)
@@ -178,6 +184,12 @@ struct AppEntry: App {
                             await api.setAuthToken(newToken)
                             await browseViewModel.updateAuthToken(newToken)
                         }
+                    }
+                    .onChange(of: authService.sapisid, initial: true) { _, newSapisid in
+                        #if os(iOS)
+                        playerStateStore.vm.updateSAPISID(newSapisid)
+                        #endif
+                        Task { await api.setSAPISID(newSapisid) }
                     }
                     .onChange(of: settingsStore.settings.enabledSections) { _, newSections in
                         browseViewModel.configureSections(newSections)

@@ -24,6 +24,9 @@ public actor InnerTubeAPI {
     let session: URLSession
     var visitorData: String?
     var authToken: String?
+    /// SAPISID cookie value from YouTube.com web session (set via OAuthLogin/MergeSession).
+    /// Used by postWebCreator to compute SAPISIDHASH for WEB_CREATOR requests on www.youtube.com.
+    var sapisid: String?
 
     // MARK: - signatureTimestamp (STS) cache
     //
@@ -251,6 +254,14 @@ public actor InnerTubeAPI {
         let msg = token != nil ? "token(\(token!.prefix(8))…)" : "nil"
         tubeLog.notice("setAuthToken: \(msg, privacy: .public)")
         self.authToken = token
+    }
+
+    /// Sets the YouTube.com SAPISID cookie value extracted via the OAuthLogin/MergeSession
+    /// flow. Used by postWebCreator to compute the SAPISIDHASH Authorization header.
+    public func setSAPISID(_ value: String?) {
+        let msg = value != nil ? "present" : "nil"
+        tubeLog.notice("setSAPISID: \(msg, privacy: .public)")
+        self.sapisid = value
     }
 
     // MARK: - Visitor data

@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import os
 #if canImport(FoundationNetworking)
 import FoundationNetworking
@@ -346,12 +347,12 @@ extension InnerTubeAPI {
     /// Uses nameID=62 so YouTube identifies the request as the Studio creator client.
     ///
     /// Endpoint: www.youtube.com (same as MWEB/WebSafari — WEB_CREATOR is a web client).
-    /// Auth: cookie-based (URLSession shared cookie storage). NO Bearer token.
-    ///   • googleapis.com + Bearer → HTTP 400 INVALID_ARGUMENT (googleapis.com does not
-    ///     support WEB_CREATOR nameID=62 with OAuth2 Bearer auth).
-    ///   • www.youtube.com + Bearer → HTTP 400 (www.youtube.com expects SAPISID cookies,
-    ///     not OAuth2 Bearer tokens, for web client IDs).
-    ///   • www.youtube.com + cookies → 200 (streams rqh=0 if session is authenticated)
+    /// Auth: SAPISIDHASH when available (computed from the SAPISID cookie obtained via
+    ///   the OAuthLogin/MergeSession flow after TV device sign-in).
+    ///   • googleapis.com + Bearer → HTTP 400 INVALID_ARGUMENT (WEB_CREATOR not supported there)
+    ///   • www.youtube.com + Bearer → HTTP 400 (expects SAPISID, not OAuth2 Bearer)
+    ///   • www.youtube.com + SAPISIDHASH → 200 with rqh=0 adaptive streams ✓
+    ///   • www.youtube.com + no auth → 200 + LOGIN_REQUIRED (no streamingData)
     func postWebCreator(body: [String: Any]) async throws -> [String: Any] {
         guard var comps = URLComponents(url: baseURL.appendingPathComponent("player"),
                                         resolvingAgainstBaseURL: false) else {
@@ -367,12 +368,17 @@ extension InnerTubeAPI {
         request.setValue("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36,gzip(gfe)", forHTTPHeaderField: "User-Agent")
         request.setValue(InnerTubeClients.WebCreator.nameID, forHTTPHeaderField: "X-YouTube-Client-Name")
         request.setValue(InnerTubeClients.WebCreator.version, forHTTPHeaderField: "X-YouTube-Client-Version")
-        // NOTE: No Authorization: Bearer header.
-        // www.youtube.com uses cookie-based session auth for web clients.
-        // Sending Bearer causes HTTP 400. Auth state comes from URLSession cookie storage.
+        // SAPISIDHASH auth: `Authorization: SAPISIDHASH {timestamp}_{sha1("{ts} {SAPISID} {origin}")}`
+        // This is the yt-dlp web-client auth scheme — the only scheme www.youtube.com accepts
+        // for web client nameIDs. Falls through to unauthenticated (LOGIN_REQUIRED) when absent.
+        if let sid = sapisid {
+            request.setValue(InnerTubeAPI.sapisidhash(sapisid: sid), forHTTPHeaderField: "Authorization")
+            request.setValue("1", forHTTPHeaderField: "X-Origin")
+        }
+        let authStatus = sapisid != nil ? "SAPISIDHASH" : "unauthenticated"
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let videoId = body["videoId"] as? String ?? ""
-        tubeLog.notice("POST /player [WebCreator] videoId=\(videoId, privacy: .public)")
+        tubeLog.notice("POST /player [WebCreator] videoId=\(videoId, privacy: .public) auth=\(authStatus, privacy: .public)")
         let (data, response) = try await session.data(for: request)
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
@@ -621,5 +627,27 @@ extension InnerTubeAPI {
             tubeLog.notice("✅ /\(endpoint, privacy: .public) [TV] HTTP \(statusCode, privacy: .public) keys: \(topKeys, privacy: .public)")
         }
         return json
+    }
+}
+
+// MARK: - SAPISIDHASH helper
+
+extension InnerTubeAPI {
+
+    /// Computes the SAPISIDHASH Authorization header value for www.youtube.com web-client requests.
+    ///
+    /// Format: `SAPISIDHASH {timestamp}_{sha1("{timestamp} {SAPISID} {origin}")}`
+    ///
+    /// This is the auth scheme used by YouTube's web frontend and mirrored by yt-dlp.
+    /// Pass the result directly as the `Authorization` header value.
+    static func sapisidhash(
+        sapisid: String,
+        origin: String = "https://www.youtube.com"
+    ) -> String {
+        let ts = Int(Date().timeIntervalSince1970)
+        let payload = "\(ts) \(sapisid) \(origin)"
+        let digest = Insecure.SHA1.hash(data: Data(payload.utf8))
+        let hex = digest.map { String(format: "%02x", $0) }.joined()
+        return "SAPISIDHASH \(ts)_\(hex)"
     }
 }

@@ -44,6 +44,9 @@ struct SmartTubeTVApp: App {
                         await browseViewModel.updateAuthToken(newToken)
                     }
                 }
+                .onChange(of: authService.sapisid, initial: true) { _, newSapisid in
+                    Task { await api.setSAPISID(newSapisid) }
+                }
                 .onChange(of: settingsStore.settings.enabledSections) { _, newSections in
                     browseViewModel.configureSections(newSections)
                 }

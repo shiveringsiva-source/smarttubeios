@@ -50,6 +50,10 @@ final class MockInnerTubeAPI: InnerTubeAPIProtocol {
         calls.append(Call(method: "setAuthToken", args: [token ?? "nil"]))
     }
 
+    func setSAPISID(_ value: String?) async {
+        calls.append(Call(method: "setSAPISID", args: [value ?? "nil"]))
+    }
+
     func fetchHome(continuationToken: String?) async throws -> VideoGroup {
         calls.append(Call(method: "fetchHome", args: [continuationToken ?? "nil"]))
         if let e = errorToThrow { throw e }

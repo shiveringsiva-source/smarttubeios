@@ -14,6 +14,7 @@ public protocol InnerTubeAPIProtocol: AnyObject, Sendable {
 
     // MARK: Auth
     func setAuthToken(_ token: String?) async
+    func setSAPISID(_ value: String?) async
 
     // MARK: Home / browse
     func fetchHome(continuationToken: String?) async throws -> VideoGroup

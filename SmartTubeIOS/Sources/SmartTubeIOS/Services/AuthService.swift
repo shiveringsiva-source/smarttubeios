@@ -52,6 +52,10 @@ public final class AuthService {
     // module can read and write them without going through private accessors.
 
     public internal(set) var accessToken: String?
+    /// YouTube.com SAPISID cookie value obtained via the OAuthLogin/MergeSession flow.
+    /// Used by InnerTubeAPI.postWebCreator to compute the SAPISIDHASH Authorization header.
+    /// Set asynchronously after TV device sign-in completes; nil when signed out or not yet fetched.
+    public internal(set) var sapisid: String?
     var refreshToken: String?
     var tokenExpiry: Date?
     var pollTask: Task<Void, Never>?
@@ -190,6 +194,7 @@ public final class AuthService {
         tokenRefreshTask?.cancel()
         tokenRefreshTask = nil
         accessToken      = nil
+        sapisid          = nil
         refreshToken     = nil
         tokenExpiry      = nil
         accountName      = nil
@@ -208,6 +213,7 @@ public final class AuthService {
         tokenRefreshTask?.cancel()
         tokenRefreshTask = nil
         accessToken      = nil
+        sapisid          = nil
         refreshToken     = nil
         tokenExpiry      = nil
         accountName      = nil
