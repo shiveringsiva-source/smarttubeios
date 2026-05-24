@@ -309,17 +309,16 @@ extension PlaybackViewModel {
             // If YouTube returns UNPLAYABLE/LOGIN_REQUIRED and the user is signed in,
             // automatically retry with the authenticated TV client before showing an error.
             let info: PlayerInfo
-            // TEMP DISABLED: playerInfo cache/coalescing — always fetch fresh
-            // if let cachedInfo = cached.playerInfo {
-            //     playerLog.notice("cache HIT: playerInfo (skipping network)")
-            //     info = cachedInfo
-            // } else if let inFlight = await VideoPreloadCache.shared.inFlightPlayerFetch(videoId: video.id),
-            //           let coalescedInfo = await inFlight.value {
-            //     playerLog.notice("coalescedPrefetch HIT: playerInfo (skipping network)")
-            //     info = coalescedInfo
-            // } else {
-            do {
-                info = try await api.fetchPlayerInfo(videoId: video.id)
+            if let cachedInfo = cached.playerInfo {
+                playerLog.notice("cache HIT: playerInfo (skipping network)")
+                info = cachedInfo
+            } else if let inFlight = await VideoPreloadCache.shared.inFlightPlayerFetch(videoId: video.id),
+                      let coalescedInfo = await inFlight.value {
+                playerLog.notice("coalescedPrefetch HIT: playerInfo (skipping network)")
+                info = coalescedInfo
+            } else {
+                do {
+                    info = try await api.fetchPlayerInfo(videoId: video.id)
                 } catch {
                     if case APIError.ipBlocked(let reason) = error {
                         // NW-6-FIX: IP-block short-circuit. Every extra /player call from a
@@ -362,7 +361,8 @@ extension PlaybackViewModel {
                         throw error
                     }
                 }
-            await VideoPreloadCache.shared.store(playerInfo: info, for: video.id)
+                await VideoPreloadCache.shared.store(playerInfo: info, for: video.id)
+            }
             // BUG-005 fix: guard against rapid navigation — if the user navigated away while we
             // were awaiting the player info, discard this result rather than overwrite ViewModel state.
             guard currentVideo?.id == video.id else {
