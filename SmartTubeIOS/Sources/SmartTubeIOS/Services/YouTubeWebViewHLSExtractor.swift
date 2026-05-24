@@ -42,7 +42,7 @@ final class YouTubeWebViewHLSExtractor: NSObject {
     /// - Parameter videoId: The YouTube video ID.
     /// - Parameter timeoutSeconds: How long to wait before giving up. Default 20 s.
     /// - Returns: The HLS master manifest URL (may include `spc=`), or `nil` on failure/timeout.
-    func extractHLSURL(videoId: String, timeoutSeconds: Double = 30) async -> URL? {
+    func extractHLSURL(videoId: String, timeoutSeconds: Double = 40) async -> URL? {
         // Cancel any pending extraction before starting a new one.
         finish(url: nil)
         extractedNSolver = nil
@@ -54,6 +54,15 @@ final class YouTubeWebViewHLSExtractor: NSObject {
 
             let contentController = WKUserContentController()
             contentController.add(self, name: "hlsExtractor")
+
+            // Inject the EJS AST-based n-challenge solver (lib + core) BEFORE
+            // our interceptor so that `jsc` is available when solveNFromPlayerJS runs.
+            if let solverScripts = Self.ejsSolverUserScripts() {
+                for script in solverScripts {
+                    contentController.addUserScript(script)
+                }
+            }
+
             // Inject the interceptor BEFORE the document loads so it can hook into
             // XMLHttpRequest and fetch before YouTube's player JS initialises.
             contentController.addUserScript(WKUserScript(
@@ -108,6 +117,32 @@ final class YouTubeWebViewHLSExtractor: NSObject {
         }
     }
 
+    // MARK: - EJS Solver Scripts
+
+    /// Loads the yt-dlp EJS AST-based n-challenge solver scripts from the app bundle
+    /// and returns them as ordered WKUserScript instances ready for injection.
+    ///
+    /// Injection order matters:
+    ///   1. lib.min.js  — defines `var lib = {meriyah, astring}` (JS AST parser + code-gen)
+    ///   2. bridge       — exposes `meriyah` and `astring` as top-level globals
+    ///   3. core.min.js — defines `var jsc = (function(e,n){...})(meriyah, astring)` (solver)
+    private static func ejsSolverUserScripts() -> [WKUserScript]? {
+        guard let libURL  = Bundle.module.url(forResource: "yt.solver.lib.min",  withExtension: "js"),
+              let coreURL = Bundle.module.url(forResource: "yt.solver.core.min", withExtension: "js"),
+              let libCode  = try? String(contentsOf: libURL,  encoding: .utf8),
+              let coreCode = try? String(contentsOf: coreURL, encoding: .utf8) else {
+            extractLog.warning("⚠️ [webView] EJS solver scripts not found in bundle")
+            return nil
+        }
+        let bridgeCode = "var meriyah = (typeof lib !== 'undefined' && lib.meriyah) || undefined; " +
+                         "var astring = (typeof lib !== 'undefined' && lib.astring) || undefined;"
+        return [
+            WKUserScript(source: libCode,    injectionTime: .atDocumentStart, forMainFrameOnly: true),
+            WKUserScript(source: bridgeCode, injectionTime: .atDocumentStart, forMainFrameOnly: true),
+            WKUserScript(source: coreCode,   injectionTime: .atDocumentStart, forMainFrameOnly: true),
+        ]
+    }
+
     // MARK: - JavaScript Interceptor
 
     /// Injected at document-start. Intercepts the YouTube player's internal API call,
@@ -137,7 +172,7 @@ final class YouTubeWebViewHLSExtractor: NSObject {
         // to suppress xhrManifest/fetchManifest fallbacks from firing.
         var hlsExtractionStarted = false;
 
-        function sendHLSURL(hlsUrl, poToken, source, unsolvedN, solvedN) {
+        function sendHLSURL(hlsUrl, poToken, source, unsolvedN, solvedN, playerID) {
             if (sentFinalURL) return;
             sentFinalURL = true;
             window.webkit.messageHandlers.hlsExtractor.postMessage(
@@ -146,7 +181,8 @@ final class YouTubeWebViewHLSExtractor: NSObject {
                     poToken:        poToken   || null,
                     source:         source    || 'unknown',
                     unsolvedN:      unsolvedN || null,
-                    solvedN:        solvedN   || null
+                    solvedN:        solvedN   || null,
+                    playerID:       playerID  || null
                 })
             );
         }
@@ -200,13 +236,15 @@ final class YouTubeWebViewHLSExtractor: NSObject {
             return null;
         }
 
-        // Downloads the player JS (cache hit after page loads) and runs the n-solver
-        // on `unsolvedN`. Returns the solved string, or null on failure.
-        // Uses origFetch directly (bound to window) to avoid our own fetch hook
-        // and prevent the "Illegal invocation" TypeError from strict-mode this=undefined.
+        // Downloads the main player JS and uses the bundled EJS AST-based solver (jsc)
+        // to solve `unsolvedN`. Returns the solved string, or null on failure.
+        // `jsc` is defined by the solver WKUserScripts injected before this script.
         async function solveNFromPlayerJS(unsolvedN) {
             try {
-                // Find the player script element
+                // jsc must be available from the EJS solver scripts injected at document-start
+                if (typeof jsc !== 'function') return null;
+
+                // Locate the IAS player script to extract the player ID
                 var playerSrc = null;
                 var scripts = document.querySelectorAll('script[src]');
                 for (var si = 0; si < scripts.length; si++) {
@@ -217,33 +255,37 @@ final class YouTubeWebViewHLSExtractor: NSObject {
                 }
                 if (!playerSrc) return null;
 
-                // Fetch with 'force-cache' so WKWebView returns the already-cached player JS.
-                // Use origFetch bound to window to avoid strict-mode this=undefined issues.
-                var jsResp = await origFetch.call(window, playerSrc, {cache: 'force-cache'});
+                // Build the main-variant URL (player_es6) from the player ID.
+                // yt-dlp forces the 'main' variant (player_es6.vflset/en_US/base.js)
+                // because only that variant contains the n-solver function.
+                var pidMatch = playerSrc.match(/\/player\/([a-f0-9]+)\//);
+                if (!pidMatch) return null;
+                var mainUrl = 'https://www.youtube.com/s/player/' + pidMatch[1] +
+                              '/player_es6.vflset/en_US/base.js';
+
+                // Fetch with cache:default so WKWebView serves from cache if available,
+                // or fetches from network (~2.5 MB) on first call.
+                var jsResp = await origFetch.call(window, mainUrl, {cache: 'default'});
+                if (!jsResp.ok) return null;
                 var jsText = await jsResp.text();
 
-                // yt-dlp patterns to locate the n-solver array reference
-                var patterns = [
-                    /\.get\("n"\)\)&&\(b=([a-zA-Z0-9$]{2,3})\[(\d+)\]\(b\)/,
-                    /\([a-z]=([a-zA-Z0-9$]{2,3})\[(\d+)\]\([a-z]\)/,
-                    /b=([a-zA-Z0-9$]{2,3})\[(\d+)\]\(b\)&&\(b=a\[/
-                ];
-                var arrName = null, arrIdx = -1;
-                for (var pi = 0; pi < patterns.length; pi++) {
-                    var m = jsText.match(patterns[pi]);
-                    if (m) { arrName = m[1]; arrIdx = parseInt(m[2]); break; }
+                // Run the EJS AST-based solver. This parses the player JS, locates the
+                // n-solver function structurally, calls it, and returns the solved value.
+                var solverInput = {
+                    type: 'player',
+                    player: jsText,
+                    requests: [{type: 'n', challenges: [unsolvedN]}]
+                };
+                var result = jsc(solverInput);
+                if (result && result.type === 'result' &&
+                    result.responses && result.responses.length > 0) {
+                    var resp = result.responses[0];
+                    if (resp.type === 'result' && resp.data) {
+                        var solved = resp.data[unsolvedN];
+                        return (typeof solved === 'string' && solved !== unsolvedN) ? solved : null;
+                    }
                 }
-                if (!arrName || arrIdx < 0) return null;
-
-                var fnBody = extractFnFromJSArray(jsText, arrName, arrIdx);
-                if (!fnBody) return null;
-
-                // Evaluate the function in isolation (no access to player scope)
-                var fn = (new Function('return ' + fnBody))();
-                if (typeof fn !== 'function') return null;
-
-                var solved = fn(unsolvedN);
-                return (typeof solved === 'string' && solved !== unsolvedN) ? solved : null;
+                return null;
             } catch(e) {
                 return null;
             }
@@ -271,21 +313,48 @@ final class YouTubeWebViewHLSExtractor: NSObject {
 
                 hlsExtractionStarted = true;
 
+                // Extract player ID from multiple sources (in priority order).
+                // Sent to Swift so it can run the EJS solver via Node.js as a fallback.
+                var playerID = null;
+                try {
+                    // Method 1: script[src] with any /player/ path segment
+                    var piScripts = document.querySelectorAll('script[src]');
+                    for (var psi = 0; psi < piScripts.length; psi++) {
+                        var pSrc = piScripts[psi].src || piScripts[psi].getAttribute('src') || '';
+                        if (pSrc.indexOf('/player/') > -1) {
+                            var pidM = pSrc.match(/\/player\/([a-f0-9]+)\//);
+                            if (pidM) { playerID = pidM[1]; break; }
+                        }
+                    }
+                    // Method 2: ytcfg.get('PLAYER_JS_URL')
+                    if (!playerID && window.ytcfg && typeof window.ytcfg.get === 'function') {
+                        var pjsUrl = window.ytcfg.get('PLAYER_JS_URL') ||
+                                     window.ytcfg.get('jsUrl') || '';
+                        if (pjsUrl) {
+                            var pm2 = pjsUrl.match(/\/player\/([a-f0-9]+)\//);
+                            if (pm2) playerID = pm2[1];
+                        }
+                    }
+                    // Method 3: Scan page HTML for the IAS player URL pattern (always present)
+                    if (!playerID) {
+                        var pageHtml = document.documentElement.innerHTML || '';
+                        var pm3 = pageHtml.match(/\/s\/player\/([a-f0-9]{8})\/player_ias/);
+                        if (pm3) playerID = pm3[1];
+                    }
+                } catch(e) {}
+
                 // Async phase: fetch master manifest → extract HLS n-value → solve it
                 (async function() {
                     var hlsN = null, solvedN = null;
 
-                    // Fallback timer: if async chain takes >9 s, send whatever we have
+                    // Fallback timer: if async chain takes >20 s, send whatever we have.
                     var fallbackTimer = setTimeout(function() {
-                        sendHLSURL(hlsUrl, poToken, 'apiResponse', hlsN, solvedN);
-                    }, 9000);
+                        sendHLSURL(hlsUrl, poToken, 'apiResponse', hlsN, solvedN, playerID);
+                    }, 20000);
 
                     try {
                         // Step 1: Fetch the HLS master manifest to find a per-quality
                         // playlist URL containing /n/{hlsN}/ in the path.
-                        // manifest.googlevideo.com supports CORS from youtube.com.
-                        // Use origFetch.call(window, ...) to avoid strict-mode this=undefined
-                        // which would cause "Illegal invocation" on native fetch.
                         var mResp = await origFetch.call(window, hlsUrl, {credentials: 'include'});
                         var mText = await mResp.text();
                         // Per-quality playlist URLs embed the HLS n-value as a path segment
@@ -294,12 +363,13 @@ final class YouTubeWebViewHLSExtractor: NSObject {
                     } catch(e) {}
 
                     try {
-                        // Step 2: Solve the HLS n-value using the player JS n-solver function.
-                        if (hlsN) solvedN = await solveNFromPlayerJS(hlsN);
+                        // Step 2: Try in-JS EJS solver (only works if jsc is defined).
+                        if (hlsN && typeof jsc === 'function') solvedN = await solveNFromPlayerJS(hlsN);
                     } catch(e) {}
 
                     clearTimeout(fallbackTimer);
-                    sendHLSURL(hlsUrl, poToken, 'apiResponse', hlsN, solvedN);
+                    // Include playerID so Swift can run the Node.js solver as fallback.
+                    sendHLSURL(hlsUrl, poToken, 'apiResponse', hlsN, solvedN, playerID);
                 })();
 
                 return true;
@@ -386,6 +456,131 @@ final class YouTubeWebViewHLSExtractor: NSObject {
 
     // MARK: - Private helpers
 
+    private func finishWithURL(_ url: URL, poToken: String?) {
+        if let pot = poToken, !pot.isEmpty {
+            let potURL = URL(string: url.absoluteString.appending("/pot/\(pot)")) ?? url
+            finish(url: potURL)
+        } else {
+            finish(url: url)
+        }
+    }
+
+    /// Solves an HLS n-challenge by running the bundled EJS solver via Node.js as a child
+    /// process. Downloads the main player JS variant from YouTube's CDN (or uses a cached
+    /// copy in /tmp), then pipes the solver script to `node -` via a POSIX pipe.
+    /// This approach is safe for the iOS Simulator (macOS POSIX APIs available) but will
+    /// return nil on a real iOS device (no Node.js binary present).
+    private static func solveNChallengeViaNode(playerID: String, unsolvedN: String) async -> String? {
+        guard let libURL  = Bundle.module.url(forResource: "yt.solver.lib.min",  withExtension: "js"),
+              let coreURL = Bundle.module.url(forResource: "yt.solver.core.min", withExtension: "js"),
+              let libCode  = try? String(contentsOf: libURL,  encoding: .utf8),
+              let coreCode = try? String(contentsOf: coreURL, encoding: .utf8) else {
+            extractLog.warning("⚠️ [solver] EJS scripts not found in bundle")
+            return nil
+        }
+
+        // Download or use cached copy of the main player JS variant.
+        // yt-dlp uses the `player_es6.vflset/en_US/base.js` variant because it is the
+        // only variant that contains the n-solver function.
+        let tmpPlayerPath = "/tmp/yt_player_\(playerID).js"
+        if !FileManager.default.fileExists(atPath: tmpPlayerPath) {
+            guard let playerURL = URL(string:
+                "https://www.youtube.com/s/player/\(playerID)/player_es6.vflset/en_US/base.js"
+            ) else { return nil }
+            extractLog.notice("⚠️ [solver] downloading player JS for \(playerID as NSString)")
+            guard let (data, _) = try? await URLSession.shared.data(from: playerURL),
+                  !data.isEmpty else {
+                extractLog.warning("⚠️ [solver] player JS download failed")
+                return nil
+            }
+            try? data.write(to: URL(fileURLWithPath: tmpPlayerPath))
+        }
+        extractLog.notice("⚠️ [solver] running Node.js EJS solver, n=\(unsolvedN as NSString)")
+
+        // Build the solver script that runs entirely inside Node.js.
+        // lib.min.js defines `var lib = {meriyah, astring}` (meriyah JS AST parser).
+        // core.min.js defines `var jsc = function(e,n){...}(meriyah,astring)` (EJS solver).
+        let escapedN = unsolvedN.replacingOccurrences(of: "'", with: "\\'")
+        let solverScript = """
+        \(libCode)
+        var meriyah = lib.meriyah; var astring = lib.astring;
+        \(coreCode)
+        var playerJS = require('fs').readFileSync('\(tmpPlayerPath)', 'utf8');
+        try {
+            var result = jsc({type:'player',player:playerJS,requests:[{type:'n',challenges:['\(escapedN)']}]});
+            var solved = (result&&result.responses&&result.responses[0]&&result.responses[0].data)
+                ? result.responses[0].data['\(escapedN)'] : null;
+            process.stdout.write(solved||'');
+        } catch(e) { process.stdout.write(''); }
+        """
+
+        guard let scriptData = solverScript.data(using: .utf8) else { return nil }
+        return Self.runPosixSpawn(executable: "/usr/local/bin/node", args: ["-"], stdin: scriptData)
+    }
+
+    /// Spawns an executable via `posix_spawn`, pipes `stdin` to it, and returns stdout.
+    /// Synchronous — blocks until the child exits. Runs in ~0.3 s for the Node.js solver.
+    private static func runPosixSpawn(executable: String, args: [String], stdin: Data) -> String? {
+        var pid: pid_t = 0
+        var stdinPipe  = [Int32](repeating: 0, count: 2)
+        var stdoutPipe = [Int32](repeating: 0, count: 2)
+        guard Darwin.pipe(&stdinPipe) == 0, Darwin.pipe(&stdoutPipe) == 0 else { return nil }
+
+        var fileActions: posix_spawn_file_actions_t?
+        posix_spawn_file_actions_init(&fileActions)
+        posix_spawn_file_actions_adddup2(&fileActions, stdinPipe[0],  STDIN_FILENO)
+        posix_spawn_file_actions_adddup2(&fileActions, stdoutPipe[1], STDOUT_FILENO)
+        posix_spawn_file_actions_addclose(&fileActions, stdinPipe[1])
+        posix_spawn_file_actions_addclose(&fileActions, stdoutPipe[0])
+        // Route stderr to /dev/null so Node.js warnings don't interfere.
+        let devNull = open("/dev/null", O_WRONLY)
+        if devNull >= 0 { posix_spawn_file_actions_adddup2(&fileActions, devNull, STDERR_FILENO) }
+
+        let cArgs: [UnsafeMutablePointer<CChar>?] = ([executable] + args).map { strdup($0) } + [nil]
+        defer { cArgs.compactMap { $0 }.forEach { free($0) } }
+
+        let spawnRet = posix_spawn(&pid, executable, &fileActions, nil, cArgs, nil)
+        posix_spawn_file_actions_destroy(&fileActions)
+        close(stdinPipe[0])
+        close(stdoutPipe[1])
+        if devNull >= 0 { close(devNull) }
+
+        guard spawnRet == 0 else {
+            extractLog.error("❌ [solver] posix_spawn failed: \(spawnRet)")
+            close(stdinPipe[1]); close(stdoutPipe[0])
+            return nil
+        }
+
+        // Write solver script to Node's stdin.
+        stdin.withUnsafeBytes { buf in
+            guard let ptr = buf.baseAddress else { return }
+            var offset = 0
+            while offset < buf.count {
+                let written = Darwin.write(stdinPipe[1], ptr.advanced(by: offset), buf.count - offset)
+                if written <= 0 { break }
+                offset += written
+            }
+        }
+        close(stdinPipe[1])
+
+        // Read Node's stdout (the solved n-value, typically <50 bytes).
+        var outputData = Data()
+        var readBuf = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let n = Darwin.read(stdoutPipe[0], &readBuf, readBuf.count)
+            if n <= 0 { break }
+            outputData.append(contentsOf: readBuf[..<n])
+        }
+        close(stdoutPipe[0])
+
+        var exitStatus: Int32 = 0
+        waitpid(pid, &exitStatus, 0)
+
+        let output = String(data: outputData, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (output?.isEmpty == false) ? output : nil
+    }
+
     private func finish(url: URL?) {
         timeoutTask?.cancel()
         timeoutTask = nil
@@ -448,6 +643,7 @@ extension YouTubeWebViewHLSExtractor: WKScriptMessageHandler {
         var urlSource = "unknown"
         var unsolvedNValue: String? = nil
         var solvedNValue: String? = nil
+        var playerIDValue: String? = nil
 
         if let body = message.body as? String {
             // Try to parse as JSON first (new format)
@@ -458,6 +654,7 @@ extension YouTubeWebViewHLSExtractor: WKScriptMessageHandler {
                 urlSource = (json["source"] as? String) ?? "unknown"
                 unsolvedNValue = json["unsolvedN"] as? String
                 solvedNValue = json["solvedN"] as? String
+                playerIDValue = json["playerID"] as? String
             } else {
                 // Fallback: raw URL string (old format)
                 hlsURLString = body
@@ -472,25 +669,45 @@ extension YouTubeWebViewHLSExtractor: WKScriptMessageHandler {
 
         extractLog.notice("⚠️ [webView] URL captured source=\(urlSource as NSString)")
 
-        // The JS interceptor solved the n-challenge from an adaptive format URL.
-        // Store the mapping; the proxy loader uses it to rewrite playlist segment URLs.
+        // If the JS interceptor already solved the n-challenge, use it directly.
         if let u = unsolvedNValue, let s = solvedNValue, u != s {
             extractedNSolver = (unsolved: u, solved: s)
             extractLog.notice("✅ [webView] n-challenge solved in JS: \(u as NSString) → \(s as NSString)")
-        } else if let u = unsolvedNValue {
-            extractedNSolver = nil
-            extractLog.notice("⚠️ [webView] n NOT solved in JS: unsolvedN=\(u as NSString) solvedN=nil")
-        } else {
-            extractedNSolver = nil
-            extractLog.notice("⚠️ [webView] no n-challenge found in adaptive format URLs")
+            finishWithURL(url, poToken: poToken)
+            return
         }
 
-        if let pot = poToken, !pot.isEmpty {
-            let potURL = URL(string: url.absoluteString.appending("/pot/\(pot)")) ?? url
-            finish(url: potURL)
-        } else {
-            finish(url: url)
+        // JS solver was not available — try solving on the Swift side via Node.js.
+        if let playerID = playerIDValue, let unsolvedN = unsolvedNValue, !unsolvedN.isEmpty {
+            extractLog.notice("⚠️ [webView] JS solver unavailable; launching Swift/Node.js solver for playerID=\(playerID as NSString) n=\(unsolvedN as NSString)")
+            let capturedURL    = url
+            let capturedPoToken = poToken
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let solved = await Task.detached(priority: .userInitiated) {
+                    await Self.solveNChallengeViaNode(playerID: playerID, unsolvedN: unsolvedN)
+                }.value
+                if let s = solved, !s.isEmpty, s != unsolvedN {
+                    self.extractedNSolver = (unsolved: unsolvedN, solved: s)
+                    extractLog.notice("✅ [webView] n solved via Node.js: \(unsolvedN as NSString) → \(s as NSString)")
+                } else {
+                    self.extractedNSolver = nil
+                    extractLog.notice("⚠️ [webView] Node.js solver returned nil/same for n=\(unsolvedN as NSString)")
+                }
+                self.finishWithURL(capturedURL, poToken: capturedPoToken)
+            }
+            return
         }
+
+        // No n-challenge found or no player ID available.
+        if let u = unsolvedNValue {
+            extractedNSolver = nil
+            extractLog.notice("⚠️ [webView] n NOT solved (no playerID available): unsolvedN=\(u as NSString)")
+        } else {
+            extractedNSolver = nil
+            extractLog.notice("⚠️ [webView] no n-challenge found in HLS manifest")
+        }
+        finishWithURL(url, poToken: poToken)
     }
 }
 
