@@ -191,7 +191,12 @@ final class YTHLSProxyLoader: NSObject, AVAssetResourceLoaderDelegate, @unchecke
         // directly by segment URLs (no #EXTINF duration tags). AVPlayer rejects such playlists
         // with CoreMediaErrorDomain -12881. We reconstruct a conformant HLS playlist by
         // extracting the segment duration from the /len/{ms}/ path component of each URL.
-        if !text.contains("#EXTINF") {
+        //
+        // Guard: master manifests also lack #EXTINF — they use #EXT-X-STREAM-INF instead.
+        // Applying this synthesis to a master manifest converts variant/audio-group URLs into
+        // fake segments → CoreMediaErrorDomain -12642. Skip synthesis for any master manifest.
+        let isMasterManifest = text.contains("#EXT-X-STREAM-INF") || text.contains("#EXT-X-MEDIA:")
+        if !text.contains("#EXTINF") && !isMasterManifest {
             let rawLines = text.components(separatedBy: "\n")
             var fixedLines: [String] = []
             var maxDurationSecs: Double = 4.0

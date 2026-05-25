@@ -1369,6 +1369,7 @@ extension PlaybackViewModel {
             playerLog.error("❌ [webView/HLS] failed to build proxy URL for master")
             return false
         }
+        playerLog.notice("[webView/HLS] ✅ proxying master URL (not per-quality variant) — EXT-X-MEDIA audio groups preserved for dubbed tracks")
         let proxyLoader = YTHLSProxyLoader(ua: ua, nSolver: nSolver)
         let asset = AVURLAsset(url: proxyURL)
         // Keep proxy loader alive for the lifetime of this asset

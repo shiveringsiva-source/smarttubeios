@@ -1,5 +1,33 @@
 import XCTest
 
+// AGENT-POST-RUN-CHECK: ui-tests-with-logs
+//
+// After every run of this file, load .github/skills/ui-tests-with-logs/SKILL.md
+// and inspect the extracted device log.
+//
+// LEGITIMATE skip:
+//   - Network unavailable or Home feed returned no cards.
+//     Device log should show: "[loadAsync] start" followed by a network error.
+//   - Quality button never became enabled within 20s — formats did not load.
+//     Device log should show: "availableFormats after initial dedup: raw=0" or
+//     "[tryAllStreams] muxed 360p" with no subsequent availableFormats update.
+//
+// BUG skip (must fix before closing):
+//   - Quality button exists=false (button still hidden rather than disabled).
+//     This would be a regression of #186.
+//
+// Log events to verify for #186:
+//   ✓ [loadAsync] availableFormats after initial dedup: raw=N deduped=M
+//   ✓ Quality button exists AND (isEnabled==true when formats loaded)
+//
+// RED FLAGS in device log:
+//   - availableFormats after initial dedup: raw=0 → quality picker will be empty
+//   - [qualityPicker] → picker opened but no items → regression in format parsing
+//   - [webView/HLS] synthesized #EXTINF … for master manifest (210KB) → YTHLSProxyLoader
+//     treating master as variant; causes CoreMediaErrorDomain -12642 and WKWebView path fails
+//   - [webView/HLS] ❌ AVPlayerItem failed: …error -12642 → master manifest was EXTINF-mangled
+//     (regression of #205 proxy fix + YTHLSProxyLoader master guard)
+
 // MARK: - QuickAccessRowUITests
 //
 // Regression test for GitHub issue #52: quick-access row should appear

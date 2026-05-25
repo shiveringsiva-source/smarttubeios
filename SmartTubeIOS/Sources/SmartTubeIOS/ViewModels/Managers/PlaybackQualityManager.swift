@@ -284,12 +284,13 @@ final class PlaybackQualityManager {
                 .joined(separator: ",")
             playerLog.notice("[quality] reloadDASHItem: requested=\(fmt.height)p playerInfo mp4 heights=[\(infoMp4Heights)]")
 
+            let h264Pref = delegate?.settings.preferH264 ?? false
             let bestFromInfo = PlaybackQualityManager.selectBestVideoFormat(
                 from: info.formats, preferredMaxHeight: fmt.height,
-                preferH264: delegate?.settings.preferH264 ?? false
+                preferH264: h264Pref
             )
             let resolvedHeight = bestFromInfo?.height ?? -1
-            playerLog.notice("[quality] reloadDASHItem: selectBestVideoFormat(maxH=\(fmt.height)) → resolvedHeight=\(resolvedHeight)p")
+            playerLog.notice("[quality] reloadDASHItem: preferH264=\(h264Pref) selectBestVideoFormat(maxH=\(fmt.height)) → resolvedHeight=\(resolvedHeight)p codec=\(bestFromInfo?.mimeType ?? "nil")")
 
             // Guard: selectBestVideoFormat falls back to the highest available format when
             // no format at or below preferredMaxHeight exists. Only use the result if it

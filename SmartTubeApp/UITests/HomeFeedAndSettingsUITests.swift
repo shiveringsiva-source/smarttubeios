@@ -1,5 +1,36 @@
 import XCTest
 
+// AGENT-POST-RUN-CHECK: ui-tests-with-logs
+//
+// After every run of this file, load .github/skills/ui-tests-with-logs/SKILL.md
+// and inspect the extracted device log.
+//
+// For testPreferH264ToggleExistsAndToggles (#206):
+//
+// LEGITIMATE skip: (none — this test has no network dependency)
+//
+// BUG skip (must fix before closing):
+//   - Toggle not found (settings.preferH264Toggle missing) → regression of #206;
+//     check SettingsView.swift player section.
+//
+// Log events to verify for #206:
+//   ✓ [quality] reloadDASHItem: preferH264=false … (toggle is OFF by default)
+//   ✓ [quality] reloadDASHItem: preferH264=true … (when toggle is ON)
+//
+// RED FLAGS in device log (testPreferH264ToggleExistsAndToggles):
+//   - preferH264=true seen when toggle was never turned on → settings not reset
+//   - [quality] reloadDASHItem line absent entirely → reloadDASHItem never ran
+//     (no quality switch was possible — acceptable for a settings-only test)
+//
+// For test_InitialHomeLoad_NoDuplicateCards / test_AfterPagination_NoDuplicateCards:
+//
+// LEGITIMATE skip:
+//   - Network unavailable — no cards loaded.
+//     Device log should show: InnerTube network error or no /browse response.
+//
+// BUG skip (must fix before closing):
+//   - Home feed loaded but duplicate IDs detected → regression in feed dedup logic.
+
 // MARK: - HomeFeedAndSettingsUITests
 //
 // Merged from: HomeFeedNoDuplicatesUITests + SettingsUITests
