@@ -1370,7 +1370,8 @@ extension PlaybackViewModel {
             return false
         }
         playerLog.notice("[webView/HLS] ✅ proxying master URL (not per-quality variant) — EXT-X-MEDIA audio groups preserved for dubbed tracks")
-        let proxyLoader = YTHLSProxyLoader(ua: ua, nSolver: nSolver)
+        let webViewCookies = await extractWKWebViewCookies()
+        let proxyLoader = YTHLSProxyLoader(ua: ua, nSolver: nSolver, webViewCookies: webViewCookies)
         let asset = AVURLAsset(url: proxyURL)
         // Keep proxy loader alive for the lifetime of this asset
         asset.resourceLoader.setDelegate(proxyLoader, queue: DispatchQueue.global(qos: .userInitiated))
@@ -1421,6 +1422,18 @@ extension PlaybackViewModel {
             }
         }
         return false
+    }
+
+    /// Extracts all cookies from the WKWebView's httpCookieStore, including googlevideo.com
+    /// cookies required for rqh=1-enforced CDN segment requests.
+    private func extractWKWebViewCookies() async -> [HTTPCookie] {
+        await withCheckedContinuation { (cont: CheckedContinuation<[HTTPCookie], Never>) in
+            WKWebsiteDataStore.default().httpCookieStore.getAllCookies { cookies in
+                let gvCount = cookies.filter { $0.domain.contains("googlevideo") }.count
+                playerLog.notice("[webView/HLS] extracted \(cookies.count) cookies (\(gvCount) googlevideo) for proxy")
+                cont.resume(returning: cookies)
+            }
+        }
     }
 
     /// Parses an HLS master M3U8 manifest and returns a map of stream height → variant URL

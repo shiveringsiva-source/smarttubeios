@@ -41,12 +41,17 @@ final class YTHLSProxyLoader: NSObject, AVAssetResourceLoaderDelegate, @unchecke
     /// in HLS playlist text before serving it to AVPlayer. This makes segment URLs carry
     /// the solved n-challenge so the video CDN accepts them (HTTP 200 instead of 403).
     let nSolver: (unsolved: String, solved: String)?
+    /// All cookies extracted from WKWebView's httpCookieStore at proxy creation time.
+    /// Includes both youtube.com and googlevideo.com cookies. For rqh=1-enforced content,
+    /// googlevideo.com cookies are required to authenticate CDN segment requests.
+    let webViewCookies: [HTTPCookie]
     private let lock = NSLock()
-    private var activeTasks: [ObjectIdentifier: URLSessionDataTask] = [:]
+    private var activeTasks: [ObjectIdentifier: URLSessionDataTask] = []
 
-    init(ua: String, nSolver: (unsolved: String, solved: String)? = nil) {
+    init(ua: String, nSolver: (unsolved: String, solved: String)? = nil, webViewCookies: [HTTPCookie] = []) {
         self.ua = ua
         self.nSolver = nSolver
+        self.webViewCookies = webViewCookies
     }
 
     // MARK: AVAssetResourceLoaderDelegate
@@ -69,16 +74,20 @@ final class YTHLSProxyLoader: NSObject, AVAssetResourceLoaderDelegate, @unchecke
             request.setValue("https://www.youtube.com", forHTTPHeaderField: "Origin")
             request.setValue("https://www.youtube.com/", forHTTPHeaderField: "Referer")
         }
-        // For googlevideo.com segment CDN requests, attach the youtube.com session cookies
-        // that were synced from the WKWebView during HLS extraction.  The CDN validates the
-        // per-segment /bui/ token against VISITOR_INFO1_LIVE (and possibly YSC/PREF).
-        // Without these cookies the CDN returns HTTP 403 for pfa=1 content.
-        if let host = realURL.host, host.contains("googlevideo.com"),
-           let ytCookies = HTTPCookieStorage.shared.cookies(for: URL(string: "https://www.youtube.com")!),
-           !ytCookies.isEmpty {
-            let cookieHeader = ytCookies.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
-            request.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
-            proxyLog.notice("[HLSProxy] attaching \(ytCookies.count) yt cookies to segment request")
+        // For googlevideo.com segment CDN requests, attach all cookies extracted from the
+        // WKWebView at proxy creation time (webViewCookies). This includes both youtube.com
+        // and googlevideo.com cookies needed for rqh=1-enforced content.
+        // Falls back to HTTPCookieStorage.shared when webViewCookies was not provided.
+        if let host = realURL.host, host.contains("googlevideo.com") {
+            let cookies: [HTTPCookie] = webViewCookies.isEmpty
+                ? (HTTPCookieStorage.shared.cookies(for: URL(string: "https://www.youtube.com")!) ?? [])
+                : webViewCookies
+            if !cookies.isEmpty {
+                let cookieHeader = cookies.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
+                request.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
+                let gvCount = cookies.filter { $0.domain.contains("googlevideo") }.count
+                proxyLog.notice("[HLSProxy] attaching \(cookies.count) cookies (\(gvCount) googlevideo) to segment request")
+            }
         }
         proxyLog.notice("[HLSProxy] GET \(realURL.absoluteString.prefix(200))")
 
