@@ -129,6 +129,12 @@ public struct AppSettings: Codable {
     /// ~90% data reduction vs 1080p. Live streams are excluded automatically.
     public var audioOnlyMode: Bool
 
+    // MARK: Codec preference
+    /// When `true`, restricts adaptive video format selection to H.264 (`avc1`) only.
+    /// Mirrors Android's `limitVideoCodec("avc1")` opt-in for devices with VP9/AV1
+    /// decoder issues. Defaults to `false` (all codecs allowed).
+    public var preferH264: Bool
+
     // MARK: iCloud sync
     /// When `true`, local user data (subscriptions, RSS feeds, video state, queue) is
     /// synced to iCloud via `NSUbiquitousKeyValueStore`. Defaults to `false` (opt-in).
@@ -236,6 +242,7 @@ public struct AppSettings: Codable {
         forceIPv4            = false
         poTokenServiceURL    = nil
         audioOnlyMode        = false
+        preferH264           = false
         iCloudSyncEnabled    = false
     }
 }

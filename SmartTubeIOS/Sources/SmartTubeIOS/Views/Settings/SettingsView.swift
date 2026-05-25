@@ -163,6 +163,8 @@ public struct SettingsView: View {
             Toggle("Autoplay next video", isOn: $store.settings.autoplayEnabled)
             Toggle("Subtitles", isOn: $store.settings.subtitlesEnabled)
             Toggle("Background Playback", isOn: $store.settings.backgroundPlaybackEnabled)
+            Toggle("Prefer H.264 Codec", isOn: $store.settings.preferH264)
+                .accessibilityIdentifier("settings.preferH264Toggle")
             #if os(iOS)
             Toggle("Picture in Picture", isOn: $store.settings.pipEnabled)
                 .accessibilityIdentifier("settings.pipToggle")

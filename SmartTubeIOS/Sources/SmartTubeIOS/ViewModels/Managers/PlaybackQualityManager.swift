@@ -285,7 +285,8 @@ final class PlaybackQualityManager {
             playerLog.notice("[quality] reloadDASHItem: requested=\(fmt.height)p playerInfo mp4 heights=[\(infoMp4Heights)]")
 
             let bestFromInfo = PlaybackQualityManager.selectBestVideoFormat(
-                from: info.formats, preferredMaxHeight: fmt.height
+                from: info.formats, preferredMaxHeight: fmt.height,
+                preferH264: delegate?.settings.preferH264 ?? false
             )
             let resolvedHeight = bestFromInfo?.height ?? -1
             playerLog.notice("[quality] reloadDASHItem: selectBestVideoFormat(maxH=\(fmt.height)) → resolvedHeight=\(resolvedHeight)p")
@@ -307,7 +308,8 @@ final class PlaybackQualityManager {
             }
         } else {
             videoURL = PlaybackQualityManager.selectBestVideoFormat(
-                from: info.formats, preferredMaxHeight: nil
+                from: info.formats, preferredMaxHeight: nil,
+                preferH264: delegate?.settings.preferH264 ?? false
             )?.url
         }
 

@@ -879,7 +879,8 @@ extension PlaybackViewModel {
         guard settings.preferredQuality != .auto,
               let maxH = settings.preferredQuality.maxHeight else { return }
         guard let videoURL = PlaybackQualityManager.selectBestVideoFormat(
-                  from: info.formats, preferredMaxHeight: maxH
+                  from: info.formats, preferredMaxHeight: maxH,
+                  preferH264: settings.preferH264
               )?.url,
               let audioURL = info.bestAdaptiveAudioURL else { return }
         if AVAssetTrackCache.shared.videoTracks(for: videoURL) != nil { return }
