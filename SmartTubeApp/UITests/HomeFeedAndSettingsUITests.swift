@@ -228,6 +228,36 @@ final class HomeFeedAndSettingsUITests: XCTestCase {
                        "settings.landscapeAlwaysPlayToggle must not appear in Settings — replaced by the in-player lock button")
     }
 
+    // MARK: - #206 Prefer H.264 Codec toggle
+
+    /// Regression test for task #206 — 'Prefer H.264 Codec' toggle added to Settings Player section.
+    ///
+    /// Verifies:
+    ///   1. `settings.preferH264Toggle` exists in Settings (Player section).
+    ///   2. It defaults to OFF (false) on a freshly reset settings session.
+    ///   3. Tapping it toggles it ON then back OFF — value is bindable.
+    func testPreferH264ToggleExistsAndToggles() {
+        openSettings()
+        let form = app.collectionViews.firstMatch
+        XCTAssertTrue(form.waitForExistence(timeout: 5),
+                      "Settings form must be visible")
+        let toggle = form.switches["settings.preferH264Toggle"].firstMatch
+        UITestHelpers.scrollUntilVisible(toggle, in: form)
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5),
+                      "settings.preferH264Toggle must appear in the Player section of Settings (task #206)")
+        // Default value from AppSettings.init() is false → UISwitch value "0"
+        XCTAssertEqual(toggle.value as? String, "0",
+                       "Prefer H.264 Codec must default to OFF (AppSettings.preferH264 defaults false)")
+        // Toggle ON
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
+        XCTAssertEqual(toggle.value as? String, "1",
+                       "Prefer H.264 Codec must be ON after tapping once")
+        // Restore OFF
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
+        XCTAssertEqual(toggle.value as? String, "0",
+                       "Prefer H.264 Codec must return to OFF after tapping again")
+    }
+
     // MARK: - Tests (from HomeFeedNoDuplicatesUITests)
 
     func test_InitialHomeLoad_NoDuplicateCards() throws {
