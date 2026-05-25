@@ -57,6 +57,7 @@
 		AA1100000000000000001D02 /* SIDAudioTrackUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1100000000000000001D01 /* SIDAudioTrackUITests.swift */; };
 		AA1100000000000000001E02 /* ScrubberUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1100000000000000001E01 /* ScrubberUITests.swift */; };
 		AA1100000000000000001F02 /* HLSResolutionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1100000000000000001F01 /* HLSResolutionUITests.swift */; };
+				AA1200000000000000002002 /* WKHLSCookieProxyUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1200000000000000002001 /* WKHLSCookieProxyUITests.swift */; };
 		AA11000000000000000020A2 /* ShortsVerticalSwipeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11000000000000000020A1 /* ShortsVerticalSwipeUITests.swift */; };
 		AB01CD23EF456789AB01CD23 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB01CD23EF456789AB01CD24 /* AppDelegate.swift */; };
 		AP000000000000000000001B /* AirPlayUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AP000000000000000000001A /* AirPlayUITests.swift */; };
@@ -201,6 +202,7 @@
 		AA1100000000000000001D01 /* SIDAudioTrackUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SIDAudioTrackUITests.swift; sourceTree = "<group>"; };
 		AA1100000000000000001E01 /* ScrubberUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrubberUITests.swift; sourceTree = "<group>"; };
 		AA1100000000000000001F01 /* HLSResolutionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLSResolutionUITests.swift; sourceTree = "<group>"; };
+				AA1200000000000000002001 /* WKHLSCookieProxyUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WKHLSCookieProxyUITests.swift; sourceTree = "<group>"; };
 		AA11000000000000000020A1 /* ShortsVerticalSwipeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortsVerticalSwipeUITests.swift; sourceTree = "<group>"; };
 		AB01CD23EF456789AB01CD24 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		AE55B486AFD7F51FEF1874FF /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -338,6 +340,7 @@
 				AA1100000000000000001D01 /* SIDAudioTrackUITests.swift */,
 				AA1100000000000000001E01 /* ScrubberUITests.swift */,
 				AA1100000000000000001F01 /* HLSResolutionUITests.swift */,
+							AA1200000000000000002001 /* WKHLSCookieProxyUITests.swift */,
 				AA11000000000000000020A1 /* ShortsVerticalSwipeUITests.swift */,
 				AA1100000000000000000CA1 /* RecommendedChipUITests.swift */,
 				AA1100000000000000000DA1 /* TVPlayerSettingsUITests.swift */,
@@ -829,6 +832,7 @@
 				AA1100000000000000001D02 /* SIDAudioTrackUITests.swift in Sources */,
 				AA1100000000000000001E02 /* ScrubberUITests.swift in Sources */,
 				AA1100000000000000001F02 /* HLSResolutionUITests.swift in Sources */,
+							AA1200000000000000002002 /* WKHLSCookieProxyUITests.swift in Sources */,
 				AA11000000000000000020A2 /* ShortsVerticalSwipeUITests.swift in Sources */,
 				AA1100000000000000000CA2 /* RecommendedChipUITests.swift in Sources */,
 				AA1100000000000000000EA2 /* AudioOnlyModeUITests.swift in Sources */,
@@ -1039,7 +1043,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MARKETING_VERSION = 4.0;
+				MARKETING_VERSION = 4.1;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1466,7 +1470,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MARKETING_VERSION = 4.0;
+				MARKETING_VERSION = 4.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
