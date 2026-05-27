@@ -271,6 +271,12 @@ public struct SearchView: View {
         }
         .listStyle(.plain)
         .accessibilityIdentifier("search.suggestionsContainer")
+        // Tapping empty list space (outside a row) must dismiss the keyboard.
+        // Task #202: the resultsView and noResultsView already had this gesture
+        // but suggestionsListView (shown while keyboard is open) was missing it.
+        // .contentShape(Rectangle()) makes the transparent empty space tappable.
+        .contentShape(Rectangle())
+        .onTapGesture { isSearchFocused = false }
     }
 
     private var placeholderView: some View {
