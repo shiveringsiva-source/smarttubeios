@@ -287,6 +287,30 @@ extension PlaybackViewModel {
                             "video_duration": String(Int(self.duration)),
                             "stall_trigger":  "AVPlayerItemPlaybackStalled"
                         ])
+                        // Stall recovery (#193): wait 2 s for AVPlayer to self-heal;
+                        // if still stalled, nudge the pipeline with a near-zero seek
+                        // + explicit rate restore. Capped at 3 attempts per item.
+                        let recoveryCount = self.stallCount
+                        if recoveryCount <= 3 {
+                            Task { @MainActor [weak self] in
+                                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                                guard let self, self.isPlaying, self.player.rate == 0,
+                                      !self.isQualityChangePending else { return }
+                                let seekT = self.currentTime
+                                playerLog.notice("[stall] recovery#\(recoveryCount): seeking to \(seekT)s to flush pipeline")
+                                self.player.seek(
+                                    to: CMTime(seconds: seekT, preferredTimescale: 600),
+                                    toleranceBefore: .zero,
+                                    toleranceAfter: CMTime(seconds: 1, preferredTimescale: 600)
+                                ) { [weak self] _ in
+                                    Task { @MainActor [weak self] in
+                                        guard let self, self.isPlaying else { return }
+                                        self.player.rate = Float(self.settings.playbackSpeed)
+                                        playerLog.notice("[stall] recovery#\(recoveryCount): rate restored")
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 #if canImport(UIKit)
@@ -672,6 +696,30 @@ extension PlaybackViewModel {
                         "video_duration": String(Int(self.duration)),
                         "stall_trigger":  "AVPlayerItemPlaybackStalled"
                     ])
+                    // Stall recovery (#193): wait 2 s for AVPlayer to self-heal;
+                    // if still stalled, nudge the pipeline with a near-zero seek
+                    // + explicit rate restore. Capped at 3 attempts per item.
+                    let recoveryCount = self.stallCount
+                    if recoveryCount <= 3 {
+                        Task { @MainActor [weak self] in
+                            try? await Task.sleep(nanoseconds: 2_000_000_000)
+                            guard let self, self.isPlaying, self.player.rate == 0,
+                                  !self.isQualityChangePending else { return }
+                            let seekT = self.currentTime
+                            playerLog.notice("[stall] recovery#\(recoveryCount): seeking to \(seekT)s to flush pipeline")
+                            self.player.seek(
+                                to: CMTime(seconds: seekT, preferredTimescale: 600),
+                                toleranceBefore: .zero,
+                                toleranceAfter: CMTime(seconds: 1, preferredTimescale: 600)
+                            ) { [weak self] _ in
+                                Task { @MainActor [weak self] in
+                                    guard let self, self.isPlaying else { return }
+                                    self.player.rate = Float(self.settings.playbackSpeed)
+                                    playerLog.notice("[stall] recovery#\(recoveryCount): rate restored")
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
