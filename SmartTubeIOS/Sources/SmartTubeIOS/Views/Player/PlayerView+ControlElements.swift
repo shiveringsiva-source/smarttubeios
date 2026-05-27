@@ -433,90 +433,100 @@ extension PlayerControlsOverlay {
     }
 
     var iosProgressBar: some View {
-        VStack(spacing: 4) {
-            // Tooltip row — always occupies space so layout doesn't jump
-            GeometryReader { geo in
-                if vm.isScrubbing && vm.duration > 0 {
-                    let hPad: CGFloat = 20
-                    let trackW = geo.size.width - hPad * 2
-                    let fraction = CGFloat(vm.scrubTime / vm.duration)
-                    let thumbX = hPad + trackW * fraction
-                    let chapterAtScrub = vm.chapters.last(where: { $0.startTime <= vm.scrubTime })
-                    let labelW: CGFloat = chapterAtScrub != nil ? min(geo.size.width * 0.5, 180) : 64
-                    let clampedX = min(max(thumbX, hPad + labelW / 2), geo.size.width - hPad - labelW / 2)
+        // Wrap in an outer GeometryReader so the highPriorityGesture below can
+        // reference the bar's width.  The gesture is placed on the full-height
+        // VStack (tooltip row + track row = 60 pt) so any touch in that area —
+        // including the 28 pt invisible tooltip strip above the visible bar — will
+        // activate the scrub drag.  Previously the gesture was only on the inner
+        // 28 pt track ZStack, which meant touches on the empty tooltip row were
+        // silently swallowed without triggering the seek.
+        GeometryReader { outerGeo in
+            let hPad: CGFloat = 20
+            let trackW = outerGeo.size.width - hPad * 2
 
-                    VStack(spacing: 2) {
-                        if let chapter = chapterAtScrub {
-                            Text(chapter.title)
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(.white.opacity(0.85))
-                                .lineLimit(1)
-                                .truncationMode(.tail)
+            VStack(spacing: 4) {
+                // Tooltip row — always occupies space so layout doesn't jump
+                GeometryReader { geo in
+                    if vm.isScrubbing && vm.duration > 0 {
+                        let fraction = CGFloat(vm.scrubTime / vm.duration)
+                        let thumbX = hPad + trackW * fraction
+                        let chapterAtScrub = vm.chapters.last(where: { $0.startTime <= vm.scrubTime })
+                        let labelW: CGFloat = chapterAtScrub != nil ? min(outerGeo.size.width * 0.5, 180) : 64
+                        let clampedX = min(max(thumbX, hPad + labelW / 2), outerGeo.size.width - hPad - labelW / 2)
+
+                        VStack(spacing: 2) {
+                            if let chapter = chapterAtScrub {
+                                Text(chapter.title)
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundStyle(.white.opacity(0.85))
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                            Text(formatDuration(vm.scrubTime))
+                                .font(.caption.monospacedDigit())
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.white)
                         }
-                        Text(formatDuration(vm.scrubTime))
-                            .font(.caption.monospacedDigit())
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 6))
+                        .frame(width: labelW)
+                        .position(x: clampedX, y: geo.size.height / 2)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 6))
-                    .frame(width: labelW)
-                    .position(x: clampedX, y: geo.size.height / 2)
                 }
-            }
-            .frame(height: 28)
+                .frame(height: 28)
 
-            // Track + slider row (custom — fully transparent thumb and track)
-            GeometryReader { geo in
-                let hPad: CGFloat = 20
-                let trackW = geo.size.width - hPad * 2
-                let time = vm.isScrubbing ? vm.scrubTime : vm.currentTime
-                let progress = vm.duration > 0 ? CGFloat(time / vm.duration) : 0
-                let thumbX = hPad + trackW * progress
+                // Track + slider row (custom — fully transparent thumb and track)
+                GeometryReader { geo in
+                    let time = vm.isScrubbing ? vm.scrubTime : vm.currentTime
+                    let progress = vm.duration > 0 ? CGFloat(time / vm.duration) : 0
+                    let thumbX = hPad + trackW * progress
 
-                ZStack {
-                    // Background track
-                    Capsule()
-                        .fill(Color.white.opacity(0.2))
-                        .frame(height: 4)
-                        .padding(.horizontal, hPad)
-
-                    // Progress fill
-                    HStack(spacing: 0) {
+                    ZStack {
+                        // Background track
                         Capsule()
-                            .fill(Color.red.opacity(0.5))
-                            .frame(width: max(thumbX - hPad, 0), height: 4)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.leading, hPad)
+                            .fill(Color.white.opacity(0.2))
+                            .frame(height: 4)
+                            .padding(.horizontal, hPad)
 
-                    // Thumb
-                    Circle()
-                        .fill(Color.white.opacity(0.5))
-                        .frame(width: 16, height: 16)
-                        .position(x: thumbX, y: geo.size.height / 2)
-                }
-                .overlay(sponsorBlockMarkers)
-                .overlay(chapterMarkers)
-                .contentShape(Rectangle())
-                #if !os(tvOS)
-                // highPriorityGesture ensures the seek-bar drag beats any child-view
-                // tap gestures (e.g. chapter-marker hit areas) so scrubbing is not
-                // interrupted by a chapter-marker onTapGesture firing mid-drag.
-                .highPriorityGesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            let fraction = min(max((value.location.x - hPad) / trackW, 0), 1)
-                            if !vm.isScrubbing { vm.beginScrubbing() }
-                            vm.updateScrub(to: Double(fraction) * vm.duration)
+                        // Progress fill
+                        HStack(spacing: 0) {
+                            Capsule()
+                                .fill(Color.red.opacity(0.5))
+                                .frame(width: max(thumbX - hPad, 0), height: 4)
+                            Spacer(minLength: 0)
                         }
-                        .onEnded { _ in vm.commitScrub() }
-                )
-                #endif
+                        .padding(.leading, hPad)
+
+                        // Thumb
+                        Circle()
+                            .fill(Color.white.opacity(0.5))
+                            .frame(width: 16, height: 16)
+                            .position(x: thumbX, y: geo.size.height / 2)
+                    }
+                    .overlay(sponsorBlockMarkers)
+                    .overlay(chapterMarkers)
+                }
+                .frame(height: 28)
             }
-            .frame(height: 28)
+            .contentShape(Rectangle())
+            #if !os(tvOS)
+            // highPriorityGesture on the full VStack (tooltip + track, 60 pt total)
+            // ensures the seek-bar drag beats any child-view tap gestures (e.g.
+            // chapter-marker hit areas) and activates even when the touch lands on
+            // the invisible tooltip strip above the visible progress bar.
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let fraction = min(max((value.location.x - hPad) / trackW, 0), 1)
+                        if !vm.isScrubbing { vm.beginScrubbing() }
+                        vm.updateScrub(to: Double(fraction) * vm.duration)
+                    }
+                    .onEnded { _ in vm.commitScrub() }
+            )
+            #endif
         }
+        .frame(height: 60)
         .accessibilityIdentifier("player.progressBar")
     }
 

@@ -1493,6 +1493,14 @@ extension PlaybackViewModel {
             switch status {
             case .readyToPlay:
                 playerLog.notice("✅ [webView/HLS] readyToPlay")
+                // Refresh duration from AVPlayerItem — the YouTube API metadata may be
+                // absent (nil) or inaccurate, leaving duration=0 and breaking scrubbing.
+                let itemDur = item.duration.seconds
+                if itemDur.isFinite && itemDur > 0 {
+                    let prevDur = self.duration
+                    self.duration = itemDur
+                    playerLog.notice("[duration] updated from webView/HLS AVPlayerItem: \(String(format: "%.1f", itemDur))s (was \(String(format: "%.1f", prevDur))s)")
+                }
                 // Try the standard #EXT-X-MEDIA path (works if manifest has audio groups).
                 // For YouTube's YT-EXT-AUDIO-CONTENT-ID format, loadAudioTracks returns nil
                 // but tracks are already loaded via loadHLSVariantTracks above.

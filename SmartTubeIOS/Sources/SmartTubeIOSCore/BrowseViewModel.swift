@@ -531,11 +531,12 @@ public final class BrowseViewModel {
                 } else {
                     browseLog.notice("fetchNextPage success: section=\(section.title) newVideos=\(group.videos.count) nextToken=\(group.nextPageToken != nil)")
                     mergeIntoFirstGroup(group)
-                    // Re-sort globally after merging so videos from different pages
-                    // remain in strict newest-first order across pagination boundaries.
-                    if !videoGroups.isEmpty {
-                        videoGroups[0].videos.sort { ($0.publishedAt ?? .distantPast) > ($1.publishedAt ?? .distantPast) }
-                    }
+                    // NOTE: Do NOT sort after appending. The YouTube subscription feed API
+                    // returns pages in reverse-chronological order — page N+1 videos are
+                    // always older than page N. Sorting the entire array after each append
+                    // reorders existing items in SwiftUI's ForEach, which breaks the
+                    // LazyVGrid scroll position (content shifts under the user's offset,
+                    // making previously-seen cards reappear and the list appear to jump).
                 }
             case .history:
                 let group = try await retryWithBackoff(label: "BrowseVM[\(section.title)]") {
