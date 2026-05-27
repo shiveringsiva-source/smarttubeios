@@ -22,12 +22,12 @@ struct MiniPlayerView: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(playerState.currentVideo?.title ?? "")
+                Text(playerState.playingVideo?.title ?? "")
                     .font(.caption.weight(.medium))
                     .lineLimit(1)
                     .foregroundStyle(.primary)
                     .accessibilityIdentifier("miniPlayer.titleLabel")
-                Text(playerState.currentVideo?.channelTitle ?? "")
+                Text(playerState.playingVideo?.channelTitle ?? "")
                     .font(.caption2)
                     .lineLimit(1)
                     .foregroundStyle(.secondary)

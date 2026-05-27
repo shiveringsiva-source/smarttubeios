@@ -63,6 +63,24 @@ public final class PlayerStateStore {
     /// The video that is currently loaded or playing. Non-nil when presentation != .hidden.
     private(set) var currentVideo: Video? = nil
 
+    /// The video whose frames the AVPlayer is actually rendering.
+    ///
+    /// During a load (`vm.isLoading == true`), `currentVideo` has already been updated to
+    /// the newly selected video but `AVPlayerItem` may not be ready yet — the player layer
+    /// is still showing the previous video's frames. `playingVideo` resolves this by
+    /// returning the last-confirmed playing video while the new one is loading, so the
+    /// MiniPlayer label stays in sync with the visual content.
+    ///
+    /// - When idle (`isLoading == false`): equals `currentVideo`.
+    /// - When loading (`isLoading == true`) and there is a previous video: equals that
+    ///   video (last entry in `vm.history` — pushed onto the stack just before the new
+    ///   video starts loading).
+    /// - When loading the very first video ever (history is empty): returns `nil` (the
+    ///   MiniPlayer is hidden during a first-play full-screen open, so this is harmless).
+    var playingVideo: Video? {
+        vm.isLoading ? vm.history.last : currentVideo
+    }
+
     // MARK: - Imperative dismiss hook
 
     /// Set by LandscapePresenter's coordinator when a full-screen player is presented.
