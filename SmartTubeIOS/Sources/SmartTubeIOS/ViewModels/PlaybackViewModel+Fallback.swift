@@ -582,6 +582,18 @@ extension PlaybackViewModel {
                     let prevDur = self.duration
                     self.duration = itemDur
                     playerLog.notice("[duration] updated from AVPlayerItem: \(String(format: "%.1f", itemDur))s (was \(String(format: "%.1f", prevDur))s from metadata)")
+                } else if self.duration == 0 {
+                    durationObserverTask?.cancel()
+                    durationObserverTask = Task { [weak self, weak item] in
+                        guard let self, let item else { return }
+                        for await seconds in item.firstValidDurationStream {
+                            guard !Task.isCancelled else { return }
+                            let prev = self.duration
+                            self.duration = seconds
+                            playerLog.notice("[duration] deferred KVO update: \(String(format: "%.1f", seconds))s (was \(String(format: "%.1f", prev))s)")
+                            break
+                        }
+                    }
                 }
                 if let pos = savedPositionToRestore, pos > 0 {
                     savedPositionToRestore = nil
@@ -803,6 +815,18 @@ extension PlaybackViewModel {
                         let prevDur = self.duration
                         self.duration = compDur
                         playerLog.notice("[duration] updated from composition AVPlayerItem: \(String(format: "%.1f", compDur))s (was \(String(format: "%.1f", prevDur))s from metadata)")
+                    } else if self.duration == 0 {
+                        durationObserverTask?.cancel()
+                        durationObserverTask = Task { [weak self, weak compositeItem] in
+                            guard let self, let compositeItem else { return }
+                            for await seconds in compositeItem.firstValidDurationStream {
+                                guard !Task.isCancelled else { return }
+                                let prev = self.duration
+                                self.duration = seconds
+                                playerLog.notice("[duration] deferred KVO update: \(String(format: "%.1f", seconds))s (was \(String(format: "%.1f", prev))s)")
+                                break
+                            }
+                        }
                     }
                     if let pos = savedPositionToRestore, pos > 0 {
                         savedPositionToRestore = nil
@@ -1500,6 +1524,18 @@ extension PlaybackViewModel {
                     let prevDur = self.duration
                     self.duration = itemDur
                     playerLog.notice("[duration] updated from webView/HLS AVPlayerItem: \(String(format: "%.1f", itemDur))s (was \(String(format: "%.1f", prevDur))s)")
+                } else if self.duration == 0 {
+                    durationObserverTask?.cancel()
+                    durationObserverTask = Task { [weak self, weak item] in
+                        guard let self, let item else { return }
+                        for await seconds in item.firstValidDurationStream {
+                            guard !Task.isCancelled else { return }
+                            let prev = self.duration
+                            self.duration = seconds
+                            playerLog.notice("[duration] deferred KVO update (webView/HLS): \(String(format: "%.1f", seconds))s (was \(String(format: "%.1f", prev))s)")
+                            break
+                        }
+                    }
                 }
                 // Try the standard #EXT-X-MEDIA path (works if manifest has audio groups).
                 // For YouTube's YT-EXT-AUDIO-CONTENT-ID format, loadAudioTracks returns nil

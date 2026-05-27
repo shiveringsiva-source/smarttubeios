@@ -228,6 +228,9 @@ public final class PlaybackViewModel {
     var itemObserverTask: Task<Void, Never>?
     var endObserverTask: Task<Void, Never>?
     var stallObserverTask: Task<Void, Never>?
+    /// Observes `AVPlayerItem.duration` via KVO after `.readyToPlay` for HLS streams
+    /// where the duration is `.invalid` at ready-time and arrives later. Cancelled in `stop()`.
+    var durationObserverTask: Task<Void, Never>?
     /// Number of `AVPlayerItemPlaybackStalled` (or rateObserver rate→0) events in this session.
     var stallCount: Int = 0
     var qualityTask: Task<Void, Never>? {
