@@ -406,7 +406,7 @@ extension InnerTubeAPI {
                 ($0["thumbnailOverlayTimeStatusRenderer"] as? [String: Any])?["style"] as? String == "SHORTS"
             } ?? false
             || isUstreamerShorts
-            || isVerticalThumbnail
+            || (isVerticalThumbnail && (duration.map { $0 <= 180 } ?? true))
 
         if isUstreamerShorts {
             tubeLog.debug("tileRenderer isShort=true id=\(videoId, privacy: .public) signal=ustreamerConfig(\(ustreamerConfig ?? "", privacy: .public))")
@@ -693,13 +693,16 @@ extension InnerTubeAPI {
             let ustreamerConfig = watchEndpoint?["ustreamerConfig"] as? String
             if ustreamerConfig == "GgIIBQ==" && (duration.map { $0 <= 180 } ?? true) { return true }
             // Quaternary signal: vertical thumbnail (height > width) — another parseTileRenderer mirror.
+            // Guard with duration ≤ 180 s: long-form landscape videos sometimes have portrait
+            // thumbnails (movie trailers, talk show clips). Without the guard any such video
+            // is misclassified as a Short (task #201).
             let thumbnails = (r["thumbnail"] as? [String: Any])?["thumbnails"] as? [[String: Any]]
             let isVerticalThumbnail = thumbnails?.contains {
                 let w = ($0["width"] as? Int) ?? 0
                 let h = ($0["height"] as? Int) ?? 0
                 return h > w && w > 0
             } ?? false
-            return isVerticalThumbnail
+            return isVerticalThumbnail && (duration.map { $0 <= 180 } ?? true)
         }()
         if isShort {
             let signal: String
