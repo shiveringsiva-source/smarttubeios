@@ -86,6 +86,23 @@ final class YouTubeWebViewHLSExtractor: NSObject {
             // Use .default() so existing WKWebView cookies from earlier loads are reused.
             config.websiteDataStore = .default()
 
+            // Pre-seed the SOCS consent cookie so YouTube does not show the GDPR consent
+            // dialog for EU-region IPs. SOCS=CAI is the minimal accepted-consent value;
+            // must be injected before wv.load() so the cookie is present on the first request.
+            let socsCookieProps: [HTTPCookiePropertyKey: Any] = [
+                .name: "SOCS",
+                .value: "CAI",
+                .domain: ".youtube.com",
+                .path: "/",
+                .secure: true,
+                .sameSitePolicy: "None",
+                .expires: Date(timeIntervalSinceNow: 365 * 24 * 3600)
+            ]
+            if let socsCookie = HTTPCookie(properties: socsCookieProps) {
+                config.websiteDataStore.httpCookieStore.setCookie(socsCookie)
+                extractLog.notice("[webView/HLS] SOCS consent cookie pre-seeded for .youtube.com")
+            }
+
             // Non-zero off-screen frame so the compositor renders the video element,
             // which is required for programmatic playback on iOS.
             let wv = WKWebView(frame: CGRect(x: -1, y: -1, width: 1, height: 1), configuration: config)
@@ -172,6 +189,24 @@ final class YouTubeWebViewHLSExtractor: NSObject {
     private static let interceptorJS: String = #"""
     (function() {
         'use strict';
+
+        // Detect consent wall at document-start and report to native.
+        // If the SOCS=CAI cookie pre-seeding failed (e.g. the cookie was not accepted
+        // by WKWebView before the first request), YouTube redirects EU users to
+        // consent.youtube.com or shows a GDPR bump on the page itself.
+        // Native Swift logs a warning so EU timeout failures can be diagnosed.
+        (function checkConsentWall() {
+            try {
+                var h = document.location.hostname;
+                if (h === 'consent.youtube.com' ||
+                    document.querySelector('[data-view-name="VIEW_NAME_CONSENT_BUMP"]') ||
+                    document.querySelector('.HEBJsc')) {
+                    window.webkit.messageHandlers.hlsExtractor.postMessage(
+                        JSON.stringify({ consentWallDetected: true, timestamp: Date.now() })
+                    );
+                }
+            } catch(e) {}
+        })();
 
         var sentFinalURL = false;
         // Set to true as soon as tryExtractHLS starts its async resolution,
@@ -618,6 +653,11 @@ extension YouTubeWebViewHLSExtractor: WKScriptMessageHandler {
             // Try to parse as JSON first (new format)
             if let data = body.data(using: .utf8),
                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                // Consent-wall detection message: SOCS cookie pre-seeding did not work.
+                if let consentWall = json["consentWallDetected"] as? Bool, consentWall {
+                    extractLog.warning("⚠️ [webView/HLS] consent wall detected — SOCS cookie bypass did not prevent EU GDPR dialog; hlsManifestUrl will not arrive")
+                    return
+                }
                 hlsURLString = json["hlsManifestUrl"] as? String
                 poToken = json["poToken"] as? String
                 urlSource = (json["source"] as? String) ?? "unknown"
