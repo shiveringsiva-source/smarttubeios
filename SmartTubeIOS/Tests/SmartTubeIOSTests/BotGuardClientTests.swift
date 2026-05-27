@@ -139,10 +139,11 @@ struct BotGuardClientTests {
         return try JSONSerialization.data(withJSONObject: payload)
     }
 
-    /// WAA GenerateIT response: [integrityTokenB64, ttlSeconds, mintThreshold]
-    /// "AAEC" = base64([0, 1, 2])
+    /// WAA GenerateIT response: [integrityTokenB64, ttlSeconds, mintThreshold, websafeFallbackToken]
+    /// Real API shape: [String|null, Int, Int, String|null] — 4 elements.
+    /// "AAEC" = base64([0, 1, 2]); NSNull() at [3] since happy-path tests use the getMinter flow.
     private func waaGenerateITPayload() throws -> Data {
-        try JSONSerialization.data(withJSONObject: ["AAEC", 3600, 1] as [Any])
+        try JSONSerialization.data(withJSONObject: ["AAEC", 3600, 1, NSNull()] as [Any])
     }
 
     // Derived from the same URL constants the client uses so the key always matches exactly.

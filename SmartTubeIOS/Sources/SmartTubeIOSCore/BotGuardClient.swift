@@ -498,11 +498,12 @@ public final class BotGuardClient: PoTokenProvider, @unchecked Sendable {
             defer { sema.signal() }
             if let error { result = .failure(error); return }
             // GenerateIT response: [integrityToken, ttlSecs, mintRefreshThreshold, websafeFallbackToken]
-            // json[0]: integrityTokenBasedRequestKey — input to getMinter() for full minting flow (may be null)
-            // json[3]: websafeFallbackToken — ready-to-use PO token when getMinter is not available
+            // json[0]: integrityTokenBasedRequestKey — input to getMinter() for full minting flow (may be nil)
+            // json[3]: websafeFallbackToken — ready-to-use PO token when getMinter is not available (may be absent)
+            // Guard requires non-empty JSON array; json[3] is accessed only when present (API format may vary).
             guard let data,
                   let json = try? JSONSerialization.jsonObject(with: data) as? [Any],
-                  json.count >= 4 else {
+                  !json.isEmpty else {
                 let httpStatus = (response as? HTTPURLResponse)?.statusCode ?? -1
                 let bodySnippet = data.flatMap { String(data: $0.prefix(200), encoding: .utf8) } ?? "<nil>"
                 log.notice("[BotGuard] GenerateIT failed: HTTP \(httpStatus) body=\(bodySnippet)")
@@ -511,8 +512,8 @@ public final class BotGuardClient: PoTokenProvider, @unchecked Sendable {
                 ))
                 return
             }
-            let integrityToken    = json[0] as? String  // may be nil
-            let websafeFallback   = json[3] as? String  // ready-to-use PO token fallback
+            let integrityToken    = json[0] as? String          // may be nil
+            let websafeFallback   = json.count > 3 ? json[3] as? String : nil  // ready-to-use PO token fallback
             guard integrityToken != nil || websafeFallback != nil else {
                 result = .failure(BotGuardError.integrityTokenFailed("both integrityToken and websafeFallback are nil"))
                 return
