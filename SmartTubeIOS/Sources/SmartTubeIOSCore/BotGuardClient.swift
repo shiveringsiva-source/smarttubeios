@@ -481,6 +481,14 @@ public final class BotGuardClient: PoTokenProvider, @unchecked Sendable {
 
     // MARK: - Phase 4: integrity token (blocking, on jsQueue)
 
+    // Holds the dataTask callback result across a DispatchSemaphore hand-off.
+    // @unchecked Sendable is safe here: jsQueue blocks on the semaphore while the
+    // URLSession delegate queue writes, so there is no concurrent access in practice.
+    private final class _ResultBox<T>: @unchecked Sendable {
+        var value: T
+        init(_ value: T) { self.value = value }
+    }
+
     private func fetchIntegrityTokenSync(bgResponse: String) throws -> (integrityToken: String?, websafeFallback: String?) {
         let payload = [Self.requestKey, bgResponse]
         var req = URLRequest(url: Self.waaGenerateITURL, timeoutInterval: 12)
@@ -490,13 +498,13 @@ public final class BotGuardClient: PoTokenProvider, @unchecked Sendable {
         req.setValue("grpc-web-javascript/0.1",   forHTTPHeaderField: "x-user-agent")
         req.httpBody = try? JSONSerialization.data(withJSONObject: payload)
 
-        var result: Result<(integrityToken: String?, websafeFallback: String?), Error>?
+        let box = _ResultBox<Result<(integrityToken: String?, websafeFallback: String?), Error>?>(nil)
         let sema = DispatchSemaphore(value: 0)
         let log = bgLog   // capture logger value to avoid 'self' capture in closure
 
         session.dataTask(with: req) { data, response, error in
             defer { sema.signal() }
-            if let error { result = .failure(error); return }
+            if let error { box.value = .failure(error); return }
             // GenerateIT response: [integrityToken, ttlSecs, mintRefreshThreshold, websafeFallbackToken]
             // json[0]: integrityTokenBasedRequestKey — input to getMinter() for full minting flow (may be nil)
             // json[3]: websafeFallbackToken — ready-to-use PO token when getMinter is not available (may be absent)
@@ -507,7 +515,7 @@ public final class BotGuardClient: PoTokenProvider, @unchecked Sendable {
                 let httpStatus = (response as? HTTPURLResponse)?.statusCode ?? -1
                 let bodySnippet = data.flatMap { String(data: $0.prefix(200), encoding: .utf8) } ?? "<nil>"
                 log.notice("[BotGuard] GenerateIT failed: HTTP \(httpStatus) body=\(bodySnippet)")
-                result = .failure(BotGuardError.integrityTokenFailed(
+                box.value = .failure(BotGuardError.integrityTokenFailed(
                     "HTTP \(httpStatus) body=\(bodySnippet.prefix(80))"
                 ))
                 return
@@ -515,14 +523,14 @@ public final class BotGuardClient: PoTokenProvider, @unchecked Sendable {
             let integrityToken    = json[0] as? String          // may be nil
             let websafeFallback   = json.count > 3 ? json[3] as? String : nil  // ready-to-use PO token fallback
             guard integrityToken != nil || websafeFallback != nil else {
-                result = .failure(BotGuardError.integrityTokenFailed("both integrityToken and websafeFallback are nil"))
+                box.value = .failure(BotGuardError.integrityTokenFailed("both integrityToken and websafeFallback are nil"))
                 return
             }
-            result = .success((integrityToken, websafeFallback))
+            box.value = .success((integrityToken, websafeFallback))
         }.resume()
 
         sema.wait()
-        return try result!.get()
+        return try box.value!.get()
     }
 
     // MARK: - Phase 5: mint (JS, on jsQueue)
