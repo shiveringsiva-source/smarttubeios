@@ -72,13 +72,25 @@ extension PlaybackViewModel {
         if let idx = currentVideo?.playlistIndex,
            currentVideo?.playlistId == CurrentQueueStore.playlistID {
             Task {
-                if let next = await CurrentQueueStore.shared.videoAt(index: idx + 1) {
-                    playerLog.notice("Autoplay (queue): index=\(idx + 1) id=\(next.id)")
-                    load(video: next)
+                if settings.queueShuffleEnabled {
+                    let remaining = await CurrentQueueStore.shared.remainingVideos(after: idx)
+                    if let pick = remaining.randomElement() {
+                        playerLog.notice("Autoplay (queue, shuffle): random id=\(pick.id)")
+                        load(video: pick)
+                    } else {
+                        playerLog.notice("Autoplay (queue, shuffle): exhausted, clearing")
+                        await CurrentQueueStore.shared.clear()
+                        videoEnded = true
+                    }
                 } else {
-                    playerLog.notice("Autoplay (queue): exhausted, clearing")
-                    await CurrentQueueStore.shared.clear()
-                    videoEnded = true
+                    if let next = await CurrentQueueStore.shared.videoAt(index: idx + 1) {
+                        playerLog.notice("Autoplay (queue): index=\(idx + 1) id=\(next.id)")
+                        load(video: next)
+                    } else {
+                        playerLog.notice("Autoplay (queue): exhausted, clearing")
+                        await CurrentQueueStore.shared.clear()
+                        videoEnded = true
+                    }
                 }
             }
             return

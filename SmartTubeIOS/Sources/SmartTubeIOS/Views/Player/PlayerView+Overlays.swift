@@ -164,6 +164,7 @@ extension PlayerView {
             moreMenuSleepTimerRow
             moreMenuAudioOnlyRow
             #endif
+            moreMenuQueueShuffleRow
             moreMenuDownloadRow
             moreMenuCaptionsRow
             moreMenuAudioTrackRow
@@ -553,6 +554,41 @@ extension PlayerView {
         .focused($moreMenuFocusedRow, equals: .audioOnly)
         #endif
         Divider()
+    }
+
+    @ViewBuilder private var moreMenuQueueShuffleRow: some View {
+        if (vm.playerInfo?.video ?? video).playlistId == CurrentQueueStore.playlistID {
+            Button {
+                menuLog.notice("[moreMenu] Queue Shuffle row tapped — toggling queueShuffleEnabled: \(store.settings.queueShuffleEnabled) → \(!store.settings.queueShuffleEnabled)")
+                store.settings.queueShuffleEnabled.toggle()
+                showMoreMenu = false
+            } label: {
+                HStack {
+                    Label(
+                        store.settings.queueShuffleEnabled
+                            ? String(localized: "Shuffle Queue (On)", bundle: .module)
+                            : String(localized: "Shuffle Queue", bundle: .module),
+                        systemImage: "shuffle"
+                    )
+                    Spacer()
+                    if store.settings.queueShuffleEnabled {
+                        Image(systemName: AppSymbol.checkmark)
+                            .foregroundStyle(Color.accentColor)
+                    }
+                }
+                .padding()
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+            .accessibilityIdentifier("player.moreMenu.queueShuffleRow")
+            #if os(tvOS)
+            .background(moreMenuFocusedRow == .queueShuffle ? Color.gray.opacity(0.35) : .clear)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .focused($moreMenuFocusedRow, equals: .queueShuffle)
+            #endif
+            Divider()
+        }
     }
 
     @ViewBuilder private var moreMenuDownloadRow: some View {

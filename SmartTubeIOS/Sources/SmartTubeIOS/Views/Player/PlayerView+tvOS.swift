@@ -44,7 +44,7 @@ extension PlayerView {
     /// D-pad navigation — SwiftUI's spatial focus engine cannot reliably navigate
     /// between buttons inside a ZStack overlay on tvOS.
     enum MoreMenuRow: Hashable {
-        case speed, quality, like, dislike, sleepTimer, audioOnly, captions, audioTrack, description, comments, cancel
+        case speed, quality, like, dislike, sleepTimer, audioOnly, queueShuffle, captions, audioTrack, description, comments, cancel
     }
 
     /// Ordered list of rows currently visible in the more menu.

@@ -307,5 +307,74 @@ struct CurrentQueueStoreTests {
         let queued = await store.videoAt(index: 0)
         #expect(queued?.playlistId == CurrentQueueStore.playlistID)
     }
+
+    // MARK: - remainingVideos(after:)
+
+    @Test("remainingVideos: empty queue returns empty array")
+    func remainingVideosEmptyQueue() async {
+        let store = makeStore()
+        let result = await store.remainingVideos(after: 0)
+        #expect(result.isEmpty)
+    }
+
+    @Test("remainingVideos: after last index returns empty array")
+    func remainingVideosAfterLastIndex() async {
+        let store = makeStore()
+        for id in ["aaa11111111", "bbb22222222", "ccc33333333"] {
+            await store.append(makeVideo(id: id))
+        }
+        let result = await store.remainingVideos(after: 2)
+        #expect(result.isEmpty)
+    }
+
+    @Test("remainingVideos: after out-of-bounds index returns empty array")
+    func remainingVideosOutOfBounds() async {
+        let store = makeStore()
+        await store.append(makeVideo(id: "aaa11111111"))
+        let result = await store.remainingVideos(after: 99)
+        #expect(result.isEmpty)
+    }
+
+    @Test("remainingVideos: returns correct slice from middle of queue")
+    func remainingVideosMiddleSlice() async {
+        let store = makeStore()
+        for id in ["aaa11111111", "bbb22222222", "ccc33333333", "ddd44444444"] {
+            await store.append(makeVideo(id: id))
+        }
+        let result = await store.remainingVideos(after: 1)
+        #expect(result.count == 2)
+        #expect(result[0].id == "ccc33333333")
+        #expect(result[1].id == "ddd44444444")
+    }
+
+    @Test("remainingVideos: all returned videos have queue playlistId")
+    func remainingVideosTaggedWithPlaylistId() async {
+        let store = makeStore()
+        for id in ["aaa11111111", "bbb22222222", "ccc33333333"] {
+            await store.append(makeVideo(id: id))
+        }
+        let result = await store.remainingVideos(after: 0)
+        #expect(result.allSatisfy { $0.playlistId == CurrentQueueStore.playlistID })
+    }
+
+    @Test("remainingVideos: returned videos carry correct sequential playlistIndex values")
+    func remainingVideosPlaylistIndexTags() async {
+        let store = makeStore()
+        for id in ["aaa11111111", "bbb22222222", "ccc33333333", "ddd44444444"] {
+            await store.append(makeVideo(id: id))
+        }
+        let result = await store.remainingVideos(after: 1)
+        // after index 1, videos are at original positions 2 and 3
+        #expect(result[0].playlistIndex == 2)
+        #expect(result[1].playlistIndex == 3)
+    }
+
+    @Test("remainingVideos: single-video queue returns empty (no video after last)")
+    func remainingVideosSingleVideoQueue() async {
+        let store = makeStore()
+        await store.append(makeVideo(id: "aaa11111111"))
+        let result = await store.remainingVideos(after: 0)
+        #expect(result.isEmpty)
+    }
 }
 

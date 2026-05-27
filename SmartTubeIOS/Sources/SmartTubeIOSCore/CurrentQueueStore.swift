@@ -102,6 +102,19 @@ public actor CurrentQueueStore: UserDefaultsBackedStore {
         return copy
     }
 
+    /// Returns all queue videos after `index`, each tagged with `playlistId` and `playlistIndex`.
+    /// Used by shuffle logic in `PlaybackViewModel` to pick a random remaining video.
+    public func remainingVideos(after index: Int) -> [Video] {
+        let startIdx = index + 1
+        guard startIdx < videos.count else { return [] }
+        return (startIdx..<videos.count).map { i in
+            var copy = videos[i]
+            copy.playlistId    = Self.playlistID
+            copy.playlistIndex = i
+            return copy
+        }
+    }
+
     /// A `PlaylistInfo` stub for rendering the queue row in LibraryView.
     public var asPlaylistInfo: PlaylistInfo {
         PlaylistInfo(

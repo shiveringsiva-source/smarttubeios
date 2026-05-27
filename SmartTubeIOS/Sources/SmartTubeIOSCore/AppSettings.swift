@@ -39,6 +39,9 @@ public struct AppSettings: Codable {
     public var loopEnabled: Bool
     /// When `true`, autoplay picks a random video from the related-videos list.
     public var shuffleEnabled: Bool
+    /// When `true`, playing from the Current Queue picks a random remaining video instead of the next sequential one.
+    /// Independent from `shuffleEnabled` (which shuffles YouTube recommendations after non-queue playback).
+    public var queueShuffleEnabled: Bool
 
     // MARK: UI
     public var defaultSection: String
@@ -219,6 +222,7 @@ public struct AppSettings: Codable {
         videoGravityMode     = .fit
         loopEnabled          = false
         shuffleEnabled       = false
+        queueShuffleEnabled  = false
         defaultSection       = BrowseSection.SectionType.home.rawValue
         compactThumbnails    = false
         hideShorts           = false
@@ -292,6 +296,7 @@ extension AppSettings {
         case videoGravityMode
         case loopEnabled
         case shuffleEnabled
+        case queueShuffleEnabled
         case defaultSection
         case compactThumbnails
         case hideShorts
@@ -332,6 +337,7 @@ extension AppSettings {
         videoGravityMode             = c.safeDecode(VideoGravityMode.self,  forKey: .videoGravityMode,             default: d.videoGravityMode)
         loopEnabled                  = c.safeDecode(Bool.self,              forKey: .loopEnabled,                  default: d.loopEnabled)
         shuffleEnabled               = c.safeDecode(Bool.self,              forKey: .shuffleEnabled,               default: d.shuffleEnabled)
+        queueShuffleEnabled          = c.safeDecode(Bool.self,              forKey: .queueShuffleEnabled,          default: d.queueShuffleEnabled)
         defaultSection               = c.safeDecode(String.self,            forKey: .defaultSection,               default: d.defaultSection)
         compactThumbnails            = c.safeDecode(Bool.self,              forKey: .compactThumbnails,            default: d.compactThumbnails)
         hideShorts                   = c.safeDecode(Bool.self,              forKey: .hideShorts,                   default: d.hideShorts)
