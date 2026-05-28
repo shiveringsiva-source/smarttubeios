@@ -288,7 +288,6 @@ public struct HomeView: View {
                         #if os(tvOS)
                         .focusSection()
                         #endif
-                        Divider()
                     }
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
@@ -399,7 +398,6 @@ public struct HomeView: View {
                 #if os(tvOS)
                 .focusSection()
                 #endif
-                Divider()
             }
             if isShorts {
                 // Shorts chip: vertical portrait card list driven by ShortsRowSection's
