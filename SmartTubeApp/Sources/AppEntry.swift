@@ -462,12 +462,26 @@ struct AppEntry: App {
         let probeLog = os.Logger(subsystem: "com.void.smarttube.app", category: "BotGuardProbe")
         probeLog.notice("[BotGuardProbe] 🔵 starting probe for videoId=\(videoID)")
         Task.detached {
+            let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            let resultURL = docs?.appendingPathComponent("bg_probe_result.txt")
+            // Write "started" immediately so we know the task launched.
+            try? "STARTED\nvideoId=\(videoID)\n".write(to: resultURL!, atomically: true, encoding: .utf8)
             let client = BotGuardClient()
             do {
                 let token = try await client.token(for: videoID)
-                probeLog.notice("[BotGuardProbe] ✅ PIPELINE COMPLETE tokenLen=\(token.count) videoId=\(videoID)")
+                let hasMinter = client.lastRunHasMinter
+                let itLen = client.lastRunIntegrityTokenLen
+                probeLog.notice("[BotGuardProbe] ✅ PIPELINE COMPLETE tokenLen=\(token.count) hasMinter=\(hasMinter) integrityTokenLen=\(itLen) videoId=\(videoID)")
+                if let url = resultURL {
+                    let result = "SUCCESS\ntokenLen=\(token.count)\nhasMinter=\(hasMinter)\nintegrityTokenLen=\(itLen)\nvideoId=\(videoID)\n"
+                    try? result.write(to: url, atomically: true, encoding: .utf8)
+                }
             } catch {
                 probeLog.notice("[BotGuardProbe] ❌ PIPELINE FAILED error=\(String(describing: error)) videoId=\(videoID)")
+                if let url = resultURL {
+                    let result = "FAILED\nerror=\(error)\nvideoId=\(videoID)\n"
+                    try? result.write(to: url, atomically: true, encoding: .utf8)
+                }
             }
         }
     }
