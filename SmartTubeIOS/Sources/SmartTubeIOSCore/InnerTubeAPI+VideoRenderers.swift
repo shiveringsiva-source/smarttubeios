@@ -292,6 +292,15 @@ extension InnerTubeAPI {
                     } else {
                         rendererMisses["lockupViewModel", default: 0] += 1
                     }
+                } else if let renderer = dict["shortsLockupViewModel"] as? [String: Any] {
+                    // WEB search results — YouTube returns Shorts in shortsLockupViewModel
+                    // inside reelShelfRenderer items instead of videoRenderer (2026-05-28).
+                    if let v = parseShortsLockupViewModel(renderer) {
+                        videos.append(v)
+                        rendererHits["shortsLockupViewModel", default: 0] += 1
+                    } else {
+                        rendererMisses["shortsLockupViewModel", default: 0] += 1
+                    }
                 } else if let contItem = dict["continuationItemRenderer"] as? [String: Any],
                           let endpoint = contItem["continuationEndpoint"] as? [String: Any],
                           let command = endpoint["continuationCommand"] as? [String: Any],
@@ -884,6 +893,81 @@ extension InnerTubeAPI {
             isLive: false,
             isShort: false,
             watchProgress: watchProgress,
+            badges: []
+        )
+    }
+
+    // MARK: - WEB shortsLockupViewModel parser
+    // Used by WEB search responses for #shorts queries (and shelf results in general).
+    // YouTube returns Shorts in a reelShelfRenderer → items[] → shortsLockupViewModel
+    // structure instead of videoRenderer. The videoId, title, thumbnail, and view
+    // count are all available without a secondary network request.
+    //
+    // Field mapping verified against live API response (2026-05-28):
+    //   videoId:   onTap.innertubeCommand.reelWatchEndpoint.videoId
+    //   title:     overlayMetadata.primaryText.content
+    //   viewCount: overlayMetadata.secondaryText.content  (e.g. "3.3K views")
+    //   thumbnail: onTap.innertubeCommand.reelWatchEndpoint.thumbnail.thumbnails[-1].url
+    //              or thumbnailViewModel.image.sources[-1].url as fallback
+    private func parseShortsLockupViewModel(_ r: [String: Any]) -> Video? {
+        // videoId — from reelWatchEndpoint inside onTap.innertubeCommand
+        guard let onTap = r["onTap"] as? [String: Any],
+              let command = onTap["innertubeCommand"] as? [String: Any],
+              let reelEp = command["reelWatchEndpoint"] as? [String: Any],
+              let videoId = reelEp["videoId"] as? String,
+              !videoId.isEmpty
+        else { return nil }
+
+        // title — overlayMetadata.primaryText.content
+        let title: String = {
+            guard let overlay = r["overlayMetadata"] as? [String: Any],
+                  let primary = overlay["primaryText"] as? [String: Any],
+                  let content = primary["content"] as? String
+            else { return "" }
+            return content
+        }()
+
+        // viewCount — overlayMetadata.secondaryText.content ("3.3K views", "829K views", etc.)
+        let viewCount: Int? = {
+            guard let overlay = r["overlayMetadata"] as? [String: Any],
+                  let secondary = overlay["secondaryText"] as? [String: Any],
+                  let content = secondary["content"] as? String
+            else { return nil }
+            return extractNumber(content)
+        }()
+
+        // thumbnail — reelWatchEndpoint.thumbnail.thumbnails[-1] preferred; thumbnailViewModel fallback
+        let thumbURL: URL? = {
+            if let thumbDict = reelEp["thumbnail"] as? [String: Any],
+               let thumbs = thumbDict["thumbnails"] as? [[String: Any]],
+               let urlStr = thumbs.last?["url"] as? String {
+                return URL(string: urlStr)
+            }
+            // Fallback: thumbnailViewModel.image.sources[-1].url
+            if let tvm = r["thumbnailViewModel"] as? [String: Any],
+               let image = tvm["image"] as? [String: Any],
+               let sources = image["sources"] as? [[String: Any]],
+               let urlStr = sources.last?["url"] as? String {
+                return URL(string: urlStr)
+            }
+            return nil
+        }()
+
+        tubeLog.debug("shortsLockupViewModel id=\(videoId, privacy: .public) title=\(title.prefix(40), privacy: .public)")
+
+        return Video(
+            id: videoId,
+            title: title,
+            channelTitle: "",
+            channelId: nil,
+            thumbnailURL: thumbURL,
+            duration: nil,         // not provided; isShort=true is the signal
+            viewCount: viewCount,
+            publishedAt: nil,
+            publishedTimeText: nil,
+            isLive: false,
+            isShort: true,
+            watchProgress: nil,
             badges: []
         )
     }

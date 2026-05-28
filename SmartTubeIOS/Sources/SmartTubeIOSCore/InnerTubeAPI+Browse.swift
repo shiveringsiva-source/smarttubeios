@@ -134,6 +134,16 @@ extension InnerTubeAPI {
             }
         }
         let data = try await post(endpoint: "search", body: body)
+        // DEBUG: dump raw search response for #shorts queries so we can inspect
+        // which renderer types YouTube is actually returning.
+        if query == "#shorts", let desktop = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first {
+            let filename = continuationToken == nil ? "shorts_search_p1.json" : "shorts_search_cont_\(Int.random(in: 1000...9999)).json"
+            let url = desktop.appendingPathComponent(filename)
+            if let jsonData = try? JSONSerialization.data(withJSONObject: data, options: [.prettyPrinted, .sortedKeys]) {
+                try? jsonData.write(to: url)
+                tubeLog.notice("search DEBUG: dumped #shorts response (\(jsonData.count, privacy: .public) bytes) to Desktop/\(filename, privacy: .public)")
+            }
+        }
         return try parseVideoGroup(from: data, title: "Search: \(query)")
     }
 
@@ -202,14 +212,16 @@ extension InnerTubeAPI {
         // as a Short and override isShort in-place.
         let shortsFilter = SearchFilter(duration: .short)
         let searchGroup = try await search(query: "#shorts", filter: shortsFilter)
+        // Accept videos already flagged isShort=true by the parser (shortsLockupViewModel sets
+        // isShort=true directly), OR any video with duration ≤ 180 s that wasn't flagged.
+        // Do NOT reject on nil duration — shortsLockupViewModel items have nil duration.
         var shorts = searchGroup.videos.filter { $0.isShort || ($0.duration.map { $0 <= 180 } ?? false) }
         for i in shorts.indices where !shorts[i].isShort { shorts[i].isShort = true }
-        // Log per-video detail to diagnose why some search results are dropped
         let dropped = searchGroup.videos.filter { !($0.isShort || ($0.duration.map { $0 <= 180 } ?? false)) }
         for v in dropped {
             tubeLog.notice("fetchShorts DROPPED: id=\(v.id, privacy: .public) dur=\(v.duration.map { "\($0)" } ?? "nil", privacy: .public) isShort=\(v.isShort, privacy: .public) title=\(v.title.prefix(40), privacy: .public)")
         }
-        tubeLog.notice("fetchShorts search → \(searchGroup.videos.count, privacy: .public) total, \(shorts.count, privacy: .public) kept as shorts (\(dropped.count, privacy: .public) dropped: no isShort + dur>180 or nil), token=\(searchGroup.nextPageToken.map { String($0.prefix(16)) + "\u{2026}" } ?? "nil", privacy: .public)")
+        tubeLog.notice("fetchShorts search → \(searchGroup.videos.count, privacy: .public) total, \(shorts.count, privacy: .public) kept as shorts (\(dropped.count, privacy: .public) dropped), token=\(searchGroup.nextPageToken.map { String($0.prefix(16)) + "\u{2026}" } ?? "nil", privacy: .public)")
         // Tag token with "srch:" so fetchShortsMore() uses only the search continuation path.
         return VideoGroup(title: "Shorts", videos: shorts, nextPageToken: searchGroup.nextPageToken.map { "srch:" + $0 })
     }
