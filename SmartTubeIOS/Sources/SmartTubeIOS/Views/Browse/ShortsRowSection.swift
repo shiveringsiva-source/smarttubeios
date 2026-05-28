@@ -77,7 +77,10 @@ struct ShortsRowSection: View {
                 }
             }
             .padding(.horizontal)
-            .padding(.vertical, 4)
+            .padding(.top, 4)
+            // Bottom padding gives the scroll indicator room to render without
+            // being clipped by fixedSize(vertical: true) below.
+            .padding(.bottom, 12)
         }
         // Prevent the horizontal ScrollView from expanding to fill the full
         // height offered by a VStack parent (e.g. when pinned above a ScrollView).
