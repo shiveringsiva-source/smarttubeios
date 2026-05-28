@@ -623,17 +623,14 @@ extension PlaybackViewModel {
             // Apply ABR hints so AVPlayer selects the right variant immediately.
             // Consistent with the quality-switch path in PlaybackQualityManager.
             if info.hlsURL != nil {
-                if initialMaxH > 0 {
-                    let h = CGFloat(initialMaxH)
-                    item.preferredMaximumResolution = CGSize(width: h * 4, height: h)
-                    item.preferredPeakBitRate = peakBitRate(for: initialMaxH)
-                    playerLog.notice("Initial quality \(initialMaxH)p hint set (master with ABR)")
-                } else {
-                    // Auto: remove all constraints so AVPlayer picks the best available variant.
-                    item.preferredMaximumResolution = .zero
-                    item.preferredPeakBitRate = 0
-                    playerLog.notice("Initial quality Auto: ABR unconstrained (.zero / 0)")
-                }
+                // Fast-start: cap initial ABR at 360p so AVPlayer picks a low-bitrate
+                // variant for the first segment → first frame on screen as quickly as
+                // possible. After .readyToPlay the hint is upgraded to the user's
+                // preferred quality (see itemObserverTask ramp below).
+                item.preferredMaximumResolution = CGSize(width: 640, height: 360)
+                item.preferredPeakBitRate = peakBitRate(for: 360)
+                let target = initialMaxH > 0 ? "\(initialMaxH)p" : "Auto"
+                playerLog.notice("[fast-start] initial ABR hint → 360p (preferred target: \(target))")
             }
             // Observe item status using async/await (withCheckedContinuation is not needed
             // here since we only need to react to status changes, not await them).
@@ -686,7 +683,29 @@ extension PlaybackViewModel {
                         // Previously this was done after player.rate was set, which
                         // dismissed the spinner before buffering completed on slow
                         // networks (GitHub issue #53).
-                        self.isLoading = false                    case .failed:
+                        self.isLoading = false
+                        // Fast-start quality ramp: first frame is visible now. Upgrade
+                        // ABR hints to the user's preferred quality so AVPlayer switches
+                        // to a higher-quality variant during continued playback. This is
+                        // a hint update only — no item replacement, no stutter.
+                        if info.hlsURL != nil {
+                            let targetMaxH = self.settings.preferredQuality.maxHeight
+                            Task { [weak self, weak item] in
+                                try? await Task.sleep(for: .milliseconds(800))
+                                guard let self, !Task.isCancelled else { return }
+                                if let h = targetMaxH {
+                                    let hf = CGFloat(h)
+                                    item?.preferredMaximumResolution = CGSize(width: hf * 4, height: hf)
+                                    item?.preferredPeakBitRate = self.peakBitRate(for: h)
+                                    playerLog.notice("[fast-start] ABR ramp → \(h)p")
+                                } else {
+                                    item?.preferredMaximumResolution = .zero
+                                    item?.preferredPeakBitRate = 0
+                                    playerLog.notice("[fast-start] ABR ramp → Auto (unconstrained)")
+                                }
+                            }
+                        }
+                    case .failed:
                         let err = item.error.map { "\($0)" } ?? "nil"
                         playerLog.error("❌ AVPlayerItem failed: \(err)")
                         if let video = self.currentVideo {
@@ -998,6 +1017,14 @@ extension PlaybackViewModel {
                 relatedVideos = searched?.videos.filter { $0.id != video.id }.prefix(InnerTubeClients.maxVideoResults).map { $0 } ?? []
                 hasNext = !relatedVideos.isEmpty
             }
+        }
+        // If the related-videos fetch resolved hasNext=false but this is a queue
+        // video that still has a subsequent item, restore hasNext=true so the
+        // next button stays enabled for queue playback.
+        if !hasNext,
+           video.playlistId == CurrentQueueStore.playlistID,
+           let idx = video.playlistIndex {
+            hasNext = await CurrentQueueStore.shared.videoAt(index: idx + 1) != nil
         }
         if let status = nextInfo?.likeStatus { likeStatus = status }
         if let ch = nextInfo?.chapters, !ch.isEmpty {

@@ -503,6 +503,7 @@ final class PlaybackQualityManager {
         1080: 15_000_000,
          720:  8_000_000,
          480:  4_000_000,
+         360:  1_500_000,
     ]
 
     func peakBitRate(for height: Int) -> Double {
