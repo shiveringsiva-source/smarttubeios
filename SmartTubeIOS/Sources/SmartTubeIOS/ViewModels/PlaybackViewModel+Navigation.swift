@@ -8,6 +8,42 @@ private let playerLog = CrashlyticsLogger(category: "Player")
 
 extension PlaybackViewModel {
 
+    // MARK: - Next-video prefetch
+
+    /// Prefetches the queue video at `index` in the background so its PlayerInfo
+    /// is warm in `VideoPreloadCache` before `load(video:)` is called for it.
+    /// Uses `.immediate` priority so it jumps ahead of speculative card prefetches.
+    /// Safe to call multiple times for the same video — the cache deduplicates.
+    func prefetchQueueVideo(at index: Int) {
+        let sponsorCats = settings.activeSponsorCategories
+        let token = currentAuthToken
+        Task(priority: .userInitiated) { [weak self] in
+            guard let next = await CurrentQueueStore.shared.videoAt(index: index) else { return }
+            playerLog.notice("[prefetch] next-queue video index=\(index) id=\(next.id)")
+            await VideoPreloadCache.shared.prefetch(
+                videoId: next.id,
+                sponsorCategories: sponsorCats,
+                authToken: token,
+                priority: .immediate
+            )
+            // Also prefetch the one after — avoids a cold start if the user
+            // taps "next" quickly before the first prefetch completes.
+            guard let _ = self else { return }
+            let afterNext = await CurrentQueueStore.shared.videoAt(index: index + 1)
+            if let afterNext {
+                playerLog.notice("[prefetch] next+1 queue video index=\(index + 1) id=\(afterNext.id)")
+                await VideoPreloadCache.shared.prefetch(
+                    videoId: afterNext.id,
+                    sponsorCategories: sponsorCats,
+                    authToken: token,
+                    priority: .speculative
+                )
+            }
+        }
+    }
+
+    // MARK: - Navigation
+
     /// Play the next related video. Advances through the Current Queue if one is
     /// active; otherwise falls back to the first related (suggestion) video.
     public func playNext() {
@@ -16,6 +52,7 @@ extension PlaybackViewModel {
             Task {
                 if let next = await CurrentQueueStore.shared.videoAt(index: idx + 1) {
                     playerLog.notice("playNext (queue): index=\(idx + 1) id=\(next.id)")
+                    prefetchQueueVideo(at: idx + 2)
                     load(video: next)
                 } else {
                     playerLog.notice("playNext (queue): exhausted at index=\(idx), clearing")
@@ -85,6 +122,7 @@ extension PlaybackViewModel {
                 } else {
                     if let next = await CurrentQueueStore.shared.videoAt(index: idx + 1) {
                         playerLog.notice("Autoplay (queue): index=\(idx + 1) id=\(next.id)")
+                        prefetchQueueVideo(at: idx + 2)
                         load(video: next)
                     } else {
                         playerLog.notice("Autoplay (queue): exhausted, clearing")

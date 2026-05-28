@@ -100,6 +100,15 @@ extension PlaybackViewModel {
         }
 
         loadTask = Task { await loadAsync(video: video) }
+
+        // Kick off a background prefetch for the next video in the queue
+        // so its PlayerInfo is warm in VideoPreloadCache before it is needed.
+        // This fires immediately on load() so the full video duration is
+        // available as warm-up time, rather than waiting until playback ends.
+        if video.playlistId == CurrentQueueStore.playlistID,
+           let nextIndex = video.playlistIndex.map({ $0 + 1 }) {
+            prefetchQueueVideo(at: nextIndex)
+        }
     }
 
     /// User-initiated retry after all automatic fallbacks have been exhausted.
