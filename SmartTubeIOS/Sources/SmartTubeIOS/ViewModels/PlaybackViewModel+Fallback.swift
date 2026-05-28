@@ -62,6 +62,10 @@ extension PlaybackViewModel {
         // Started as fire-and-forget in loadAsync; we wait up to 6 s here before
         // falling through to WKWebView HLS so cold-start latency stays bounded.
         // If BotGuardWV is already ready (cached from a prior video), the mint is instant (<5 ms).
+        // parallelWKURL holds a pre-fetched WKWebView HLS URL when Phase -2 starts WKWebView
+        // extraction concurrently with its fast-fail BotGuard attempts, eliminating the
+        // 4–5 s serial wait that would otherwise occur in Phase -1b.
+        var parallelWKURL: URL? = nil
         if !BotGuardWebViewRunner.shared.isReady {
             playerLog.notice("[BotGuardWV] waiting up to 6 s for minted token before WKWebView HLS…")
             await withTaskGroup(of: Void.self) { group in
@@ -84,6 +88,14 @@ extension PlaybackViewModel {
                 await api.storeExternalPoToken(mintedToken, for: video.id)
                 hasMintedPoToken = true
                 playerLog.notice("[BotGuardWV] ✅ minted token (len=\(mintedToken.count) webVD.len=\(webVD.count)) — trying WEB client adaptive before WKWebView HLS")
+
+                // Start WKWebView HLS extraction in parallel with Phase -2 fast-fail attempts.
+                // WKWebView takes 4–5 s; by launching it now (while the Phase -2 BotGuard paths
+                // run sequentially), it is typically done or nearly done by the time all Phase -2
+                // paths fail, eliminating the 4–5 s serial wait that previously occurred after.
+                let wkHLSTask = Task { @MainActor in
+                    await YouTubeWebViewHLSExtractor.shared.extractHLSURL(videoId: video.id)
+                }
 
                 // --- WEB client with pot= (yt-dlp approach) ---
                 // WEB client (nameID=1) adaptive stream URLs accept WEB BotGuard pot= tokens.
@@ -109,6 +121,7 @@ extension PlaybackViewModel {
                     }
                     if await tryAllStreams(video: video, info: webInfo, label: "BotGuardWV", skipMuxed: true) {
                         playerLog.notice("[BotGuardWV] ✅ adaptive streaming via minted BotGuard token — WKWebView HLS not needed")
+                        wkHLSTask.cancel()
                         if let playerInfo { launchPhase2(video: video, info: playerInfo, cached: cached) }
                         return
                     }
@@ -134,6 +147,7 @@ extension PlaybackViewModel {
                             switch st {
                             case .readyToPlay:
                                 playerLog.notice("[BotGuardWV] ✅ adaptive streaming via minted BotGuard token — WKWebView HLS not needed")
+                                wkHLSTask.cancel()
                                 if let playerInfo { launchPhase2(video: video, info: playerInfo, cached: cached) }
                                 return
                             case .failed:
@@ -156,6 +170,7 @@ extension PlaybackViewModel {
                         let iosInfo = try await api.fetchPlayerInfo(videoId: video.id)
                         if await tryAllStreams(video: video, info: iosInfo, label: "BotGuardWV", skipMuxed: true) {
                             playerLog.notice("[BotGuardWV] ✅ adaptive streaming via minted BotGuard token — WKWebView HLS not needed")
+                            wkHLSTask.cancel()
                             if let playerInfo { launchPhase2(video: video, info: playerInfo, cached: cached) }
                             return
                         }
@@ -163,35 +178,10 @@ extension PlaybackViewModel {
                         playerLog.notice("[BotGuardWV] ⚠️ iOS adaptive fetch failed: \(error)")
                     }
 
-                    // Android VR adaptive attempt — ANDROID_VR client has an unconditional
-                    // rqh=1 exemption (isAndroidVR=true bypasses the CDN skip guard).
-                    // The VR client uses an Oculus UA without OAuth Bearer; CDN handles it
-                    // differently from iOS/Android — sometimes works for rqh=1 videos.
-                    // Phase 1 exhaustive retry also tries Android VR but only runs after
-                    // WKWebView HLS (which always succeeds for these videos), so this is the
-                    // first opportunity to test Android VR for the BotGuard path.
-                    playerLog.notice("[BotGuardWV] trying Android VR adaptive (ANDROID_VR rqh=1 native exempt + BotGuard cookies)")
-                    do {
-                        var vrInfo = try await api.fetchPlayerInfoAndroidVR(videoId: video.id)
-                        // fetchPlayerInfoAndroidVR does NOT include pot= in the request body,
-                        // so the returned format URLs don't have pot= either. Apply it now
-                        // so CDN auth validation sees the minted BotGuard token in each URL.
-                        // CDN already returns HTTP 206 WITHOUT pot= (ANDROID_VR is less strict
-                        // than iOS); adding pot= may unlock full-speed delivery.
-                        vrInfo = vrInfo.applyingPoToken(mintedToken)
-                        playerLog.notice("[BotGuardWV] applied pot= to Android VR URLs (len=\(mintedToken.count))")
-                        // Use label "BotGuardWV" so isBotGuardMinted=true fires in attemptComposition,
-                        // injecting youtube.com cookies (VISITOR_INFO1_LIVE) alongside the
-                        // BotGuard pot= token. isAndroidVR=true also fires (from c=ANDROID_VR URL),
-                        // so the rqh=1 skip guard is bypassed through both exemptions.
-                        if await tryAllStreams(video: video, info: vrInfo, label: "BotGuardWV", skipMuxed: true) {
-                            playerLog.notice("[BotGuardWV] ✅ adaptive streaming via minted BotGuard token — WKWebView HLS not needed")
-                            if let playerInfo { launchPhase2(video: video, info: playerInfo, cached: cached) }
-                            return
-                        }
-                    } catch {
-                        playerLog.notice("[BotGuardWV] ⚠️ Android VR adaptive fetch failed: \(error)")
-                    }
+                    // Android VR is intentionally skipped here: CDN throttles Android VR
+                    // byte-range requests after the first probe, causing an 8 s timeout
+                    // that is wasted time for all rqh=1 videos. Android VR is still tried
+                    // in Phase 1 (exhaustive retry) for the rare case where WKWebView fails.
 
                     // Android adaptive attempt — also try c=ANDROID with minted token + cookies.
                     // ANDROID URLs have rqh=1 like iOS, but CDN behavior may differ for Android UA.
@@ -200,6 +190,7 @@ extension PlaybackViewModel {
                         let androidInfo = try await api.fetchPlayerInfoAndroid(videoId: video.id)
                         if await tryAllStreams(video: video, info: androidInfo, label: "BotGuardWV", skipMuxed: true) {
                             playerLog.notice("[BotGuardWV] ✅ adaptive streaming via minted BotGuard token — WKWebView HLS not needed")
+                            wkHLSTask.cancel()
                             if let playerInfo { launchPhase2(video: video, info: playerInfo, cached: cached) }
                             return
                         }
@@ -207,10 +198,13 @@ extension PlaybackViewModel {
                         playerLog.notice("[BotGuardWV] ⚠️ Android adaptive fetch failed: \(error)")
                     }
 
-                    playerLog.notice("[BotGuardWV] ⚠️ WEB client adaptive with pot= failed — falling to WKWebView HLS")
+                    playerLog.notice("[BotGuardWV] ⚠️ WEB client adaptive with pot= failed — awaiting parallel WKWebView HLS")
                 } catch {
-                    playerLog.notice("[BotGuardWV] ⚠️ WEB client fetch failed: \(error) — falling to WKWebView HLS")
+                    playerLog.notice("[BotGuardWV] ⚠️ WEB client fetch failed: \(error) — awaiting parallel WKWebView HLS")
                 }
+                // Await the parallel WKWebView task (likely already done by now).
+                // Fall through to Phase -1b with the pre-fetched URL.
+                parallelWKURL = await wkHLSTask.value
             }
         } else {
             playerLog.notice("[BotGuardWV] not ready after 6 s wait — skipping to WKWebView HLS")
@@ -225,8 +219,15 @@ extension PlaybackViewModel {
         // spc= and make its internal /player call; we intercept that response to get the URL.
         // This runs once before the 3-attempt client loop to avoid repeated 8s CDN timeouts
         // from rqh=1 adaptive streams that AVFoundation's byte-range probe pattern triggers.
-        playerLog.notice("⚠️ [webView] fetching HLS manifest URL via WKWebView YouTube player")
-        let webViewURL = await YouTubeWebViewHLSExtractor.shared.extractHLSURL(videoId: video.id)
+        let webViewURL: URL?
+        if let preloaded = parallelWKURL {
+            // Phase -2 pre-fetched this concurrently — no additional wait needed.
+            playerLog.notice("⚠️ [webView] using parallel WKWebView HLS URL (already ready — saved serial 4–5 s wait)")
+            webViewURL = preloaded
+        } else {
+            playerLog.notice("⚠️ [webView] fetching HLS manifest URL via WKWebView YouTube player")
+            webViewURL = await YouTubeWebViewHLSExtractor.shared.extractHLSURL(videoId: video.id)
+        }
         let nSolver = YouTubeWebViewHLSExtractor.shared.extractedNSolver
         // Option B: if the YouTube player running in the WKWebView produced a BotGuard
         // pot= token (present in serviceIntegrityDimensions.poToken of its /player call),

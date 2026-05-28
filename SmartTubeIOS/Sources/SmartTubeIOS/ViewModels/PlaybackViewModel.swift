@@ -38,6 +38,8 @@ public final class PlaybackViewModel {
     /// After first playback begins the flag is cleared, so quality-switch
     /// reloads can wait the full CDN time without being cut short.
     var needsQuickStartup: Bool = false
+    /// Timestamp set at the start of `load(video:)` — used to log total video-start latency.
+    var videoLoadStartedAt: Date = .distantPast
     public internal(set) var isPlaying: Bool = false
     public internal(set) var videoEnded: Bool = false
     public internal(set) var currentTime: TimeInterval = 0
