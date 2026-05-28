@@ -160,6 +160,9 @@ extension InnerTubeAPI {
         // like "Today", "Yesterday", "This week" that is the closest available date
         // when the tile metadata lines contain no relative date string.
         var currentSectionDate: Date? = nil
+        // Diagnostic counters for unknown/skipped renderers — logged at the end.
+        var rendererHits: [String: Int] = [:]
+        var rendererMisses: [String: Int] = [:]
 
         // Walk the renderer tree to find videoRenderers and continuationItemRenderers.
         // Handles WEB (videoRenderer, richItemRenderer, compactVideoRenderer),
@@ -202,22 +205,55 @@ extension InnerTubeAPI {
                     if var v = parseTileRenderer(renderer) {
                         if v.publishedAt == nil { v.publishedAt = currentSectionDate }
                         videos.append(v)
+                        rendererHits["tileRenderer", default: 0] += 1
+                    } else {
+                        rendererMisses["tileRenderer", default: 0] += 1
                     }
                 } else if let renderer = dict["videoRenderer"] as? [String: Any] {
-                    if let v = parseVideoRenderer(renderer) { videos.append(v) }
+                    if let v = parseVideoRenderer(renderer) {
+                        videos.append(v)
+                        rendererHits["videoRenderer", default: 0] += 1
+                    } else {
+                        rendererMisses["videoRenderer", default: 0] += 1
+                    }
                 } else if let renderer = dict["gridVideoRenderer"] as? [String: Any] {
-                    if let v = parseVideoRenderer(renderer) { videos.append(v) }
+                    if let v = parseVideoRenderer(renderer) {
+                        videos.append(v)
+                        rendererHits["gridVideoRenderer", default: 0] += 1
+                    } else {
+                        rendererMisses["gridVideoRenderer", default: 0] += 1
+                    }
                 } else if let renderer = dict["reelItemRenderer"] as? [String: Any] {
-                    if let v = parseReelItemRenderer(renderer) { videos.append(v) }
+                    if let v = parseReelItemRenderer(renderer) {
+                        videos.append(v)
+                        rendererHits["reelItemRenderer", default: 0] += 1
+                    } else {
+                        rendererMisses["reelItemRenderer", default: 0] += 1
+                    }
                 } else if let renderer = dict["richItemRenderer"] as? [String: Any],
                           let content = renderer["content"] as? [String: Any] {
                     if let videoRenderer = content["videoRenderer"] as? [String: Any] {
-                        if let v = parseVideoRenderer(videoRenderer) { videos.append(v) }
+                        if let v = parseVideoRenderer(videoRenderer) {
+                            videos.append(v)
+                            rendererHits["richItem/videoRenderer", default: 0] += 1
+                        } else {
+                            rendererMisses["richItem/videoRenderer", default: 0] += 1
+                        }
                     } else if let reelRenderer = content["reelItemRenderer"] as? [String: Any] {
-                        if let v = parseReelItemRenderer(reelRenderer) { videos.append(v) }
+                        if let v = parseReelItemRenderer(reelRenderer) {
+                            videos.append(v)
+                            rendererHits["richItem/reelItemRenderer", default: 0] += 1
+                        } else {
+                            rendererMisses["richItem/reelItemRenderer", default: 0] += 1
+                        }
                     } else if let lockup = content["lockupViewModel"] as? [String: Any] {
                         // WEB home v2: richItemRenderer wraps lockupViewModel
-                        if let v = parseLockupViewModel(lockup) { videos.append(v) }
+                        if let v = parseLockupViewModel(lockup) {
+                            videos.append(v)
+                            rendererHits["richItem/lockupViewModel", default: 0] += 1
+                        } else {
+                            rendererMisses["richItem/lockupViewModel", default: 0] += 1
+                        }
                     } else if let contItem = content["continuationItemRenderer"] as? [String: Any],
                               let endpoint = contItem["continuationEndpoint"] as? [String: Any],
                               let command = endpoint["continuationCommand"] as? [String: Any],
@@ -225,18 +261,36 @@ extension InnerTubeAPI {
                         // Continuation token nested inside richItemRenderer
                         nextPageToken = token
                     } else {
+                        // Unknown richItemRenderer content type — log what keys are present
+                        let unknownKeys = content.keys.sorted().joined(separator: ",")
+                        rendererMisses["richItem/unknown[\(unknownKeys)]", default: 0] += 1
                         for value in content.values { walk(value, depth: depth + 1) }
                     }
                 } else if let renderer = dict["compactVideoRenderer"] as? [String: Any] {
-                    if let v = parseVideoRenderer(renderer) { videos.append(v) }
+                    if let v = parseVideoRenderer(renderer) {
+                        videos.append(v)
+                        rendererHits["compactVideoRenderer", default: 0] += 1
+                    } else {
+                        rendererMisses["compactVideoRenderer", default: 0] += 1
+                    }
                 } else if let renderer = dict["playlistVideoRenderer"] as? [String: Any] {
                     // WEB browse response for VL<playlistId> — playlist video items
                     // BUG-012 fix: use parsePlaylistVideoRenderer instead of parseVideoRenderer
                     // so shortBylineText/shortViewCountText fields are read correctly.
-                    if let v = parsePlaylistVideoRenderer(renderer) { videos.append(v) }
+                    if let v = parsePlaylistVideoRenderer(renderer) {
+                        videos.append(v)
+                        rendererHits["playlistVideoRenderer", default: 0] += 1
+                    } else {
+                        rendererMisses["playlistVideoRenderer", default: 0] += 1
+                    }
                 } else if let renderer = dict["lockupViewModel"] as? [String: Any] {
                     // WEB home v2 (LockupItem in Android) — lockupViewModel
-                    if let v = parseLockupViewModel(renderer) { videos.append(v) }
+                    if let v = parseLockupViewModel(renderer) {
+                        videos.append(v)
+                        rendererHits["lockupViewModel", default: 0] += 1
+                    } else {
+                        rendererMisses["lockupViewModel", default: 0] += 1
+                    }
                 } else if let contItem = dict["continuationItemRenderer"] as? [String: Any],
                           let endpoint = contItem["continuationEndpoint"] as? [String: Any],
                           let command = endpoint["continuationCommand"] as? [String: Any],
@@ -252,7 +306,9 @@ extension InnerTubeAPI {
 
         walk(json)
         let shortsCount = videos.filter { $0.isShort }.count
-        tubeLog.notice("parseVideoGroup '\(title ?? "nil", privacy: .public)' → \(videos.count, privacy: .public) videos (\(videos.count - shortsCount, privacy: .public) regular, \(shortsCount, privacy: .public) shorts), nextPage=\(nextPageToken != nil ? "yes" : "no", privacy: .public)")
+        let hitsDesc = rendererHits.sorted(by: { $0.key < $1.key }).map { "\($0.key)=\($0.value)" }.joined(separator: " ")
+        let missDesc = rendererMisses.sorted(by: { $0.key < $1.key }).map { "\($0.key)=\($0.value)" }.joined(separator: " ")
+        tubeLog.notice("parseVideoGroup '\(title ?? "nil", privacy: .public)' → \(videos.count, privacy: .public) videos (\(videos.count - shortsCount, privacy: .public) regular, \(shortsCount, privacy: .public) shorts), nextPage=\(nextPageToken != nil ? "yes" : "no", privacy: .public) | hits: \(hitsDesc.isEmpty ? "none" : hitsDesc, privacy: .public) | misses: \(missDesc.isEmpty ? "none" : missDesc, privacy: .public)")
         return VideoGroup(title: title, videos: videos, nextPageToken: nextPageToken)
     }
 

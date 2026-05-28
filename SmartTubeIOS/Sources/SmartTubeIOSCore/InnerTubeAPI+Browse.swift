@@ -204,7 +204,12 @@ extension InnerTubeAPI {
         let searchGroup = try await search(query: "#shorts", filter: shortsFilter)
         var shorts = searchGroup.videos.filter { $0.isShort || ($0.duration.map { $0 <= 180 } ?? false) }
         for i in shorts.indices where !shorts[i].isShort { shorts[i].isShort = true }
-        tubeLog.notice("fetchShorts search → \(searchGroup.videos.count, privacy: .public) total, \(shorts.count, privacy: .public) shorts, token=\(searchGroup.nextPageToken.map { String($0.prefix(16)) + "\u{2026}" } ?? "nil", privacy: .public)")
+        // Log per-video detail to diagnose why some search results are dropped
+        let dropped = searchGroup.videos.filter { !($0.isShort || ($0.duration.map { $0 <= 180 } ?? false)) }
+        for v in dropped {
+            tubeLog.notice("fetchShorts DROPPED: id=\(v.id, privacy: .public) dur=\(v.duration.map { "\($0)" } ?? "nil", privacy: .public) isShort=\(v.isShort, privacy: .public) title=\(v.title.prefix(40), privacy: .public)")
+        }
+        tubeLog.notice("fetchShorts search → \(searchGroup.videos.count, privacy: .public) total, \(shorts.count, privacy: .public) kept as shorts (\(dropped.count, privacy: .public) dropped: no isShort + dur>180 or nil), token=\(searchGroup.nextPageToken.map { String($0.prefix(16)) + "\u{2026}" } ?? "nil", privacy: .public)")
         // Tag token with "srch:" so fetchShortsMore() uses only the search continuation path.
         return VideoGroup(title: "Shorts", videos: shorts, nextPageToken: searchGroup.nextPageToken.map { "srch:" + $0 })
     }
@@ -262,7 +267,11 @@ extension InnerTubeAPI {
             let group = try await search(query: "#shorts", continuationToken: rawToken)
             var shorts = group.videos.filter { $0.isShort || ($0.duration.map { $0 <= 180 } ?? false) }
             for i in shorts.indices where !shorts[i].isShort { shorts[i].isShort = true }
-            tubeLog.notice("fetchShortsMore search → \(shorts.count, privacy: .public) shorts")
+            let dropped = group.videos.filter { !($0.isShort || ($0.duration.map { $0 <= 180 } ?? false)) }
+            for v in dropped {
+                tubeLog.notice("fetchShortsMore DROPPED: id=\(v.id, privacy: .public) dur=\(v.duration.map { "\($0)" } ?? "nil", privacy: .public) isShort=\(v.isShort, privacy: .public) title=\(v.title.prefix(40), privacy: .public)")
+            }
+            tubeLog.notice("fetchShortsMore search → \(group.videos.count, privacy: .public) total, \(shorts.count, privacy: .public) kept (\(dropped.count, privacy: .public) dropped), nextToken=\(group.nextPageToken != nil ? "yes" : "no", privacy: .public)")
             return VideoGroup(title: "Shorts", videos: shorts, nextPageToken: group.nextPageToken.map { "srch:" + $0 })
 
         default:
