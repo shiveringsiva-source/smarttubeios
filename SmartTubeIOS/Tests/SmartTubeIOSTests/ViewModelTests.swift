@@ -181,6 +181,11 @@ final class MockInnerTubeAPI: InnerTubeAPIProtocol {
         calls.append(Call(method: "sendFeedback", args: [token]))
         if let e = errorToThrow { throw e }
     }
+
+    func sendFeedbackForVideo(videoId: String, iconType: String) async throws {
+        calls.append(Call(method: "sendFeedbackForVideo", args: [videoId, iconType]))
+        if let e = errorToThrow { throw e }
+    }
 }
 
 // MARK: - Helpers

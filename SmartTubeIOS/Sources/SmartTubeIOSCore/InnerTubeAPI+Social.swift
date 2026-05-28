@@ -68,6 +68,56 @@ extension InnerTubeAPI {
         tubeLog.notice("sendFeedback token=\(token.prefix(20), privacy: .public)…")
     }
 
+    /// Sends a feed feedback signal when no pre-fetched token is available.
+    ///
+    /// The TV client home feed omits per-video feedback menu items, so
+    /// `Video.notInterestedToken` / `dontLikeToken` / `hideChannelToken` are `nil`
+    /// for authenticated home-feed results. This method fetches the token on-demand
+    /// via a WEB client `/next` request for the given video, then calls `sendFeedback`.
+    ///
+    /// - Parameters:
+    ///   - videoId: The YouTube video ID to act on.
+    ///   - iconType: The InnerTube icon type string identifying the action:
+    ///     `"NOT_INTERESTED"`, `"DISLIKE"`, or `"BLOCK_CHANNEL"`.
+    ///
+    /// If YouTube's response does not include a matching token, the method returns
+    /// silently (it logs a warning but does not throw) so the caller's hide-from-feed
+    /// notification can still be posted.
+    public func sendFeedbackForVideo(videoId: String, iconType: String) async throws {
+        var body = makeBody(client: webClientContext)
+        body["videoId"] = videoId
+        let nextData = try await post(endpoint: "next", body: body)
+        guard let token = parseFeedbackToken(iconType: iconType, from: nextData) else {
+            tubeLog.warning("sendFeedbackForVideo: no \(iconType, privacy: .public) token in /next for videoId=\(videoId, privacy: .public)")
+            return
+        }
+        try await sendFeedback(token: token)
+    }
+
+    /// Walks a `/next` (WEB) response and returns the first `feedbackEndpoint` token
+    /// whose `menuServiceItemRenderer.icon.iconType` matches `iconType`.
+    private func parseFeedbackToken(iconType: String, from json: [String: Any]) -> String? {
+        var found: String? = nil
+        func walk(_ obj: Any, depth: Int = 0) {
+            guard found == nil, depth < 50 else { return }
+            if let dict = obj as? [String: Any] {
+                if let svc = dict["menuServiceItemRenderer"] as? [String: Any],
+                   let endpoint = svc["serviceEndpoint"] as? [String: Any],
+                   let token = (endpoint["feedbackEndpoint"] as? [String: Any])?["feedbackToken"] as? String,
+                   let type = (svc["icon"] as? [String: Any])?["iconType"] as? String,
+                   type == iconType {
+                    found = token
+                    return
+                }
+                for value in dict.values { walk(value, depth: depth + 1) }
+            } else if let arr = obj as? [Any] {
+                for item in arr { walk(item, depth: depth + 1) }
+            }
+        }
+        walk(json)
+        return found
+    }
+
     // MARK: - Next (related videos / SuggestionsController equivalent)
 
     /// Fetches related/suggested videos and the current like status for a video.

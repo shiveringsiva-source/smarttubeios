@@ -159,7 +159,7 @@ extension InnerTubeAPI {
         guard let token = authToken else {
             return try await postPlayer(body: body)
         }
-        guard var comps = URLComponents(url: playerBaseURL.appendingPathComponent("player"),
+        guard let comps = URLComponents(url: playerBaseURL.appendingPathComponent("player"),
                                         resolvingAgainstBaseURL: false) else {
             throw APIError.invalidURL("player")
         }

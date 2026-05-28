@@ -332,17 +332,13 @@ public final class HomeViewModel {
         if let idx = sections.firstIndex(where: { $0.section.type == .subscriptions }),
            let token = sections[idx].nextPageToken {
             homeLog.notice("loadNextShortsPage subs: fetching token=\(String(token.prefix(16)))\u{2026}")
-            do {
-                let more = try await Self.fetchMoreVideos(type: .subscriptions, token: token, api: api)
-                let existingIDs = Set(sections[idx].videos.map(\.id))
-                let newVideos = more.0.filter { !existingIDs.contains($0.id) }
-                sections[idx].videos.append(contentsOf: newVideos)
-                sections[idx].nextPageToken = more.1
-                let newShorts = newVideos.filter { $0.isShort }.count
-                homeLog.notice("loadNextShortsPage subs: added \(newVideos.count) (\(newShorts) shorts) hasMore=\(more.1 != nil)")
-            } catch {
-                homeLog.error("loadNextShortsPage subs: failed: \(error.localizedDescription)")
-            }
+            let more = await Self.fetchMoreVideos(type: .subscriptions, token: token, api: api)
+            let existingIDs = Set(sections[idx].videos.map(\.id))
+            let newVideos = more.0.filter { !existingIDs.contains($0.id) }
+            sections[idx].videos.append(contentsOf: newVideos)
+            sections[idx].nextPageToken = more.1
+            let newShorts = newVideos.filter { $0.isShort }.count
+            homeLog.notice("loadNextShortsPage subs: added \(newVideos.count) (\(newShorts) shorts) hasMore=\(more.1 != nil)")
         }
     }
 

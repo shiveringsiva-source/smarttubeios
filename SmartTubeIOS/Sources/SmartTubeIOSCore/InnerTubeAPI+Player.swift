@@ -67,7 +67,6 @@ extension InnerTubeAPI {
         // Fall back to the API's own visitorData when webVD is not available.
         var clientFields = (webSafariClientContext["client"] as? [String: Any]) ?? [:]
         let apiVD = visitorData ?? ""
-        let useWebVD = webVD != nil && !webVD!.isEmpty
         tubeLog.notice("[InnerTube] fetchPlayerInfoWebWithPoToken: apiVD.len=\(apiVD.count) webVD.len=\(webVD?.count ?? 0) match=\(apiVD == (webVD ?? ""))")
         if let vd = webVD, !vd.isEmpty {
             clientFields["visitorData"] = vd

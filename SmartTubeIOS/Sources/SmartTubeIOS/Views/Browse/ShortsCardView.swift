@@ -114,38 +114,46 @@ struct ShortsCardView: View {
                 Label("Play Next", systemImage: "text.insert")
             }
             if authService.isSignedIn {
-                if let token = video.notInterestedToken {
-                    Button(role: .destructive) {
-                        Task {
+                Button(role: .destructive) {
+                    Task {
+                        if let token = video.notInterestedToken {
                             try? await api.sendFeedback(token: token)
-                            NotificationCenter.default.post(
-                                name: .hideVideoFromFeed,
-                                object: nil,
-                                userInfo: ["videoId": video.id]
-                            )
+                        } else {
+                            try? await api.sendFeedbackForVideo(videoId: video.id, iconType: "NOT_INTERESTED")
                         }
-                    } label: {
-                        Label("Not Interested", systemImage: "hand.raised")
+                        NotificationCenter.default.post(
+                            name: .hideVideoFromFeed,
+                            object: nil,
+                            userInfo: ["videoId": video.id]
+                        )
                     }
+                } label: {
+                    Label("Not Interested", systemImage: "hand.raised")
                 }
-                if let token = video.dontLikeToken {
-                    Button(role: .destructive) {
-                        Task {
+                Button(role: .destructive) {
+                    Task {
+                        if let token = video.dontLikeToken {
                             try? await api.sendFeedback(token: token)
-                            NotificationCenter.default.post(
-                                name: .hideVideoFromFeed,
-                                object: nil,
-                                userInfo: ["videoId": video.id]
-                            )
+                        } else {
+                            try? await api.sendFeedbackForVideo(videoId: video.id, iconType: "DISLIKE")
                         }
-                    } label: {
-                        Label("Don't Like This Video", systemImage: "hand.thumbsdown")
+                        NotificationCenter.default.post(
+                            name: .hideVideoFromFeed,
+                            object: nil,
+                            userInfo: ["videoId": video.id]
+                        )
                     }
+                } label: {
+                    Label("Don't Like This Video", systemImage: "hand.thumbsdown")
                 }
-                if let token = video.hideChannelToken, let channelId = video.channelId, !channelId.isEmpty {
+                if let channelId = video.channelId, !channelId.isEmpty {
                     Button(role: .destructive) {
                         Task {
-                            try? await api.sendFeedback(token: token)
+                            if let token = video.hideChannelToken {
+                                try? await api.sendFeedback(token: token)
+                            } else {
+                                try? await api.sendFeedbackForVideo(videoId: video.id, iconType: "BLOCK_CHANNEL")
+                            }
                             store.settings.blockedChannels[channelId] = video.channelTitle
                             NotificationCenter.default.post(
                                 name: .hideChannelFromFeed,
