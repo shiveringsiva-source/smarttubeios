@@ -49,7 +49,8 @@ extension PlaybackViewModel {
                     if let playerInfo { launchPhase2(video: video, info: playerInfo, cached: cached) }
                     return
                 }
-                playerLog.notice("[wkHLS] cached URL failed (tryWebViewHLS) — falling back to live WKWebView")
+                playerLog.notice("[wkHLS] cached URL failed (tryWebViewHLS) — invalidating and falling back to live WKWebView")
+                await VideoPreloadCache.shared.invalidateWKHLSURL(for: video.id)
             } else {
                 playerLog.notice("[wkHLS] cached URL expired (probe 403/timeout) — invalidating and using live extraction")
                 await VideoPreloadCache.shared.invalidateWKHLSURL(for: video.id)

@@ -918,6 +918,15 @@ extension PlaybackViewModel {
         prefetchTask?.cancel()
         prefetchTask = nil
         AVAssetTrackCache.shared.clear()
+        // Evict the cached WKWebView HLS URL for the video that just stopped.
+        // CDN stream sessions are single-use: re-using the same manifest URL with a
+        // new AVPlayerItem on a subsequent tap resumes from the previous position or
+        // serves recycled session content, which the user sees as a wrong / different
+        // video for ~1s before the 403 fires. Evicting here forces a fresh extraction
+        // on re-tap while still allowing neighbour pre-warms to populate the cache.
+        if let stoppedVideoId = currentVideo?.id {
+            Task { await VideoPreloadCache.shared.invalidateWKHLSURL(for: stoppedVideoId) }
+        }
         itemObserverTask?.cancel()
         itemObserverTask = nil
         endObserverTask?.cancel()

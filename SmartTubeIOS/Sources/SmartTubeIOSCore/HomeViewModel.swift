@@ -36,6 +36,10 @@ public final class HomeViewModel {
     public private(set) var isRefreshing: Bool = false
     /// Timestamp of the last successful load. Used for staleness checks.
     public private(set) var loadedAt: Date? = nil
+    /// Frozen snapshot of the interleaved home feed. Updated once both sections
+    /// finish loading (avoiding mid-load rearrangement). Appended to during
+    /// pagination without ever reordering existing items.
+    public private(set) var mergedVideos: [Video] = []
 
     // MARK: - Shelf definitions (in display order)
 
@@ -54,11 +58,11 @@ public final class HomeViewModel {
         sections.contains { $0.isLoading }
     }
 
-    /// A single interleaved video list that mixes recommended and subscription
-    /// videos: one subscription video is inserted after every `interleaveRatio`
-    /// recommended videos.  Subscription videos that duplicate an already-seen
-    /// recommended ID are skipped.
-    public var mergedVideos: [Video] {
+    /// Rebuilds `mergedVideos` from both sections' current video lists.
+    /// Called once after a full load completes so mid-load arrivals never
+    /// rearrange already-rendered cards.  Not called during pagination —
+    /// `loadMore` appends to `mergedVideos` directly to keep positions stable.
+    private func rebuildMergedVideos() {
         let recState  = sections.first { $0.section.type == .home }
         let subState  = sections.first { $0.section.type == .subscriptions }
         let recs  = recState?.videos  ?? []
@@ -68,17 +72,19 @@ public final class HomeViewModel {
             var seen = Set<String>()
             let deduped = recs.filter { seen.insert($0.id).inserted }
             if deduped.count != recs.count {
-                homeLog.notice("mergedVideos: recs-only dedup removed \(recs.count - deduped.count) duplicate(s) (raw=\(recs.count))")
+                homeLog.notice("rebuildMergedVideos: recs-only dedup removed \(recs.count - deduped.count) duplicate(s) (raw=\(recs.count))")
             }
-            return deduped
+            mergedVideos = deduped
+            return
         }
         guard !recs.isEmpty else {
             var seen = Set<String>()
             let deduped = subs.filter { seen.insert($0.id).inserted }
             if deduped.count != subs.count {
-                homeLog.notice("mergedVideos: subs-only dedup removed \(subs.count - deduped.count) duplicate(s) (raw=\(subs.count))")
+                homeLog.notice("rebuildMergedVideos: subs-only dedup removed \(subs.count - deduped.count) duplicate(s) (raw=\(subs.count))")
             }
-            return deduped
+            mergedVideos = deduped
+            return
         }
 
         let recIds = Set(recs.map(\.id))
@@ -96,7 +102,6 @@ public final class HomeViewModel {
                 subIndex += 1
             }
         }
-        // Append any remaining subscription videos after all recommended videos.
         if subIndex < uniqueSubs.count {
             result.append(contentsOf: uniqueSubs[subIndex...])
         }
@@ -105,9 +110,9 @@ public final class HomeViewModel {
         var seen = Set<String>()
         let deduped = result.filter { seen.insert($0.id).inserted }
         if deduped.count != result.count {
-            homeLog.notice("mergedVideos: final dedup removed \(result.count - deduped.count) duplicate(s) (subs+recs raw=\(result.count))")
+            homeLog.notice("rebuildMergedVideos: final dedup removed \(result.count - deduped.count) duplicate(s) (subs+recs raw=\(result.count))")
         }
-        return deduped
+        mergedVideos = deduped
     }
 
     /// Non-Short videos from the interleaved home feed.
@@ -164,12 +169,14 @@ public final class HomeViewModel {
         for i in sections.indices {
             sections[i].videos.removeAll { $0.id == id }
         }
+        mergedVideos.removeAll { $0.id == id }
     }
 
     public func removeChannel(id: String) {
         for i in sections.indices {
             sections[i].videos.removeAll { $0.channelId == id }
         }
+        mergedVideos.removeAll { $0.channelId == id }
     }
 
     // MARK: - Public API
@@ -179,6 +186,7 @@ public final class HomeViewModel {
         loadedAt = nil
         isRefreshing = true
         shortsVideos = []
+        mergedVideos = []
         for i in sections.indices {
             sections[i].videos = []
             sections[i].isLoading = true
@@ -209,9 +217,19 @@ public final class HomeViewModel {
                         sections[idx].nextPageToken = token
                         sections[idx].isLoading = false
                         sections[idx].hasFailed = videos.isEmpty
+                        // Show the first-arrived section immediately as a flat list so
+                        // the user sees content right away.  We do NOT interleave here —
+                        // that avoids re-ordering cards when the second section arrives.
+                        if mergedVideos.isEmpty, !videos.isEmpty {
+                            mergedVideos = videos
+                        }
                     }
                 }
             }
+            // Both sections are now loaded. Rebuild the full interleaved list once,
+            // replacing the partial first-arrived list. This is a single atomic swap
+            // rather than incremental insertions, so existing card positions don't jump.
+            rebuildMergedVideos()
             shortsVideos = await fetchedShortsResult.0
             shortsNextPageToken = await fetchedShortsResult.1
             // Fill the initial threshold (6 iOS / 8 tvOS) quickly.
@@ -273,6 +291,12 @@ public final class HomeViewModel {
                 // which breaks the LazyVGrid scroll position (content shifts under the
                 // user's offset, making previously-seen cards reappear and the list
                 // appear to jump back).
+                //
+                // Stable-append to mergedVideos: only add videos not already present,
+                // preserving all existing card positions.
+                let existingMergedIds = Set(mergedVideos.map(\.id))
+                let newForMerged = deduplicated.filter { !existingMergedIds.contains($0.id) }
+                mergedVideos.append(contentsOf: newForMerged)
                 sections[idx].nextPageToken = nextToken
                 sections[idx].isLoadingMore = false
             }
