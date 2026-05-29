@@ -179,22 +179,6 @@ public struct VideoCardView: View {
                 } label: {
                     Label("Not Interested", systemImage: "hand.raised")
                 }
-                Button(role: .destructive) {
-                    Task {
-                        if let token = video.dontLikeToken {
-                            try? await api.sendFeedback(token: token)
-                        } else {
-                            try? await api.sendFeedbackForVideo(videoId: video.id, iconType: "DISLIKE")
-                        }
-                        NotificationCenter.default.post(
-                            name: .hideVideoFromFeed,
-                            object: nil,
-                            userInfo: ["videoId": video.id]
-                        )
-                    }
-                } label: {
-                    Label("Don't Like This Video", systemImage: "hand.thumbsdown")
-                }
                 if let channelId = video.channelId, !channelId.isEmpty {
                     Button(role: .destructive) {
                         Task {
