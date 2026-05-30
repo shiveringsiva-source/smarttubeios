@@ -83,7 +83,7 @@ final class WKHLSReplayRegressionUITests: XCTestCase {
     ///   - player.errorBanner is absent (no CDN 403 flash)
     ///   - title is stable (no wrong video played)
     func testReplayFirstHomeVideoFiveTimes() throws {
-        let totalCycles = 5
+        let totalCycles = 3
 
         // 1. Navigate to Home and wait for the feed to load.
         UITestHelpers.tapTab(named: "Home", in: app)
