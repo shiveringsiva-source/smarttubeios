@@ -520,6 +520,25 @@ extension InnerTubeAPI {
         request.setValue(InnerTubeClients.WebSafari.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue(InnerTubeClients.WebSafari.nameID, forHTTPHeaderField: "X-YouTube-Client-Name")
         request.setValue(InnerTubeClients.WebSafari.version, forHTTPHeaderField: "X-YouTube-Client-Version")
+        // fix9: SAPISID auth for postWebSafari.
+        // When SAPISID is available (recovered from WKWebView propagated cookies), use
+        // SAPISIDHASH auth so YouTube treats the request as authenticated — returning rqh=0
+        // adaptive stream URLs that the CDN serves without pot= enforcement.
+        // Without auth, YouTube returns rqh=1 URLs that require pot= and still 403 on the
+        // CDN probe when match=false (webVD ≠ apiVD). With SAPISID, Path A wins reliably.
+        // Falls back to Bearer+AuthUser (same as yt-dlp web OAuth pattern) when SAPISID is nil.
+        let authStatus: String
+        if let sid = sapisid {
+            request.setValue(InnerTubeAPI.sapisidhash(sapisid: sid), forHTTPHeaderField: "Authorization")
+            request.setValue("1", forHTTPHeaderField: "X-Origin")
+            authStatus = "SAPISIDHASH"
+        } else if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.setValue("0", forHTTPHeaderField: "X-Goog-AuthUser")
+            authStatus = "Bearer+AuthUser"
+        } else {
+            authStatus = "unauthenticated"
+        }
         // Use the override visitor ID (from WKWebView guide call) when provided, so the
         // X-Goog-Visitor-Id header matches the context.client.visitorData in the body and
         // the minted BotGuard pot= token identifier — required for CDN URL validation.
@@ -529,7 +548,7 @@ extension InnerTubeAPI {
         }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let videoId = body["videoId"] as? String ?? ""
-        tubeLog.notice("POST /player [WebSafari] videoId=\(videoId, privacy: .public)")
+        tubeLog.notice("POST /player [WebSafari] videoId=\(videoId, privacy: .public) auth=\(authStatus, privacy: .public)")
         let (data, response) = try await session.data(for: request)
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {

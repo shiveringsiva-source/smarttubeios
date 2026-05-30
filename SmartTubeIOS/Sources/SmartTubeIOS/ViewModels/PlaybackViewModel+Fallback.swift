@@ -351,6 +351,21 @@ extension PlaybackViewModel {
             playerLog.notice("[BotGuardWV] not ready after 6 s wait — Path A done")
             return false
         }
+        // fix9: SAPISID recovery from WKWebView propagated cookies.
+        // BotGuardWebViewRunner.prepare() calls propagateWebViewCookies() which copies
+        // youtube.com cookies (including SAPISID) from the WKWebView session into
+        // HTTPCookieStorage.shared. On real device, the WKWebView is signed into YouTube
+        // (default WKWebsiteDataStore shares cookies with the signed-in browser session)
+        // so SAPISID is now in HTTPCookieStorage.shared even when AuthService couldn't get
+        // it via OAuthLogin/Multilogin (openid scope missing / old token).
+        // Recovering SAPISID here lets postWebSafari use SAPISIDHASH auth → YouTube returns
+        // rqh=0 adaptive URLs → CDN probe passes → Path A wins instead of waiting for Path B.
+        if await !api.hasSAPISID,
+           let webSAPISID = HTTPCookieStorage.shared
+               .cookies(for: URL(string: "https://www.youtube.com")!)?.first(where: { $0.name == "SAPISID" })?.value {
+            await api.setSAPISID(webSAPISID)
+            playerLog.notice("[BotGuardWV] fix9: recovered SAPISID from WKWebView propagated cookies (len=\(webSAPISID.count))")
+        }
         let webVD = BotGuardWebViewRunner.shared.webVisitorData
         // fix8: use webVD as the mintToken identifier so the minted pot= token is bound
         // to the WEB session visitorData — the same VD that will be sent in

@@ -300,6 +300,10 @@ public actor InnerTubeAPI {
         self.sapisid = value
     }
 
+    /// Returns whether the SAPISID cookie is currently set.
+    /// Used by callers in other modules to avoid redundant recovery attempts.
+    public var hasSAPISID: Bool { sapisid != nil }
+
     // MARK: - Visitor data
 
     /// Clears the stored per-device `visitorData` token.
