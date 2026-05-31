@@ -490,7 +490,14 @@ extension PlaybackViewModel {
             // Check VideoPreloadCache for all data types. Fresh hits skip the network
             // call entirely; partial hits fill only the missing pieces in parallel.
             let cached = await VideoPreloadCache.shared.consume(videoId: video.id)
-            playerLog.notice("cache: playerInfo=\(cached.playerInfo != nil) nextInfo=\(cached.nextInfo != nil) sponsor=\(cached.sponsorSegments != nil) endCards=\(cached.endCards != nil) tracking=\(cached.trackingURLs != nil)")
+            // Log the full cache verdict as a single breadcrumb so wrong-video / prefetch-race
+            // scenarios are immediately visible in Firebase reports.
+            let cacheVerdict = "playerInfo=\(cached.playerInfo != nil) nextInfo=\(cached.nextInfo != nil) sponsor=\(cached.sponsorSegments != nil) endCards=\(cached.endCards != nil) tracking=\(cached.trackingURLs != nil) complete=\(cached.isComplete)"
+            if cached.playerInfo != nil {
+                playerLog.notice("PREFETCH_HIT: \(video.id) — \(cacheVerdict)")
+            } else {
+                playerLog.notice("PREFETCH_MISS: \(video.id) — \(cacheVerdict)")
+            }
 
             // Apply cached DeArrow overrides (community title / thumbnail timestamp).
             // Done immediately after consume() so VideoCardView can show the override
@@ -521,11 +528,11 @@ extension PlaybackViewModel {
             // automatically retry with the authenticated TV client before showing an error.
             let info: PlayerInfo
             if let cachedInfo = cached.playerInfo {
-                playerLog.notice("cache HIT: playerInfo (skipping network)")
+                playerLog.notice("PREFETCH_HIT: playerInfo for \(video.id) — skipping network (hls=\(cachedInfo.hlsURL != nil) dash=\(cachedInfo.dashURL != nil) formats=\(cachedInfo.formats.count))")
                 info = cachedInfo
             } else if let inFlight = await VideoPreloadCache.shared.inFlightPlayerFetch(videoId: video.id),
                       let coalescedInfo = await inFlight.value {
-                playerLog.notice("coalescedPrefetch HIT: playerInfo (skipping network)")
+                playerLog.notice("PREFETCH_COALESCE: playerInfo for \(video.id) — joined in-flight prefetch task")
                 info = coalescedInfo
             } else {
                 do {

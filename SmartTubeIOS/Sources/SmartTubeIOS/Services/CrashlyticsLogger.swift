@@ -68,6 +68,18 @@ struct CrashlyticsLogger: Sendable {
         crashlytics.setCustomValue(title.prefix(120).description, forKey: "active_video_title")
     }
 
+    /// Stamps the video the user *intended* to play onto Crashlytics' persistent custom keys.
+    /// Called from `PlayerStateStore.play(video:)` — the earliest user-intent signal —
+    /// so it is set BEFORE `load(video:)` runs and before the breadcrumb buffer can fill.
+    /// Comparing `intended_video_id` with `active_video_id` in a report reveals whether
+    /// the wrong video was loaded (prefetch race / wrong-card tap / id mismatch).
+    static func setIntendedVideo(id: String, title: String) {
+        let crashlytics = Crashlytics.crashlytics()
+        crashlytics.setCustomValue(id, forKey: "intended_video_id")
+        crashlytics.setCustomValue(title.prefix(120).description, forKey: "intended_video_title")
+        crashlytics.setCustomValue(ISO8601DateFormatter().string(from: Date()), forKey: "intended_video_tap_time")
+    }
+
     /// Records a user-triggered diagnostic non-fatal event in Crashlytics.
     /// All breadcrumbs accumulated during the session are attached to this event,
     /// giving a detailed picture of the app flow leading up to the user's report.

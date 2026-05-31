@@ -73,7 +73,18 @@ extension PlaybackViewModel {
         let stalls = logEvent.map { $0.numberOfStalls } ?? 0
 
         let resSource = selectedFormat != nil ? "selectedFormat(\(selectedFormat!.qualityLabel))" : "presentationSize"
-        playerLog.notice("[stats] snapshot — res=\(res) codec=\(codec) source=\(resSource)")
+        // Only forward to Crashlytics breadcrumbs when something meaningful changed.
+        // Silent 0.5 s ticks otherwise saturate the 64 KB breadcrumb buffer and push
+        // critical events (load, quality switch, errors) out of the window.
+        let prevSnap = statsSnapshot
+        let codecChanged = codec != prevSnap.codec && prevSnap.codec != "—"
+        let resChanged   = res   != prevSnap.displayResolution && prevSnap.displayResolution != "—"
+        let isFirstSnap  = prevSnap.videoId != videoId
+        if isFirstSnap || codecChanged || resChanged {
+            playerLog.notice("[stats] snapshot — res=\(res) codec=\(codec) source=\(resSource)\(codecChanged ? " ⚠️codec-changed" : "")\(resChanged ? " ⚠️res-changed" : "")")
+        } else {
+            playerLog.debug("[stats] snapshot — res=\(res) codec=\(codec) source=\(resSource)")
+        }
 
         statsSnapshot = StatsForNerdsSnapshot(
             videoId: videoId,
