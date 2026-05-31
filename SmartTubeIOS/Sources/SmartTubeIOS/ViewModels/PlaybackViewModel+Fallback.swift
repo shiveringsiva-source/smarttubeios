@@ -398,6 +398,7 @@ extension PlaybackViewModel {
         guard !Task.isCancelled else { return }
         playerLog.error("❌ All 3 retry attempts exhausted for \(video.id)")
         error = APIError.unavailable("Unable to play this video")
+        isLoading = false
     }
 
     // MARK: - Race helpers (called from withTaskGroup in exhaustiveRetry)
