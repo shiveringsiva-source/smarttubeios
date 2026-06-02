@@ -62,6 +62,7 @@
 		AA11000000000000000022A2 /* PlayerMoreMenuDuplicationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11000000000000000022A1 /* PlayerMoreMenuDuplicationUITests.swift */; };
 		AA11000000000000000023A2 /* NextVideoPrefetchUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11000000000000000023A1 /* NextVideoPrefetchUITests.swift */; };
 		AA11000000000000000024A2 /* VideoPlaybackBenchmarkUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11000000000000000024A1 /* VideoPlaybackBenchmarkUITests.swift */; };
+		AA11000000000000000025A2 /* TimeToPlayBenchmarkUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11000000000000000025A1 /* TimeToPlayBenchmarkUITests.swift */; };
 		AA1200000000000000002002 /* WKHLSCookieProxyUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1200000000000000002001 /* WKHLSCookieProxyUITests.swift */; };
 		AA1300000000000000002002 /* BotGuardPoTokenUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1300000000000000002001 /* BotGuardPoTokenUITests.swift */; };
 		AA1400000000000000002002 /* BotGuardLivePipelineUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1400000000000000002001 /* BotGuardLivePipelineUITests.swift */; };
@@ -217,6 +218,7 @@
 		AA11000000000000000022A1 /* PlayerMoreMenuDuplicationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerMoreMenuDuplicationUITests.swift; sourceTree = "<group>"; };
 		AA11000000000000000023A1 /* NextVideoPrefetchUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextVideoPrefetchUITests.swift; sourceTree = "<group>"; };
 		AA11000000000000000024A1 /* VideoPlaybackBenchmarkUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlaybackBenchmarkUITests.swift; sourceTree = "<group>"; };
+		AA11000000000000000025A1 /* TimeToPlayBenchmarkUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeToPlayBenchmarkUITests.swift; sourceTree = "<group>"; };
 		AA1200000000000000002001 /* WKHLSCookieProxyUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WKHLSCookieProxyUITests.swift; sourceTree = "<group>"; };
 		AA1300000000000000002001 /* BotGuardPoTokenUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BotGuardPoTokenUITests.swift; sourceTree = "<group>"; };
 		AA1400000000000000002001 /* BotGuardLivePipelineUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BotGuardLivePipelineUITests.swift; sourceTree = "<group>"; };
@@ -362,6 +364,7 @@
 				AA11000000000000000022A1 /* PlayerMoreMenuDuplicationUITests.swift */,
 				AA11000000000000000023A1 /* NextVideoPrefetchUITests.swift */,
 				AA11000000000000000024A1 /* VideoPlaybackBenchmarkUITests.swift */,
+				AA11000000000000000025A1 /* TimeToPlayBenchmarkUITests.swift */,
 				AA1100000000000000001E01 /* ScrubberUITests.swift */,
 				AA1100000000000000001F01 /* HLSResolutionUITests.swift */,
 				AA1200000000000000002001 /* WKHLSCookieProxyUITests.swift */,
@@ -868,6 +871,7 @@
 				AA11000000000000000022A2 /* PlayerMoreMenuDuplicationUITests.swift in Sources */,
 				AA11000000000000000023A2 /* NextVideoPrefetchUITests.swift in Sources */,
 				AA11000000000000000024A2 /* VideoPlaybackBenchmarkUITests.swift in Sources */,
+				AA11000000000000000025A2 /* TimeToPlayBenchmarkUITests.swift in Sources */,
 				AA1100000000000000001E02 /* ScrubberUITests.swift in Sources */,
 				AA1100000000000000001F02 /* HLSResolutionUITests.swift in Sources */,
 				AA1200000000000000002002 /* WKHLSCookieProxyUITests.swift in Sources */,

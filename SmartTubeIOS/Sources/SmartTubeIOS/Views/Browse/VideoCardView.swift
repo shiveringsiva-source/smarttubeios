@@ -3,6 +3,7 @@ import SmartTubeIOSCore
 import os
 
 private let focusLog = Logger(subsystem: "com.smarttube", category: "focus")
+private let feedLog  = Logger(subsystem: "com.smarttube", category: "feed")
 
 // MARK: - Notification names
 
@@ -329,6 +330,7 @@ public struct VideoCardView: View {
             .focusable()
             .onTapGesture { onSelect?() }
             .focused($isFocused)
+            .onAppear { feedLog.info("[feed] id=\(self.video.id) title=\(self.video.title)") }
             .onChange(of: isFocused) { _, newValue in
                 focusLog.info("[VideoCard] isFocused=\(newValue) id=\(self.video.id)")
                 #if canImport(WebKit)
@@ -349,6 +351,7 @@ public struct VideoCardView: View {
             }
         #else
         cardContent
+            .onAppear { feedLog.info("[feed] id=\(self.video.id) title=\(self.video.title)") }
             .alert(item: $watchLaterAlert) { item in
                 Alert(title: Text(item.title), message: Text(item.message), dismissButton: .default(Text("OK")))
             }
