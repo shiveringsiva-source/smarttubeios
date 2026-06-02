@@ -162,13 +162,22 @@ extension PlayerView {
 
                 // Loading spinner
                 if vm.isLoading {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .tint(.white)
-                        .scaleEffect(1.5)
-                        .transition(.opacity)
-                        .animation(.easeInOut(duration: 0.2), value: vm.isLoading)
-                        .allowsHitTesting(false)
+                    VStack(spacing: 12) {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(.white)
+                            .scaleEffect(1.5)
+                        if let msg = vm.retryStatusMessage {
+                            Text(msg)
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.75))
+                                .transition(.opacity)
+                                .animation(.easeInOut(duration: 0.3), value: vm.retryStatusMessage)
+                        }
+                    }
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.2), value: vm.isLoading)
+                    .allowsHitTesting(false)
                 }
 
                 // Hold-to-speed badge — shown while user long-presses to boost to 2×

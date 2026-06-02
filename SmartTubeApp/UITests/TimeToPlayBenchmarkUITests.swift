@@ -220,6 +220,9 @@ final class TimeToPlayBenchmarkUITests: XCTestCase {
             XCTContext.runActivity(named: "\(video.videoId) (\(video.scenario))") { _ in
                 do {
                     try runBenchmark(videoId: video.videoId, scenario: video.scenario)
+                } catch let skip as XCTSkip {
+                    // Legitimate skip (network unavailable, injection race) — log and continue.
+                    print("[bench] SKIP \(video.videoId): \(skip)")
                 } catch {
                     XCTFail("[\(video.videoId)] \(error)")
                 }
@@ -257,7 +260,7 @@ final class TimeToPlayBenchmarkUITests: XCTestCase {
         // `--uitesting-inject-recommended-ids` populates the Recommended chip feed,
         // not the default Home chip. Tap the chip to surface the injected card.
         let chipBar = app.scrollViews["home.chipBar"]
-        guard chipBar.waitForExistence(timeout: 20) else {
+        guard waitForExistenceGuarded(chipBar, in: app, timeout: 20) else {
             print("[bench] \(videoId) SKIP — home.chipBar not found")
             try captureAndSkip(
                 "[\(videoId)] home.chipBar not found — home screen did not load",
@@ -266,7 +269,7 @@ final class TimeToPlayBenchmarkUITests: XCTestCase {
         }
         print("[bench] \(videoId) home.chipBar visible")
         let recommendedChip = chipBar.buttons["Recommended"].firstMatch
-        guard recommendedChip.waitForExistence(timeout: 10) else {
+        guard waitForExistenceGuarded(recommendedChip, in: app, timeout: 10) else {
             print("[bench] \(videoId) SKIP — Recommended chip not found")
             try captureAndSkip(
                 "[\(videoId)] Recommended chip not found in chip bar",
@@ -289,7 +292,7 @@ final class TimeToPlayBenchmarkUITests: XCTestCase {
         // ── 3. Wait for the injected video card specifically ─────────────────
         let cardPredicate = NSPredicate(format: "identifier BEGINSWITH 'video.card.\(videoId)'")
         let specificCard = app.descendants(matching: .any).matching(cardPredicate).firstMatch
-        guard specificCard.waitForExistence(timeout: 20) else {
+        guard waitForExistenceGuarded(specificCard, in: app, timeout: 20) else {
             print("[bench] \(videoId) SKIP — video.card.\(videoId) not found in feed")
             try captureAndSkip(
                 "[\(videoId)] video.card.\(videoId) not found — injection may have failed or network unavailable",

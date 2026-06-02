@@ -31,7 +31,13 @@ public final class PlaybackViewModel {
     // MARK: - State
 
     public internal(set) var playerInfo: PlayerInfo?
-    public internal(set) var isLoading: Bool = false
+    public internal(set) var isLoading: Bool = false {
+        didSet { if !isLoading { retryStatusMessage = nil } }
+    }
+    /// Short user-facing message shown under the loading spinner when the player
+    /// enters the multi-phase stream-negotiation fallback chain. `nil` while the
+    /// fast path is still in-flight or after loading completes.
+    public internal(set) var retryStatusMessage: String? = nil
     /// True only during the initial load sequence (before first readyToPlay).
     /// The 8s loadTracks timeout in attemptComposition is applied only while this
     /// flag is set, giving fast startup (≤20 s) for the initial stream.

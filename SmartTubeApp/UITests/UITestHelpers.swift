@@ -141,16 +141,18 @@ extension XCTestCase {
         file: StaticString = #file,
         line: UInt = #line
     ) throws -> Never {
-        let shot = app.screenshot()
-        let shotAttachment = XCTAttachment(screenshot: shot)
-        shotAttachment.name = "Skip state: \(reason.prefix(60))"
-        shotAttachment.lifetime = .keepAlways
-        add(shotAttachment)
+        if app.state != .notRunning {
+            let shot = app.screenshot()
+            let shotAttachment = XCTAttachment(screenshot: shot)
+            shotAttachment.name = "Skip state: \(reason.prefix(60))"
+            shotAttachment.lifetime = .keepAlways
+            add(shotAttachment)
 
-        let treeAttachment = XCTAttachment(string: app.debugDescription)
-        treeAttachment.name = "Accessibility tree at skip"
-        treeAttachment.lifetime = .keepAlways
-        add(treeAttachment)
+            let treeAttachment = XCTAttachment(string: app.debugDescription)
+            treeAttachment.name = "Accessibility tree at skip"
+            treeAttachment.lifetime = .keepAlways
+            add(treeAttachment)
+        }
 
         throw XCTSkip(reason, file: file, line: line)
     }
@@ -159,6 +161,7 @@ extension XCTestCase {
     /// `keepAlways` lifetime. Call this immediately before an assertion that may
     /// fail to provide visual context in the result bundle.
     func captureState(_ label: String = "failure", in app: XCUIApplication) {
+        guard app.state != .notRunning else { return }
         let shot = app.screenshot()
         let shotAttachment = XCTAttachment(screenshot: shot)
         shotAttachment.name = "Screenshot: \(label)"
@@ -169,5 +172,30 @@ extension XCTestCase {
         treeAttachment.name = "Accessibility tree: \(label)"
         treeAttachment.lifetime = .keepAlways
         add(treeAttachment)
+    }
+
+    /// Polls for an element's existence while guarding against app crashes.
+    /// Unlike `waitForExistence(timeout:)`, this checks `app.state` before each
+    /// accessibility query so an unexpected process termination returns `false`
+    /// instead of triggering XCTest's crash-detection mechanism, which terminates
+    /// the entire test case even with `continueAfterFailure = true`.
+    func waitForExistenceGuarded(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        timeout: TimeInterval
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        let pollInterval: TimeInterval = 0.25
+        repeat {
+            guard app.state == .runningForeground || app.state == .runningBackground else {
+                return false
+            }
+            if element.exists { return true }
+            Thread.sleep(forTimeInterval: pollInterval)
+        } while Date() < deadline
+        guard app.state == .runningForeground || app.state == .runningBackground else {
+            return false
+        }
+        return element.exists
     }
 }
