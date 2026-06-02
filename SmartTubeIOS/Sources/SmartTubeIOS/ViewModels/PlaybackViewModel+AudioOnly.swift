@@ -99,6 +99,7 @@ extension PlaybackViewModel {
                 guard let self, !Task.isCancelled else { return }
                 switch status {
                 case .readyToPlay:
+                    audioOnlyLog.notice("[benchmark] readyToPlay — audio-only — videoId=\(self.currentVideo?.id ?? "nil") title=\(self.currentVideo?.title ?? "nil")")
                     audioOnlyLog.notice("✅ Audio-only AVPlayerItem readyToPlay")
                     if seekTime > 0 { self.seek(to: seekTime) }
                     self.player.rate = Float(self.settings.playbackSpeed)

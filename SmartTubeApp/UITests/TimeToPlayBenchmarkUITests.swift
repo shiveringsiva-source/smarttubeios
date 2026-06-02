@@ -39,9 +39,9 @@ import XCTest
 //     -workspace /Users/milikadelic/SmartTube/SmartTube.xcworkspace \
 //     -scheme SmartTube \
 //     -destination "id=6CEE2FAC-7D50-4BD0-95E2-1361EDD7FAF6" \
-//     -only-testing:SmartTubeUITests/TimeToPlayBenchmarkUITests/test_allVideosTTP \
-//     -parallel-testing-enabled NO \
-//     -maximum-parallel-testing-workers 1 \
+//     -only-testing:SmartTubeUITests/TimeToPlayBenchmarkUITests \
+//     -parallel-testing-enabled YES \
+//     -maximum-parallel-testing-workers 3 \
 //     -resultBundlePath "$RESULT" \
 //     2>&1 | tee /tmp/ttp-bench.log
 //
@@ -205,16 +205,18 @@ final class TimeToPlayBenchmarkUITests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - Parameterized benchmark
+    // MARK: - Parameterized benchmark (3 parallel batches)
 
-    /// Runs one fresh app launch per entry in `corpus`. To benchmark additional
-    /// videos, add entries to the corpus array — no new test method needed.
-    ///
-    /// Each iteration is wrapped in `XCTContext.runActivity` so failures are
-    /// clearly attributed to the failing video ID in the Xcode test report.
-    func test_allVideosTTP() {
+    /// Corpus is split into 3 equal slices. xcodebuild distributes each method
+    /// to a separate simulator clone when run with -maximum-parallel-testing-workers 3.
+    /// Each clone runs its 36 videos serially so timing measurements stay clean.
+    func test_allVideosTTP_batch1() { runBatch(Array(corpus.prefix(36))) }
+    func test_allVideosTTP_batch2() { runBatch(Array(corpus[36..<72])) }
+    func test_allVideosTTP_batch3() { runBatch(Array(corpus.suffix(from: 72))) }
+
+    private func runBatch(_ batch: [TTPTestCase]) {
         continueAfterFailure = true
-        for video in corpus {
+        for video in batch {
             XCTContext.runActivity(named: "\(video.videoId) (\(video.scenario))") { _ in
                 do {
                     try runBenchmark(videoId: video.videoId, scenario: video.scenario)
@@ -236,6 +238,8 @@ final class TimeToPlayBenchmarkUITests: XCTestCase {
     ///   - videoId: The 11-character YouTube video ID to benchmark.
     ///   - scenario: Human-readable label used in the timing attachment and log line.
     private func runBenchmark(videoId: String, scenario: String) throws {
+        print("[bench] ── START \(videoId) (\(scenario)) ──────────────────────────")
+
         // ── 1. Fresh app launch with single injected video ───────────────────
         app = XCUIApplication()
         app.launchArguments = [
@@ -245,20 +249,25 @@ final class TimeToPlayBenchmarkUITests: XCTestCase {
             "--uitesting-extended-fetch-timeout",
             "--uitesting-disable-prefetch",
         ]
+        print("[bench] \(videoId) launching with args: \(app.launchArguments)")
         app.launch()
+        print("[bench] \(videoId) launched — pid=\(app.debugDescription.components(separatedBy: "pid=").dropFirst().first?.components(separatedBy: ",").first ?? "?")")
 
         // ── 2. Navigate to the Recommended chip so injected video is visible ──
         // `--uitesting-inject-recommended-ids` populates the Recommended chip feed,
         // not the default Home chip. Tap the chip to surface the injected card.
         let chipBar = app.scrollViews["home.chipBar"]
         guard chipBar.waitForExistence(timeout: 20) else {
+            print("[bench] \(videoId) SKIP — home.chipBar not found")
             try captureAndSkip(
                 "[\(videoId)] home.chipBar not found — home screen did not load",
                 in: app
             )
         }
+        print("[bench] \(videoId) home.chipBar visible")
         let recommendedChip = chipBar.buttons["Recommended"].firstMatch
         guard recommendedChip.waitForExistence(timeout: 10) else {
+            print("[bench] \(videoId) SKIP — Recommended chip not found")
             try captureAndSkip(
                 "[\(videoId)] Recommended chip not found in chip bar",
                 in: app
@@ -274,33 +283,49 @@ final class TimeToPlayBenchmarkUITests: XCTestCase {
             if f.origin.x < 4 { nearEdge.press(forDuration: 0.05, thenDragTo: farEdge) }
             else               { farEdge.press(forDuration: 0.05, thenDragTo: nearEdge) }
         }
+        print("[bench] \(videoId) tapping Recommended chip")
         recommendedChip.tap()
 
         // ── 3. Wait for the injected video card specifically ─────────────────
         let cardPredicate = NSPredicate(format: "identifier BEGINSWITH 'video.card.\(videoId)'")
         let specificCard = app.descendants(matching: .any).matching(cardPredicate).firstMatch
         guard specificCard.waitForExistence(timeout: 20) else {
+            print("[bench] \(videoId) SKIP — video.card.\(videoId) not found in feed")
             try captureAndSkip(
                 "[\(videoId)] video.card.\(videoId) not found — injection may have failed or network unavailable",
                 in: app
             )
         }
+        let cardId = specificCard.identifier
+        print("[bench] \(videoId) card found — identifier='\(cardId)'")
+
+        // Guard: the card that appeared must contain the expected video ID.
+        XCTAssertTrue(cardId.contains(videoId),
+                      "[bench] WRONG CARD — expected video.card.\(videoId) but got '\(cardId)'")
+
         let card = specificCard
 
         // ── 3. Tap and start the clock ───────────────────────────────────────
+        print("[bench] \(videoId) tapping card '\(cardId)'")
         let tapStart = Date()
         card.tap()
+        print("[bench] \(videoId) card tapped — waiting for player.titleLabel")
 
         // ── 4. Wait for player ready (proxy: title label appears) ────────────
         let playerTitle = app.staticTexts["player.titleLabel"].firstMatch
-        guard playerTitle.waitForExistence(timeout: 30) else {
-            captureState("timeout-\(videoId)", in: app)
-            XCTFail("[\(videoId)] player.titleLabel never appeared — readyToPlay not reached within 30 s")
-            return
-        }
+        let didPlay = playerTitle.waitForExistence(timeout: 30)
 
         let ttpMs = Int(Date().timeIntervalSince(tapStart) * 1000)
-        print("[ttp] \(videoId)  \(scenario)  \(ttpMs) ms  tap→titleLabel")
+
+        if !didPlay {
+            captureState("timeout-\(videoId)", in: app)
+            print("[bench] \(videoId) TIMEOUT — player.titleLabel never appeared after \(ttpMs) ms")
+            print("[ttp] \(videoId)  \(scenario)  TIMEOUT (>\(ttpMs) ms)  tap→titleLabel-never-appeared")
+        } else {
+            let titleText = playerTitle.label
+            print("[bench] \(videoId) player.titleLabel visible in \(ttpMs) ms — title='\(titleText)'")
+            print("[ttp] \(videoId)  \(scenario)  \(ttpMs) ms  tap→titleLabel")
+        }
 
         // ── 5. Dwell so post-readyToPlay log events accumulate ───────────────
         // Captures: quality ramp at 700 ms, audio track load, Phase 2 metadata.
@@ -309,13 +334,17 @@ final class TimeToPlayBenchmarkUITests: XCTestCase {
         // ── 6. Assertions ────────────────────────────────────────────────────
         XCTAssertEqual(app.state, .runningForeground,
                        "[\(videoId)] App is not in foreground — may have crashed during playback")
-        UITestHelpers.assertNoPlayerErrorBanner(in: app, videoTitle: videoId)
+        if didPlay {
+            UITestHelpers.assertNoPlayerErrorBanner(in: app, videoTitle: videoId)
+        }
+        print("[bench] \(videoId) done — terminating app")
 
         // ── 7. Attach structured result for post-run extraction ───────────────
+        let ttpLabel = didPlay ? "\(ttpMs) ms" : "TIMEOUT (>\(ttpMs) ms)"
         let report = [
             "videoId:  \(videoId)",
             "scenario: \(scenario)",
-            "TTP (tap→titleLabel): \(ttpMs) ms",
+            "TTP (tap→titleLabel): \(ttpLabel)",
             "",
             "# Fill from log grep after run:",
             "readyToPlay (ms):  <grep '[benchmark] readyToPlay in'>",

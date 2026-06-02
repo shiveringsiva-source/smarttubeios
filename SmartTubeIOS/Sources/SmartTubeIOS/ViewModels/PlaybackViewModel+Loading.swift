@@ -14,6 +14,7 @@ extension PlaybackViewModel {
 
     public func load(video: Video) {
         playerLog.notice("[load] load() called — id=\(video.id) currentVideo=\(self.currentVideo?.id ?? "nil") isLoading=\(self.isLoading) player.item=\(self.player.currentItem != nil)")
+        playerLog.notice("[benchmark] load started — videoId=\(video.id) title=\(video.title)")
         videoLoadStartedAt = Date()
         lastSuccessfulStreamType = "unknown"
         if currentVideo?.id == video.id, !isLoading {
@@ -392,6 +393,7 @@ extension PlaybackViewModel {
                         guard let self, !Task.isCancelled else { return }
                         switch status {
                         case .readyToPlay:
+                            playerLog.notice("[benchmark] readyToPlay — local-file — videoId=\(video.id) title=\(video.title)")
                             self.loadAudioTracks(from: item)
                             self.isLoading = false
                         case .failed:
@@ -770,7 +772,7 @@ extension PlaybackViewModel {
                     case .readyToPlay:
                         let elapsedMs = Int(Date().timeIntervalSince(self.videoLoadStartedAt) * 1000)
                         playerLog.notice("✅ AVPlayerItem readyToPlay — video=\(self.currentVideo?.id ?? "nil") rate=\(self.player.rate) timeControlStatus=\(self.player.timeControlStatus.rawValue) isAudioOnlyMode=\(self.isAudioOnlyMode)")
-                        playerLog.notice("[benchmark] readyToPlay in \(elapsedMs) ms since load()")
+                        playerLog.notice("[benchmark] readyToPlay in \(elapsedMs) ms since load() — videoId=\(self.currentVideo?.id ?? "nil") title=\(self.currentVideo?.title ?? "nil")")
                         // Only set the stream type here if a fallback path hasn't already set it
                         // (fallback paths set it in attemptURL/tryWebViewHLS readyToPlay handlers).
                         if self.lastSuccessfulStreamType == "unknown" {

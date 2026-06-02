@@ -520,6 +520,7 @@ extension PlaybackViewModel {
                     guard !Task.isCancelled else { return false }
                     switch st {
                     case .readyToPlay:
+                        playerLog.notice("[benchmark] readyToPlay — BotGuardWV/proxy-HLS — videoId=\(video.id)")
                         playerLog.notice("[BotGuardWV] ✅ Path A won — proxy HLS")
                         return true
                     case .failed:
@@ -1001,6 +1002,7 @@ extension PlaybackViewModel {
         for await status in item.statusStream {
             switch status {
             case .readyToPlay:
+                playerLog.notice("[benchmark] readyToPlay — \(label) — videoId=\(video.id) title=\(video.title)")
                 playerLog.notice("✅ [\(label)] readyToPlay")
                 let itemDur = item.duration.seconds
                 if itemDur.isFinite && itemDur > 0 {
@@ -1287,6 +1289,7 @@ extension PlaybackViewModel {
             for await status in compositeItem.statusStream {
                 switch status {
                 case .readyToPlay:
+                    playerLog.notice("[benchmark] readyToPlay — \(label)/adaptive — videoId=\(video.id) title=\(video.title)")
                     playerLog.notice("✅ [\(label)/adaptive] readyToPlay")
                     let compDur = compositeItem.duration.seconds
                     if compDur.isFinite && compDur > 0 {
@@ -1612,6 +1615,9 @@ extension PlaybackViewModel {
                 switch status {
                 case .readyToPlay:
                     let size = compositeItem.presentationSize
+                    let benchVid = self.currentVideo?.id ?? "nil"
+                    let benchTitle = self.currentVideo?.title ?? "nil"
+                    playerLog.notice("[benchmark] readyToPlay — quality/DASH — videoId=\(benchVid) title=\(benchTitle)")
                     playerLog.notice("✅ [quality/DASH] readyToPlay — presentationSize=\(Int(size.width))x\(Int(size.height))")
                     isQualityChangePending = false
                     // Use currentTime (preserved by time observer freeze) instead of seekTo
@@ -2033,6 +2039,7 @@ extension PlaybackViewModel {
         for await status in item.statusStream {
             switch status {
             case .readyToPlay:
+                playerLog.notice("[benchmark] readyToPlay — webView/HLS — videoId=\(video.id) title=\(video.title)")
                 playerLog.notice("✅ [webView/HLS] readyToPlay")
                 // Refresh duration from AVPlayerItem — the YouTube API metadata may be
                 // absent (nil) or inaccurate, leaving duration=0 and breaking scrubbing.
@@ -2141,6 +2148,7 @@ extension PlaybackViewModel {
             switch status {
             case .readyToPlay:
                 let posStr = String(format: "%.1f", position)
+                playerLog.notice("[benchmark] readyToPlay — wkHLS/lang — videoId=\(video.id) title=\(video.title)")
                 playerLog.notice("✅ [wkHLS/lang] readyToPlay — seeking to \(posStr)s")
                 if position > 0 {
                     let target = CMTime(seconds: position, preferredTimescale: 600)
@@ -2402,6 +2410,7 @@ extension PlaybackViewModel {
         for await status in item.statusStream {
             switch status {
             case .readyToPlay:
+                playerLog.notice("[benchmark] readyToPlay — ytDlp/HLS — videoId=\(video.id) title=\(video.title)")
                 playerLog.notice("✅ [ytDlp[sim]/HLS] readyToPlay")
                 needsQuickStartup = false
                 isLoading = false
