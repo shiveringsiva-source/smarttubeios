@@ -923,11 +923,20 @@ extension YouTubeWebViewHLSExtractor: WKScriptMessageHandler {
                 extractLog.notice("⚠️ [webView] JS solver unavailable; launching JSC solver for playerID=\(playerID as NSString) n=\(unsolvedN as NSString)")
             let capturedURL    = url
             let capturedPoToken = poToken
+            // fix239: capture generation so we can detect if a new extraction started
+            // while the JSC solver was running (~0.3 s). Without this guard, the stale
+            // Task resumes the NEW video's continuation with the OLD video's HLS URL.
+            let myGeneration = extractionGeneration
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 let solved = await Task.detached(priority: .userInitiated) {
                     await Self.solveNChallengeViaNode(playerID: playerID, unsolvedN: unsolvedN)
                 }.value
+                // fix239: reject if a new extraction started while we were solving
+                guard self.extractionGeneration == myGeneration else {
+                    extractLog.warning("⚠️ [webView/fix239] stale JSC solver result discarded — generation was \(myGeneration) now \(self.extractionGeneration) n=\(unsolvedN as NSString)")
+                    return
+                }
                 if let s = solved, !s.isEmpty, s != unsolvedN {
                     self.extractedNSolver = (unsolved: unsolvedN, solved: s)
                     extractLog.notice("✅ [webView] n solved via JSC: \(unsolvedN as NSString) → \(s as NSString)")
