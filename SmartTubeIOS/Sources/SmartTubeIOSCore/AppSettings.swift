@@ -146,6 +146,12 @@ public struct AppSettings: Codable {
     /// synced to iCloud via `NSUbiquitousKeyValueStore`. Defaults to `false` (opt-in).
     public var iCloudSyncEnabled: Bool
 
+    // MARK: Experimental (macOS)
+    /// When `true` on macOS, the YouTube IFrame-based TOS-compliant player is used
+    /// instead of the AVPlayer-based pipeline. Ads will play. Quality control is unavailable.
+    /// Opt-in experiment — has no effect on iOS or tvOS.
+    public var useTOSPlayerOnMac: Bool
+
     // MARK: Schema version
     /// Persisted schema version. Starts at 1 for newly stored settings.
     /// Old JSON lacking this key decodes as 0, signalling a pre-migration store.
@@ -258,6 +264,11 @@ public struct AppSettings: Codable {
         audioOnlyMode        = false
         preferH264           = false
         iCloudSyncEnabled    = false
+        #if os(macOS)
+        useTOSPlayerOnMac    = true
+        #else
+        useTOSPlayerOnMac    = false
+        #endif
         settingsVersion      = 1
     }
 }
@@ -321,6 +332,7 @@ extension AppSettings {
         case audioOnlyMode
         case preferH264
         case iCloudSyncEnabled
+        case useTOSPlayerOnMac
     }
 
     public init(from decoder: Decoder) throws {
@@ -363,5 +375,6 @@ extension AppSettings {
         audioOnlyMode                = c.safeDecode(Bool.self,              forKey: .audioOnlyMode,                default: d.audioOnlyMode)
         preferH264                   = c.safeDecode(Bool.self,              forKey: .preferH264,                   default: d.preferH264)
         iCloudSyncEnabled            = c.safeDecode(Bool.self,              forKey: .iCloudSyncEnabled,            default: d.iCloudSyncEnabled)
+        useTOSPlayerOnMac            = c.safeDecode(Bool.self,              forKey: .useTOSPlayerOnMac,            default: d.useTOSPlayerOnMac)
     }
 }

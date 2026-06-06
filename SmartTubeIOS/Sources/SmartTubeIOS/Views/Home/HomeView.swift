@@ -33,6 +33,12 @@ public struct HomeView: View {
     // Auto-retry tracking: record the type-specific video count at the moment a
     // scroll trigger fires so onChange can detect whether the next page helped.
     @State private var needsMoreShorts = false
+    #if os(macOS)
+    /// Tracks the video ID for which the TOS player hit a fatal embed error so
+    /// the NavigationDestination can fall through to the standard PlayerView for
+    /// that video only. Cleared when a different video is tapped.
+    @State private var tosPlayerFallbackVideoId: String? = nil
+    #endif
     @State private var shortsCountAtTrigger = 0
     @State private var needsMoreNonShorts = false
     @State private var nonShortsCountAtTrigger = 0
@@ -72,7 +78,19 @@ public struct HomeView: View {
             contentArea
                 #if !os(iOS)
                 .navigationDestination(item: $selectedVideo) { video in
+                    #if os(macOS)
+                    if store.settings.useTOSPlayerOnMac && tosPlayerFallbackVideoId != video.id {
+                        TOSPlayerView(video: video) {
+                            tosPlayerFallbackVideoId = video.id
+                        }
+                        .environment(store)
+                        .onDisappear { tosPlayerFallbackVideoId = nil }
+                    } else {
+                        PlayerView(video: video, api: api)
+                    }
+                    #else
                     PlayerView(video: video, api: api)
+                    #endif
                 }
                 #endif
                 .navigationDestination(item: $selectedPlaylist) { stub in

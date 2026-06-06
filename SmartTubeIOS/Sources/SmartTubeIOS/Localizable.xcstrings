@@ -7828,6 +7828,9 @@
         }
       }
     },
+    "Experimental" : {
+
+    },
     "Feed Details" : {
       "localizations" : {
         "ar" : {
@@ -9541,6 +9544,9 @@
           }
         }
       }
+    },
+    "IFrame Player (TOS-compliant, shows ads)" : {
+
     },
     "In-App Mini Player" : {
       "localizations" : {
@@ -23390,6 +23396,9 @@
           }
         }
       }
+    },
+    "Uses YouTube's official embedded player instead of the direct stream pipeline. Quality selection and downloads are unavailable. Ads will play. Useful for videos that refuse to play via the standard path." : {
+
     },
     "Version" : {
       "comment" : "Settings about section app version label",

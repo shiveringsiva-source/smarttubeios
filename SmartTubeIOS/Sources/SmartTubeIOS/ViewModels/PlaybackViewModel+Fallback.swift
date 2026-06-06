@@ -1238,27 +1238,38 @@ extension PlaybackViewModel {
             }
         }
 
-        // Fast rqh=1 firstByte probe for Android VR — avoids the full 8s loadTracks
-        // timeout when the CDN hangs byte-range requests for rqh=1 URLs without pot=.
-        // The CDN either immediately 403s (fail fast) or stalls the TCP connection
-        // (3s timeout here vs 8s loadTracks timeout = 5s saved per failing video).
-        // TVAuth with Bearer is intentionally excluded — its 3s timeout is already fast.
+        // CDN probe for Android VR rqh=1 — avoids loadTracks timeout when CDN enforces
+        // SABR at the content level. URLSession.data(for:) accumulates the full response
+        // body before returning; if the CDN stalls mid-body the 1.5s timeout fires → nil.
+        //
+        // Range must cover the moov atom. The CDN returns HTTP 206 for small byte ranges
+        // (including bytes=0-0 and bytes=0-1023) even for SABR-enforced videos — it
+        // serves the initial container bytes (ftyp box, partial moov header) freely —
+        // but then stalls larger sequential reads that AVURLAsset.loadTracks needs to
+        // parse track metadata. The moov atom for a typical YouTube 720p video is
+        // 20–200 KB; using bytes=0-131071 (128 KB) ensures we cover it. A stalling CDN
+        // delivers a few KB then hangs; URLSession.data(for:) won't return until the
+        // complete 128 KB body arrives, so the 1.5s timeout fires and we bail early.
+        //
+        // Timing: 128 KB at 148 Mbps ≈ 7 ms; at 10 Mbps ≈ 100 ms; stall → 1.5s.
+        // TVAuth with Bearer is intentionally excluded — injecting an OAuth token into
+        // a bare URLSession changes CDN session state, separate from AVURLAsset context.
         if videoRqh && isAndroidVR {
             var probeReq = URLRequest(url: videoURL)
             probeReq.setValue(ua, forHTTPHeaderField: "User-Agent")
-            probeReq.setValue("bytes=0-0", forHTTPHeaderField: "Range")
-            probeReq.timeoutInterval = 3
+            probeReq.setValue("bytes=0-131071", forHTTPHeaderField: "Range")
+            probeReq.timeoutInterval = 1.5
             if let (_, probeResp) = try? await URLSession(configuration: .ephemeral).data(for: probeReq),
                let http = probeResp as? HTTPURLResponse {
                 if http.statusCode == 403 || http.statusCode == 401 {
-                    playerLog.notice("❌ [\(label)/adaptive] rqh=1 firstByte probe: HTTP \(http.statusCode) — CDN enforcing rqh, skipping composition")
+                    playerLog.notice("❌ [\(label)/adaptive] rqh=1 probe: HTTP \(http.statusCode) — CDN enforcing rqh, skipping composition")
                     return false
                 }
-                playerLog.notice("[\(label)/adaptive] rqh=1 firstByte probe: HTTP \(http.statusCode) — CDN not enforcing, proceeding")
+                playerLog.notice("[\(label)/adaptive] rqh=1 probe: HTTP \(http.statusCode) 128KB delivered — moov atom accessible, proceeding")
             } else {
-                // Probe timed out (CDN stalling connection) — bail out early, 5s faster
-                // than waiting for the full 8s loadTracks race to expire.
-                playerLog.notice("⚠️ [\(label)/adaptive] rqh=1 firstByte probe: timeout — CDN stalling, skipping composition")
+                // CDN stalled before delivering 128 KB. This predicts loadTracks failure
+                // (moov atom not accessible), so bail immediately rather than waiting 2s.
+                playerLog.notice("⚠️ [\(label)/adaptive] rqh=1 probe: timeout after 1.5s (128KB stall) — CDN enforcing SABR, skipping composition")
                 return false
             }
         }

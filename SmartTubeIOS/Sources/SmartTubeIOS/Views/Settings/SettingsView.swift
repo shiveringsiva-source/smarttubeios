@@ -26,6 +26,9 @@ public struct SettingsView: View {
             uiSection
             sponsorBlockSection
             deArrowSection
+            #if os(macOS)
+            experimentalSection
+            #endif
             aboutSection
         }
         #if os(macOS)
@@ -274,6 +277,22 @@ public struct SettingsView: View {
             Text("Replace clickbait titles and thumbnails with community-sourced alternatives.")
         }
     }
+
+    // MARK: - Experimental (macOS)
+
+    #if os(macOS)
+    private var experimentalSection: some View {
+        @Bindable var store = store
+        return Section {
+            Toggle("IFrame Player (TOS-compliant, shows ads)", isOn: $store.settings.useTOSPlayerOnMac)
+                .accessibilityIdentifier("settings.useTOSPlayerOnMacToggle")
+        } header: {
+            Text("Experimental")
+        } footer: {
+            Text("Uses YouTube's official embedded player instead of the direct stream pipeline. Quality selection and downloads are unavailable. Ads will play. Useful for videos that refuse to play via the standard path.")
+        }
+    }
+    #endif
 
     // MARK: - About
 

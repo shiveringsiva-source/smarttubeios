@@ -21,5 +21,5 @@ public enum DebugFlags {
         _cachingDisabled
             || ProcessInfo.processInfo.arguments.contains("--uitesting-disable-prefetch")
     }
-    private static let _cachingDisabled: Bool = true
+    private static let _cachingDisabled: Bool = false
 }

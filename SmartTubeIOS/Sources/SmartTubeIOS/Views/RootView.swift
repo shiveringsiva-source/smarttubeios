@@ -282,6 +282,10 @@ struct MainSidebarView: View {
     @State private var searchVM = SearchViewModel()
 
     @State private var selectedSection: AppSection? = .home
+    /// Set when the IFrame player hits a fatal embed error on the current video so we
+    /// drop through to the standard PlayerView for that video only. Cleared when the
+    /// video changes.
+    @State private var tosPlayerFallbackVideoId: String? = nil
 
     var body: some View {
         @Bindable var browseVM = browseVM
@@ -312,11 +316,33 @@ struct MainSidebarView: View {
             // Full-window player overlay — avoids macOS sheet coordinate issues that
             // prevent XCUITest click events from reaching controls inside a popover window.
             if let video = browseVM.deepLinkedVideo {
-                PlayerView(video: video, api: api)
+                let shouldUseTOS = store.settings.useTOSPlayerOnMac
+                                   && tosPlayerFallbackVideoId != video.id
+                if shouldUseTOS {
+                    // TOS-compliant IFrame player experiment (macOS only, opt-in).
+                    // Falls back to the standard PlayerView on embedding-disabled videos.
+                    TOSPlayerView(video: video) {
+                        // Mark this video ID so the guard above drops to PlayerView.
+                        tosPlayerFallbackVideoId = video.id
+                    }
                     .environment(store)
                     .environment(auth)
                     .environment(browseVM)
                     .ignoresSafeArea()
+                } else {
+                    PlayerView(video: video, api: api)
+                        .environment(store)
+                        .environment(auth)
+                        .environment(browseVM)
+                        .ignoresSafeArea()
+                }
+            }
+        }
+        // When a different video is opened, clear the per-video fallback guard so
+        // the next video gets a fresh attempt through the TOS player.
+        .onChange(of: browseVM.deepLinkedVideo?.id) { _, newId in
+            if newId != tosPlayerFallbackVideoId {
+                tosPlayerFallbackVideoId = nil
             }
         }
     }
