@@ -1,4 +1,4 @@
-#if os(macOS)
+#if !os(tvOS)
 import Foundation
 import CoreFoundation
 import WebKit
@@ -177,6 +177,12 @@ final class TOSPlayerViewModel: NSObject {
 
         let config = WKWebViewConfiguration()
         config.mediaTypesRequiringUserActionForPlayback = []
+        #if os(iOS)
+        // CRITICAL on iOS: without this, YouTube's embed hijacks the native system
+        // video player when the user taps play, taking control away from the WKWebView.
+        config.allowsInlineMediaPlayback = true
+        config.allowsAirPlayForMediaPlayback = true
+        #endif
 
         let contentController = WKUserContentController()
         let proxyHandler = ScriptMessageProxy()
@@ -209,7 +215,16 @@ final class TOSPlayerViewModel: NSObject {
         config.userContentController = contentController
 
         self.webView = WKWebView(frame: .zero, configuration: config)
+        #if os(macOS)
+        // NSView-level KVC — not available on iOS UIView.
         self.webView.setValue(false, forKey: "drawsBackground")
+        #else
+        // UIView equivalent: make the WKWebView transparent so the app's black
+        // background shows through before the embed loads.
+        self.webView.isOpaque = false
+        self.webView.backgroundColor = .clear
+        self.webView.scrollView.backgroundColor = .clear
+        #endif
 
         super.init()
 
@@ -434,6 +449,7 @@ final class TOSPlayerViewModel: NSObject {
 
         var _prevState = -2;
         var _playAttempts = 0;
+        var _autoUnmuted = false;
 
         function postMsg(obj) {
             try {
@@ -497,6 +513,23 @@ final class TOSPlayerViewModel: NSObject {
                 video.muted = true;
                 var p = video.play();
                 if (p && p['catch']) { p['catch'](function() {}); }
+            }
+
+            // Auto-unmute once playback is CONFIRMED actively progressing. Loading
+            // muted (URL's mute=1 + the video.muted=true nudge above) exists solely
+            // to satisfy WebKit's autoplay policy — autoplay is only ever guaranteed
+            // to fire unmuted after a recent user gesture, so a muted start is the
+            // only reliable way to avoid landing on a frozen first frame. But the
+            // user did just tap a video expecting to hear it, so once we can SEE
+            // forward progress (t advancing past startup, video actually playing —
+            // not just "play() resolved" which can race ahead of real audio/video
+            // decode), drop the mute exactly once. Gated by _autoUnmuted so a later
+            // user-initiated mute (via YouTube's own controls=1 chrome) is never
+            // fought/overridden — this only ever fires for the initial autoplay kick.
+            if (!_autoUnmuted && !video.paused && t > 0.1) {
+                _autoUnmuted = true;
+                video.muted = false;
+                postMsg({type: 'autoUnmuted', t: t, muted: video.muted});
             }
 
             postMsg({type: 'tick', t: t, state: s});
@@ -580,4 +613,4 @@ private final class ScriptMessageProxy: NSObject, WKScriptMessageHandler, @unche
     }
 }
 
-#endif // os(macOS)
+#endif // !os(tvOS)

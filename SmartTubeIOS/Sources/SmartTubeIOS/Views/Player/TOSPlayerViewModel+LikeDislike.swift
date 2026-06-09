@@ -1,4 +1,4 @@
-#if os(macOS)
+#if !os(tvOS)
 import Foundation
 import os
 import SmartTubeIOSCore
@@ -53,4 +53,4 @@ extension TOSPlayerViewModel {
         }
     }
 }
-#endif // os(macOS)
+#endif // !os(tvOS)

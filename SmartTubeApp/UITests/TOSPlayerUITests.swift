@@ -54,10 +54,11 @@ import XCTest
 // Smoke test for the macOS IFrame (TOS-compliant) player.
 //
 // What it verifies:
-//   1. Tapping the first non-short video card opens the TOS player (close button visible).
+//   1. Tapping the first non-short video card opens the TOS player (tosPlayer.stateLabel visible —
+//      TOSPlayerView has no on-screen back/close button, see its body's doc comment for why).
 //   2. The IFrame player starts playing within 30 s (Darwin notification fires + AX state = "playing").
-//   3. No crash / close-button disappearance during 5 s of playback.
-//   4. Tapping the close button dismisses the player (close button disappears).
+//   3. No crash / stateLabel disappearance during 5 s of playback.
+//   4. Pressing Esc dismisses the player (stateLabel disappears) — the only dismissal path.
 //
 // Preconditions:
 //   - useTOSPlayerOnMac defaults to true on macOS (AppSettings.swift).
@@ -140,9 +141,9 @@ final class TOSPlayerUITests: XCTestCase {
 
         // ── 2. Register Darwin expectations BEFORE clicking ───────────────────
         // CRITICAL: The navigation often completes (and notifies) during the 1s
-        // animation that precedes the close button appearing. Expectations must
+        // animation that precedes the stateLabel appearing. Expectations must
         // be created BEFORE the click so they capture notifications that fire
-        // before the close button is visible.
+        // before the player view is visible.
         let loadStartNote  = XCTDarwinNotificationExpectation(notificationName: "com.void.smarttube.tosplayer.loadstarted")
         let navNote        = XCTDarwinNotificationExpectation(notificationName: "com.void.smarttube.tosplayer.navfinished")
         let bridgeNote     = XCTDarwinNotificationExpectation(notificationName: "com.void.smarttube.tosplayer.bridge")
@@ -162,13 +163,17 @@ final class TOSPlayerUITests: XCTestCase {
         }
         card.click()
 
-        // ── 4. Wait for the close button (player appeared) ───────────────────
-        let closeBtn = app.buttons["tosPlayer.closeButton"].firstMatch
+        // ── 4. Wait for the AX state label (player appeared) ──────────────────
+        // TOSPlayerView has no on-screen back/close button (see its body's doc
+        // comment — every attempt rendered on/near the OS titlebar chrome and
+        // had to be removed), so `tosPlayer.stateLabel` — the invisible AX text
+        // overlay that mirrors playerState for tests — is the presence signal.
+        let stateLabel = app.descendants(matching: .any).matching(identifier: "tosPlayer.stateLabel").firstMatch
         XCTAssertTrue(
-            closeBtn.waitForExistence(timeout: 15),
-            "tosPlayer.closeButton did not appear — TOS player was not opened (check useTOSPlayerOnMac=true)"
+            stateLabel.waitForExistence(timeout: 15),
+            "tosPlayer.stateLabel did not appear — TOS player was not opened (check useTOSPlayerOnMac=true)"
         )
-        print("[TOS] ✓ player opened — closeButton visible")
+        print("[TOS] ✓ player opened — stateLabel present")
 
         // ── 5. Collect diagnostic notification results ────────────────────────
         // Stage 0a: Was loadHTMLString even called?
@@ -221,8 +226,7 @@ final class TOSPlayerUITests: XCTestCase {
             ? XCTWaiter().wait(for: [playingNote], timeout: playingTimeout)
             : .timedOut
 
-        // Also poll the AX state label as a secondary check.
-        let stateLabel = app.descendants(matching: .any).matching(identifier: "tosPlayer.stateLabel").firstMatch
+        // Also poll the AX state label (declared in step 4) as a secondary check.
         let isPlaying: Bool
         if playResult == .completed {
             isPlaying = true
@@ -255,20 +259,22 @@ final class TOSPlayerUITests: XCTestCase {
         // ── 6. Let it play for 5 s and verify no crash ───────────────────────
         Thread.sleep(forTimeInterval: 5)
         XCTAssertTrue(
-            closeBtn.exists,
-            "tosPlayer.closeButton disappeared during playback — possible crash or view re-render"
+            stateLabel.exists,
+            "tosPlayer.stateLabel disappeared during playback — possible crash or view re-render"
         )
         print("[TOS] ✓ 5 s of playback — no crash")
 
-        // ── 7. Close the player ───────────────────────────────────────────────
-        closeBtn.click()
+        // ── 7. Close the player via Esc — the only dismissal path ────────────
+        // (see TOSPlayerView body's .onExitCommand doc comment for why there is
+        // no on-screen back/close button to tap instead).
+        app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
 
-        let closedPredicate = NSPredicate(format: "exists == false")
-        let closedExpect = XCTNSPredicateExpectation(predicate: closedPredicate, object: closeBtn)
-        let closedResult = XCTWaiter().wait(for: [closedExpect], timeout: 5)
+        let dismissPredicate = NSPredicate(format: "exists == false")
+        let dismissExpect = XCTNSPredicateExpectation(predicate: dismissPredicate, object: stateLabel)
+        let closedResult = XCTWaiter().wait(for: [dismissExpect], timeout: 5)
         XCTAssertEqual(
             closedResult, .completed,
-            "tosPlayer.closeButton still visible after close tap — player did not dismiss"
+            "tosPlayer.stateLabel still visible after Esc — player did not dismiss"
         )
         print("[TOS] ✓ player dismissed — test complete")
     }
@@ -276,7 +282,7 @@ final class TOSPlayerUITests: XCTestCase {
     // MARK: - Pause-on-dismiss test
     //
     // Regression test for the bug report: "video can still be heard when I press
-    // back" — i.e. dismissing the TOS player (close button / Esc) left the embedded
+    // back" — i.e. dismissing the TOS player (Esc — its only dismissal path) left the embedded
     // YouTube IFrame's audio playing. Root cause (see TOSPlayerViewModel.pause()'s
     // doc comment for the full trace): `loadEmbed()` wraps the YouTube embed in a
     // cross-origin `<iframe id="yt">`, so `webView.evaluateJavaScript` — which only
@@ -312,7 +318,7 @@ final class TOSPlayerUITests: XCTestCase {
     //     before closing — do not relax the assertion or add a skip around it.
     //   - Any skip reached AFTER "[TOS-pauseondismiss] ✓ playing" prints — by that point
     //     the only remaining work is dismiss-and-verify-paused, so a skip there means
-    //     that path broke (e.g. closeBtn never disappears → dismissal itself is broken).
+    //     that path broke (e.g. stateLabel never disappears → dismissal itself is broken).
     //
     // Log events to verify (grep for "[TOSPlayerView] onDisappear\|\[pause\]\|pausedAllMedia"):
     //   ✓ "[TOSPlayerView] onDisappear — videoId=... playerState=playing currentTime=X.Xs
@@ -340,7 +346,7 @@ final class TOSPlayerUITests: XCTestCase {
     //   - "[pause] requested" present but NO "[pause] pauseAllMediaPlayback completed" →
     //     the Task never ran/completed (e.g. `self` deallocated mid-await, or the API
     //     hung) — re-examine the strong-capture rationale in pause()'s comment
-    //   - NO "[TOSPlayerView] onDisappear" line at all after the close-button click →
+    //   - NO "[TOSPlayerView] onDisappear" line at all after pressing Esc →
     //     onDisappear itself never fired — investigate the dismissal path
     //     (browseVM.deepLinkedVideo / dismiss()) before looking at pause()
     //   - "[pause] pauseAllMediaPlayback completed" appears MULTIPLE times for one
@@ -372,10 +378,12 @@ final class TOSPlayerUITests: XCTestCase {
         }
         card.click()
 
-        let closeBtn = app.buttons["tosPlayer.closeButton"].firstMatch
+        // TOSPlayerView has no on-screen back/close button (see its body's doc
+        // comment), so `tosPlayer.stateLabel` is the presence/dismissal signal.
+        let stateLabel = app.descendants(matching: .any).matching(identifier: "tosPlayer.stateLabel").firstMatch
         XCTAssertTrue(
-            closeBtn.waitForExistence(timeout: 15),
-            "tosPlayer.closeButton did not appear — TOS player was not opened"
+            stateLabel.waitForExistence(timeout: 15),
+            "tosPlayer.stateLabel did not appear — TOS player was not opened"
         )
         print("[TOS-pauseondismiss] ✓ player opened")
 
@@ -392,18 +400,19 @@ final class TOSPlayerUITests: XCTestCase {
 
         // ── 4. Register the pause-completion expectation BEFORE dismissing — same ─
         //      "before the action" requirement as step 2: pause() fires synchronously
-        //      from onDisappear, which can run as part of the close-button tap's
-        //      view-removal, racing a post-click registration.
+        //      from onDisappear, which can run as part of Esc's view-removal,
+        //      racing a post-keypress registration.
         let pausedNote = XCTDarwinNotificationExpectation(notificationName: "com.void.smarttube.tosplayer.pausedAllMedia")
 
-        // ── 5. Dismiss the player ─────────────────────────────────────────────────
-        closeBtn.click()
-        let closedExpect = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "exists == false"), object: closeBtn
+        // ── 5. Dismiss the player via Esc — the only dismissal path (see ──────────
+        //      TOSPlayerView body's .onExitCommand doc comment).
+        app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
+        let dismissExpect = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == false"), object: stateLabel
         )
         XCTAssertEqual(
-            XCTWaiter().wait(for: [closedExpect], timeout: 5), .completed,
-            "tosPlayer.closeButton still visible after close tap — player did not dismiss"
+            XCTWaiter().wait(for: [dismissExpect], timeout: 5), .completed,
+            "tosPlayer.stateLabel still visible after Esc — player did not dismiss"
         )
         print("[TOS-pauseondismiss] ✓ player dismissed")
 
@@ -509,10 +518,12 @@ final class TOSPlayerUITests: XCTestCase {
         }
         card.click()
 
-        let closeBtn = app.buttons["tosPlayer.closeButton"].firstMatch
+        // TOSPlayerView has no on-screen back/close button (see its body's doc
+        // comment), so `tosPlayer.stateLabel` is the presence/dismissal signal.
+        let stateLabel = app.descendants(matching: .any).matching(identifier: "tosPlayer.stateLabel").firstMatch
         XCTAssertTrue(
-            closeBtn.waitForExistence(timeout: 15),
-            "tosPlayer.closeButton did not appear — TOS player was not opened"
+            stateLabel.waitForExistence(timeout: 15),
+            "tosPlayer.stateLabel did not appear — TOS player was not opened"
         )
         print("[TOS-speedpicker] ✓ player opened")
 
@@ -574,14 +585,15 @@ final class TOSPlayerUITests: XCTestCase {
         // moment to land in the device log before we close (and the process tears down).
         Thread.sleep(forTimeInterval: 2)
 
-        // ── 5. Close the player ───────────────────────────────────────────────────
-        closeBtn.click()
-        let closedExpect = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "exists == false"), object: closeBtn
+        // ── 5. Close the player via Esc — the only dismissal path (see ───────────
+        //      TOSPlayerView body's .onExitCommand doc comment).
+        app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
+        let dismissExpect = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == false"), object: stateLabel
         )
         XCTAssertEqual(
-            XCTWaiter().wait(for: [closedExpect], timeout: 5), .completed,
-            "tosPlayer.closeButton still visible after close tap — player did not dismiss"
+            XCTWaiter().wait(for: [dismissExpect], timeout: 5), .completed,
+            "tosPlayer.stateLabel still visible after Esc — player did not dismiss"
         )
         print("[TOS-speedpicker] ✓ player dismissed — test complete (inspect device log for " +
               "'[eval] setPlaybackRate(1.5) result:' — found should be 1, not 0)")
@@ -643,10 +655,12 @@ final class TOSPlayerUITests: XCTestCase {
         }
         card.click()
 
-        let closeBtn = app.buttons["tosPlayer.closeButton"].firstMatch
+        // TOSPlayerView has no on-screen back/close button (see its body's doc
+        // comment), so `tosPlayer.stateLabel` is the presence/dismissal signal.
+        let stateLabel = app.descendants(matching: .any).matching(identifier: "tosPlayer.stateLabel").firstMatch
         XCTAssertTrue(
-            closeBtn.waitForExistence(timeout: 15),
-            "tosPlayer.closeButton did not appear — TOS player was not opened"
+            stateLabel.waitForExistence(timeout: 15),
+            "tosPlayer.stateLabel did not appear — TOS player was not opened"
         )
         print("[TOS-sponsorskip] ✓ player opened")
 
@@ -688,19 +702,20 @@ final class TOSPlayerUITests: XCTestCase {
         // logging + capture-buffer flush latency.
         Thread.sleep(forTimeInterval: 6)
         XCTAssertTrue(
-            closeBtn.exists,
-            "tosPlayer.closeButton disappeared after the auto-skip — possible crash or view re-render"
+            stateLabel.exists,
+            "tosPlayer.stateLabel disappeared after the auto-skip — possible crash or view re-render"
         )
         print("[TOS-sponsorskip] ✓ player survived the skip — no crash")
 
-        // ── 7. Close the player ───────────────────────────────────────────────────
-        closeBtn.click()
-        let closedExpect = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "exists == false"), object: closeBtn
+        // ── 7. Close the player via Esc — the only dismissal path (see ───────────
+        //      TOSPlayerView body's .onExitCommand doc comment).
+        app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
+        let dismissExpect = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == false"), object: stateLabel
         )
         XCTAssertEqual(
-            XCTWaiter().wait(for: [closedExpect], timeout: 5), .completed,
-            "tosPlayer.closeButton still visible after close tap — player did not dismiss"
+            XCTWaiter().wait(for: [dismissExpect], timeout: 5), .completed,
+            "tosPlayer.stateLabel still visible after Esc — player did not dismiss"
         )
         print("[TOS-sponsorskip] ✓ player dismissed — test complete (inspect device log for skip TRIGGER/LANDED before/after times)")
     }

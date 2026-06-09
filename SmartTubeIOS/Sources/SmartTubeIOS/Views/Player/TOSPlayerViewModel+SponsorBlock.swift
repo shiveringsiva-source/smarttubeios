@@ -1,4 +1,4 @@
-#if os(macOS)
+#if !os(tvOS)
 import Foundation
 import CoreFoundation
 import os
@@ -230,4 +230,4 @@ extension TOSPlayerViewModel {
         }
     }
 }
-#endif // os(macOS)
+#endif // !os(tvOS)

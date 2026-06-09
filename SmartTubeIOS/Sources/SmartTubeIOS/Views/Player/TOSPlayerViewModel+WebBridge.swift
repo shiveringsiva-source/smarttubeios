@@ -1,4 +1,4 @@
-#if os(macOS)
+#if !os(tvOS)
 import Foundation
 import CoreFoundation
 import WebKit
@@ -94,6 +94,17 @@ extension TOSPlayerViewModel {
         case "rateChange":
             playbackRate = (json["rate"] as? Double) ?? 1.0
 
+        case "autoUnmuted":
+            // One-shot trace from stateDetectionJS's pollVideo: confirms the
+            // load-muted-then-unmute workaround actually dropped the mute once
+            // forward playback was observed (see its doc comment for why loading
+            // muted is unavoidable — WebKit's autoplay policy — and why this is
+            // the right moment to undo it). Logged at .notice so it survives
+            // xcresulttool diagnostic export — the empirical proof this fix works.
+            let unmutedAt = (json["t"] as? Double) ?? -1
+            let stillMuted = (json["muted"] as? Bool) ?? true
+            tosLog.notice("[ytCallback] 🔊 auto-unmuted at t=\(unmutedAt, format: .fixed(precision: 2))s — video.muted now \(stillMuted, privacy: .public)")
+
         case "tick":
             let t = (json["t"] as? Double) ?? 0
             let s = (json["state"] as? Int) ?? 999
@@ -157,4 +168,4 @@ extension TOSPlayerViewModel {
         }
     }
 }
-#endif // os(macOS)
+#endif // !os(tvOS)

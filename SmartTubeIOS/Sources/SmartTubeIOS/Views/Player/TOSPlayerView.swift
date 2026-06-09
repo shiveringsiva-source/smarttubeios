@@ -1,4 +1,4 @@
-#if os(macOS)
+#if !os(tvOS)
 import SwiftUI
 import WebKit
 import SmartTubeIOSCore
@@ -9,8 +9,9 @@ private let tosViewLog = Logger(subsystem: "com.void.smarttube.app", category: "
 // MARK: - TOSPlayerView
 //
 // macOS-only player backed by the YouTube IFrame API in a WKWebView.
-// Renders YouTube's own player chrome (controls:1) with a native close
-// button and SponsorBlock skip toast overlaid on top.
+// Renders YouTube's own player chrome (controls:1) with a SponsorBlock skip
+// toast overlaid on top. Dismissal is via Esc (.onExitCommand below) — see
+// its doc comment for why there is deliberately no on-screen back/close button.
 //
 // Entry path:
 //   MainSidebarView (RootView.swift)
@@ -59,17 +60,23 @@ public struct TOSPlayerView: View {
         // no amount of SwiftUI overlay/zIndex/.ignoresSafeArea() can cover it, because
         // it isn't part of the content view's layer at all. `safeAreaInsets.top` is
         // exactly the height SwiftUI reserves to avoid drawing under that chrome, so
-        // anchoring the close button below it (instead of a flat 16pt that lands the
-        // button's circle squarely under/behind the sidebar-toggle and back-chevron
-        // controls — the "strange position" the user keeps seeing) is the fix.
+        // anchoring topRightControls below it (instead of a flat offset that lands
+        // those controls under/behind the sidebar-toggle and back-chevron controls)
+        // keeps them clear of it.
+        //
+        // NOTE: there is intentionally NO on-screen back/close button here anymore —
+        // every attempt at one (an "X" close button, then a back-chevron button)
+        // ended up rendered in/near the OS-level titlebar chrome (traffic lights,
+        // sidebar toggle) — the "strange position" complaint that kept resurfacing
+        // no matter how the anchoring math was tuned, because that chrome floats
+        // above the content view's z-order and isn't something SwiftUI layout can
+        // reliably steer clear of from inside this view. Esc (.onExitCommand below)
+        // is the dismissal path now — see its doc comment.
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
                 // MARK: WKWebView layer
                 YouTubeWebPlayerView(webView: vm.webView)
                     .ignoresSafeArea()
-
-                // MARK: Close button (top-left, always visible, clear of titlebar chrome)
-                closeButton(topInset: geo.safeAreaInsets.top)
 
                 // MARK: Top-right control cluster — more menu (like/dislike, sleep
                 // timer, share) + playback speed picker. See topRightControls for why
@@ -105,7 +112,7 @@ public struct TOSPlayerView: View {
             vm.startIfNeeded()
         }
         // Pause the embedded <video> element when this view leaves the hierarchy —
-        // via the close button, the Esc key, or a fallback transition. Without this,
+        // via the Esc key or a fallback transition. Without this,
         // the WKWebView keeps playing (and audio keeps being heard) after the player
         // UI has been dismissed, since nothing else stops it.
         //
@@ -119,12 +126,17 @@ public struct TOSPlayerView: View {
             vm.pause()
             vm.saveProgress()
         }
-        // Esc key closes the player. This is currently the ONLY alternative to the
-        // on-screen close button — TOSPlayerView is presented as a conditional
-        // full-window overlay (RootView: `if let video = browseVM.deepLinkedVideo`),
-        // not pushed onto a NavigationStack, so the toolbar's "Back" chevron belongs
-        // to the browse content underneath and does not affect this overlay at all.
-        // Mirrors closeButton's action exactly (see below).
+        // Esc key closes the player. This is the ONLY dismissal path now — every
+        // on-screen back/close button tried so far ("X", then a back-chevron)
+        // ended up rendered on/near the OS-level titlebar chrome (traffic lights,
+        // sidebar toggle, native back chevron) no matter how its position was
+        // anchored, because that chrome floats above the content view's z-order —
+        // SwiftUI layout from inside this view simply can't steer reliably clear
+        // of it. TOSPlayerView is presented as a conditional full-window overlay
+        // (RootView: `if let video = browseVM.deepLinkedVideo`), not pushed onto a
+        // NavigationStack, so the window's own titlebar "Back" chevron belongs to
+        // the browse content underneath and does not affect this overlay at all —
+        // Esc is genuinely the only way in.
         .onExitCommand {
             browseVM.deepLinkedVideo = nil
             dismiss()
@@ -154,34 +166,6 @@ public struct TOSPlayerView: View {
             tosViewLog.notice("[TOSPlayerView] ⚠️ fatal error — triggering fallback to standard player")
             onFallback()
         }
-    }
-
-    // MARK: - Close button
-
-    /// - Parameter topInset: `geo.safeAreaInsets.top` from the body's GeometryReader —
-    ///   the height macOS reserves for the window's titlebar/toolbar chrome (traffic
-    ///   lights, sidebar toggle, back chevron, "SmartTube" title), which floats above
-    ///   the content view and can't be covered by SwiftUI overlay content. Anchoring
-    ///   below `max(topInset, 16)` (mirrors PlayerControlsOverlay's
-    ///   `max(safeAreaInsets.top, 20)`) keeps the button clear of that chrome instead
-    ///   of overlapping it — the "strange position" complaint.
-    private func closeButton(topInset: CGFloat) -> some View {
-        Button {
-            // Clear deep-link overlay path AND pop NavigationStack path.
-            browseVM.deepLinkedVideo = nil
-            dismiss()
-        } label: {
-            Image(systemName: "xmark")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white)
-                .padding(10)
-                .background(.ultraThinMaterial, in: Circle())
-        }
-        .buttonStyle(.plain)
-        .padding(.top, max(topInset, 16))
-        .padding(.leading, 16)
-        .accessibilityIdentifier("tosPlayer.closeButton")
-        .accessibilityLabel("Close")
     }
 
     // MARK: - Top-right control cluster (speed + more)
@@ -382,4 +366,4 @@ private struct YouTubeWebPlayerView: NSViewRepresentable {
     func updateNSView(_ nsView: WKWebView, context: Context) {}
 }
 
-#endif // os(macOS)
+#endif // !os(tvOS)
