@@ -106,11 +106,30 @@ public final class TOSPlayerStateStore {
     public func minimize() {
         tosStoreLog.notice("[TOSPlayerStateStore] minimize — currentPresentation=\(String(describing: self.presentation))")
         guard presentation == .fullScreen else { return }
+        let wasActive = vm?.playerState == .playing || vm?.playerState == .buffering
         presentation = .miniPlayer
         let action = dismissPlayerAction
         dismissPlayerAction = nil
         tosStoreLog.notice("[TOSPlayerStateStore] minimize — presentation set to .miniPlayer, dismissPlayerAction=\(action != nil)")
         action?()
+
+        // Defense-in-depth: TOSMiniPlayerLayerView transplants the WKWebView into the
+        // mini-player container so the embedded <video> stays attached to the window
+        // (visibilityState remains 'visible'). But a brief detach can still occur during
+        // the SwiftUI/UIKit transition, which pauses the embedded YouTube player. If
+        // playback was active before minimizing and hasn't resumed shortly after,
+        // explicitly resume it.
+        guard wasActive else { return }
+        let resumeVM = vm
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard let self, self.presentation == .miniPlayer, self.vm === resumeVM else { return }
+            let state = resumeVM?.playerState
+            if state != .playing, state != .buffering {
+                tosStoreLog.notice("[TOSPlayerStateStore] minimize — playback did not resume (state=\(String(describing: state))), calling vm.play()")
+                resumeVM?.play()
+            }
+        }
     }
 
     /// Expand the mini-player back to full-screen.

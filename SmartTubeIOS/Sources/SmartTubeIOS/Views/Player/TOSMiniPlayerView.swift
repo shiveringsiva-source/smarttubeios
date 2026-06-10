@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import WebKit
 import SmartTubeIOSCore
 
 // MARK: - TOSMiniPlayerView
@@ -40,7 +41,16 @@ struct TOSMiniPlayerView: View {
                 tosState.expand()
             } label: {
                 HStack(spacing: 10) {
-                    if let thumb = tosState.currentVideo?.thumbnailURL {
+                    if let webView = tosState.vm?.webView {
+                        // Live thumbnail — transplants the same WKWebView that was hosting
+                        // the full-screen player, so the embedded YouTube <video> stays
+                        // attached to the window (visibilityState remains 'visible') and
+                        // playback continues. See TOSMiniPlayerLayerView below.
+                        TOSMiniPlayerLayerView(webView: webView)
+                            .frame(width: 46, height: 46)
+                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                            .accessibilityHidden(true)
+                    } else if let thumb = tosState.currentVideo?.thumbnailURL {
                         AsyncImage(url: thumb) { phase in
                             switch phase {
                             case .success(let image):
@@ -89,6 +99,47 @@ struct TOSMiniPlayerView: View {
         // fix as MiniPlayerView.bar — see its comment for details.
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("tosPlayer.miniPlayerBar")
+    }
+}
+
+// MARK: - TOSMiniPlayerLayerView
+
+/// UIViewRepresentable that hosts the TOS player's WKWebView as a live thumbnail.
+/// UIView.addSubview transplants the webView from the full-screen
+/// YouTubeWebPlayerView's container automatically — no explicit removeFromSuperview
+/// needed. Keeping the webView attached to the window keeps the embedded YouTube
+/// <video> element's document.visibilityState == 'visible', so playback continues
+/// while minimized. Mirrors MiniPlayerLayerView's transplant pattern for AVPlayer.
+private struct TOSMiniPlayerLayerView: UIViewRepresentable {
+    let webView: WKWebView
+
+    func makeUIView(context: Context) -> UIView {
+        let container = UIView()
+        container.backgroundColor = .black
+        container.clipsToBounds = true
+        attach(to: container)
+        return container
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        if webView.superview !== uiView {
+            attach(to: uiView)
+        }
+    }
+
+    private func attach(to container: UIView) {
+        // Disable interaction so taps fall through to the SwiftUI buttons
+        // (expand / play-pause / close) overlaying this view, rather than being
+        // captured by YouTube's native player controls inside the WKWebView.
+        webView.isUserInteractionEnabled = false
+        webView.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(webView)
+        NSLayoutConstraint.activate([
+            webView.topAnchor.constraint(equalTo: container.topAnchor),
+            webView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            webView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+        ])
     }
 }
 #endif // os(iOS)

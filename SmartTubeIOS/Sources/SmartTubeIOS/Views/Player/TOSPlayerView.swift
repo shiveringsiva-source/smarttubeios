@@ -483,16 +483,41 @@ private struct YouTubeWebPlayerView: NSViewRepresentable {
     func updateNSView(_ nsView: WKWebView, context: Context) {}
 }
 #else
+/// Hosts the WKWebView inside a container with Auto Layout constraints, mirroring
+/// FullScreenPlayerLayerView's transplant pattern for PersistentPlayerHostView.
+/// The webView is owned by TOSPlayerViewModel (which outlives this representable's
+/// lifecycle), so when this view is dismissed and TOSMiniPlayerLayerView's container
+/// calls addSubview(webView), UIKit automatically removes it from this container —
+/// no explicit removeFromSuperview needed on dismiss. updateUIView re-attaches the
+/// webView here if it was transplanted away and is now expanding back to full screen.
 private struct YouTubeWebPlayerView: UIViewRepresentable {
     let webView: WKWebView
 
-    func makeUIView(context: Context) -> WKWebView {
-        webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        webView.scrollView.isScrollEnabled = false
-        return webView
+    func makeUIView(context: Context) -> UIView {
+        let container = UIView()
+        container.backgroundColor = .black
+        attach(to: container)
+        return container
     }
 
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
+    func updateUIView(_ uiView: UIView, context: Context) {
+        if webView.superview !== uiView {
+            attach(to: uiView)
+        }
+    }
+
+    private func attach(to container: UIView) {
+        webView.scrollView.isScrollEnabled = false
+        webView.isUserInteractionEnabled = true
+        webView.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(webView)
+        NSLayoutConstraint.activate([
+            webView.topAnchor.constraint(equalTo: container.topAnchor),
+            webView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            webView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+        ])
+    }
 }
 #endif
 
