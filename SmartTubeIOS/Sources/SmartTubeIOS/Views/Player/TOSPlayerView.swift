@@ -263,7 +263,7 @@ public struct TOSPlayerView: View {
     // "back button is too low and doesn't work" regression reported on-device.
     private func backButton() -> some View {
         VStack {
-            HStack {
+            HStack(spacing: 8) {
                 Button {
                     tosState.minimize()
                 } label: {
@@ -275,10 +275,16 @@ public struct TOSPlayerView: View {
                         .clipShape(Circle())
                 }
                 .accessibilityIdentifier("tosPlayer.backButton")
-                .padding(.top, 8)
-                .padding(.leading, 16)
+
+                // Playback speed pill — placed here (rather than top-right) so it
+                // doesn't overlap the IFrame's own video-title/channel row, which
+                // sits just below the top-right corner.
+                speedButton
+
                 Spacer()
             }
+            .padding(.top, 8)
+            .padding(.leading, 16)
             Spacer()
         }
     }
@@ -299,7 +305,11 @@ public struct TOSPlayerView: View {
         HStack(spacing: 8) {
             Spacer()
             moreButton
+            #if os(macOS)
+            // On iOS the speed pill lives next to the back button (top-left) —
+            // see backButton(). macOS has no on-screen back button, so it stays here.
             speedButton
+            #endif
         }
         .padding(.top, max(topInset, 16))
         .padding(.trailing, 16)
