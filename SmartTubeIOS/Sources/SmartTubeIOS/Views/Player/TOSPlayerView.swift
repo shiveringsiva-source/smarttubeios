@@ -466,54 +466,12 @@ public struct TOSPlayerView: View {
     // bottom-sheet layout and the same shared CommentRowView. tvOS-only bits
     // (focusScope/.onExitCommand) are dropped: TOSPlayerView is `!os(tvOS)`.
     private var commentsOverlay: some View {
-        ZStack(alignment: .bottom) {
-            Color.black.opacity(0.5)
-                .ignoresSafeArea()
-                .onTapGesture { showCommentsSheet = false }
-
-            VStack(spacing: 0) {
-                HStack {
-                    Button { showCommentsSheet = false } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .padding(12)
-                    }
-                    .buttonStyle(.plain)
-                    Spacer()
-                    Text("Comments")
-                        .fontWeight(.semibold)
-                    Spacer()
-                    Color.clear.frame(width: 44, height: 44)
-                }
-                .padding(.horizontal, 4)
-                Divider()
-                if vm.isLoadingComments {
-                    ProgressView()
-                        .padding(40)
-                } else if vm.videoComments.isEmpty {
-                    Text("No comments available.")
-                        .foregroundStyle(.secondary)
-                        .padding(40)
-                } else {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 12) {
-                            ForEach(vm.videoComments) { comment in
-                                CommentRowView(comment: comment)
-                            }
-                        }
-                        .padding()
-                    }
-                    .frame(maxHeight: 400)
-                }
-            }
-            .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .padding(.horizontal, 8)
-            .safeAreaPadding(.horizontal)
-            .padding(.bottom, 8)
-        }
-        .ignoresSafeArea()
-        .accessibilityIdentifier("tosPlayer.commentsOverlay")
+        CommentsOverlayView(
+            comments: vm.comments.comments,
+            isLoading: vm.comments.isLoading,
+            onDismiss: { showCommentsSheet = false },
+            accessibilityId: "tosPlayer.commentsOverlay"
+        )
     }
 
     // MARK: - SponsorBlock toast

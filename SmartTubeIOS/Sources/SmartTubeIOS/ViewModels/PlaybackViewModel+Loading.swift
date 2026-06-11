@@ -1279,7 +1279,7 @@ extension PlaybackViewModel {
            let idx = video.playlistIndex {
             hasNext = await CurrentQueueStore.shared.videoAt(index: idx + 1) != nil
         }
-        if let status = nextInfo?.likeStatus { likeStatus = status }
+        if let status = nextInfo?.likeStatus { likeDislike.setLikeStatus(status) }
         if let ch = nextInfo?.chapters, !ch.isEmpty {
             chapters = ch
             playerLog.notice("[chapters] applied \(ch.count) chapters for \(video.id)")

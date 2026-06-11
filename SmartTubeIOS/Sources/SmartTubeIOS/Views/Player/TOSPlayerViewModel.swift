@@ -80,40 +80,40 @@ final class TOSPlayerViewModel: NSObject {
 
     // MARK: - Like / Dislike / Sleep Timer
     //
-    // Transferred from PlaybackViewModel+LikeDislike.swift / +SleepTimer.swift —
-    // see TOSPlayerViewModel+LikeDislike.swift / +SleepTimer.swift for the
-    // `like()`/`dislike()`/`setSleepTimer(minutes:)` implementations. Both features
-    // are pure API/timer operations with no AVPlayer dependency, so they port
-    // verbatim. State lives here (with the rest of the model's @Observable storage);
-    // mutation is split out to extension files mirroring the PlaybackViewModel+*
-    // pattern — hence `internal` rather than `private(set)`/`private`, the same
-    // trade-off PlaybackViewModel makes with `public internal(set)`.
+    // Backed by the shared LikeDislikeController/SleepTimerController
+    // (PlayerFeatures/) also used by PlaybackViewModel — both features are pure
+    // API/timer operations with no AVPlayer dependency.
 
-    /// Optimistically updated in like()/dislike(); rolled back on API failure.
     /// Seeded from cached `nextInfo.likeStatus` in `beginWatchtimeTracking()`.
-    var likeStatus: LikeStatus = .none
+    let likeDislike: LikeDislikeController
+    var likeStatus: LikeStatus { likeDislike.likeStatus }
+    func like() { likeDislike.like(videoId: videoId) }
+    func dislike() { likeDislike.dislike(videoId: videoId) }
     /// Non-nil while a sleep-timer countdown is active; drives the moreButton's label
     /// and the checkmark in its picker submenu. Mirrors `PlaybackViewModel.sleepTimerMinutes`.
-    var sleepTimerMinutes: Int? = nil
-    @ObservationIgnored var sleepTimerTask: Task<Void, Never>?
+    let sleepTimer = SleepTimerController()
+    var sleepTimerMinutes: Int? { sleepTimer.sleepTimerMinutes }
+    func setSleepTimer(minutes: Int?) {
+        sleepTimer.setSleepTimer(minutes: minutes) { [weak self] in
+            self?.pause()
+            tosLog.notice("[sleepTimer] fired — pausing playback")
+        }
+    }
 
     // MARK: - Comments
     //
-    // Transferred from PlayerView+Overlays.swift's commentsOverlay/loadComments —
-    // another self-contained, AVPlayer-independent feature (pure InnerTubeAPI
-    // fetch). State lives here for the same reason as Like/Dislike above; see
-    // TOSPlayerViewModel+Comments.swift for loadComments().
+    // Backed by the shared CommentsController (PlayerFeatures/) also used by
+    // PlaybackViewModel — see TOSPlayerViewModel+Comments.swift for loadComments().
 
-    var videoComments: [Comment] = []
-    var isLoadingComments = false
+    let comments: CommentsController
 
     // MARK: - Dependencies
 
     private(set) var settings: AppSettings = AppSettings()
     /// Used by `fetchSponsorSegments()` (TOSPlayerViewModel+SponsorBlock.swift).
     let sponsorService = SponsorBlockService()
-    /// Used directly by like()/dislike() (TOSPlayerViewModel+LikeDislike.swift —
-    /// pure InnerTubeAPI calls, no AVPlayer dependency) and to construct `tracker` below.
+    /// Passed to `likeDislike`/`comments` controllers and used to construct
+    /// `tracker` below.
     let api: InnerTubeAPI
     /// Drives watch-position checkpointing (VideoStateStore) and watch-history
     /// reporting (InnerTubeAPI) — parity with the standard PlaybackViewModel's
@@ -187,6 +187,14 @@ final class TOSPlayerViewModel: NSObject {
         self.startTime = startTime
         self.api = api
         self.tracker = WatchtimeTracker(api: api)
+        self.likeDislike = LikeDislikeController(
+            api: api,
+            logError: { msg in tosLog.error("[likeDislike] \(msg)") }
+        )
+        self.comments = CommentsController(
+            api: api,
+            logError: { msg in tosLog.error("[comments] \(msg)") }
+        )
 
         let config = WKWebViewConfiguration()
         config.mediaTypesRequiringUserActionForPlayback = []

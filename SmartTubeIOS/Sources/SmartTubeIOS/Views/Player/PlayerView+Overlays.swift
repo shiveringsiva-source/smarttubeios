@@ -306,73 +306,27 @@ extension PlayerView {
     // MARK: - Comments overlay
 
     var commentsOverlay: some View {
-        ZStack(alignment: .bottom) {
-            Color.black.opacity(0.5)
-                .ignoresSafeArea()
-                .onTapGesture { showCommentsSheet = false }
-
-            VStack(spacing: 0) {
-                HStack {
-                    Button { showCommentsSheet = false } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .padding(12)
-                    }
-                    .buttonStyle(.plain)
-                    Spacer()
-                    Text("Comments")
-                        .fontWeight(.semibold)
-                    Spacer()
-                    Color.clear.frame(width: 44, height: 44)
-                }
-                .padding(.horizontal, 4)
-                Divider()
-                if isLoadingComments {
-                    ProgressView()
-                        .padding(40)
-                } else if videoComments.isEmpty {
-                    Text("No comments available.")
-                        .foregroundStyle(.secondary)
-                        .padding(40)
-                } else {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 12) {
-                            ForEach(videoComments) { comment in
-                                CommentRowView(comment: comment)
-                            }
-                        }
-                        .padding()
-                    }
-                    .frame(maxHeight: 400)
-                }
-            }
-            .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            #if os(tvOS)
-            .focusScope(commentsOverlayNamespace)
-            .onExitCommand { showCommentsSheet = false }
-            #endif
-            .padding(.horizontal, 8)
-            .safeAreaPadding(.horizontal)
-            .padding(.bottom, 8)
-        }
-        .ignoresSafeArea()
+        #if os(tvOS)
+        CommentsOverlayView(
+            comments: vm.comments.comments,
+            isLoading: vm.comments.isLoading,
+            onDismiss: { showCommentsSheet = false },
+            focusNamespace: commentsOverlayNamespace
+        )
+        #else
+        CommentsOverlayView(
+            comments: vm.comments.comments,
+            isLoading: vm.comments.isLoading,
+            onDismiss: { showCommentsSheet = false }
+        )
+        #endif
     }
 
     // MARK: - Comments loading
 
     func loadComments() {
         let videoId = (vm.playerInfo?.video ?? video).id
-        isLoadingComments = true
-        Task {
-            do {
-                let fetched = try await commentsAPI.fetchComments(videoId: videoId)
-                videoComments = fetched
-            } catch {
-                // Comments unavailable — empty state shown
-            }
-            isLoadingComments = false
-        }
+        vm.comments.load(videoId: videoId)
     }
 
     // MARK: - More menu rows
@@ -697,9 +651,7 @@ extension PlayerView {
         Button {
             showMoreMenu = false
             showCommentsSheet = true
-            if videoComments.isEmpty && !isLoadingComments {
-                loadComments()
-            }
+            loadComments()
         } label: {
             Label("Comments", systemImage: "bubble.left.and.bubble.right")
                 .frame(maxWidth: .infinity, alignment: .leading)

@@ -38,9 +38,6 @@ public struct PlayerView: View {
     @State var moreMenuContentHeight: CGFloat = 0
     @State var showDescriptionSheet = false
     @State var showCommentsSheet = false
-    @State var videoComments: [Comment] = []
-    @State var isLoadingComments = false
-    @State var commentsAPI: InnerTubeAPI
     @State var slideOffset: CGFloat = 0
     @State var isTransitioning = false
     @State var channelDestination: ChannelDestination?
@@ -116,7 +113,6 @@ public struct PlayerView: View {
         #if !os(iOS)
         _vm = State(initialValue: PlaybackViewModel(api: api))
         #endif
-        _commentsAPI = State(initialValue: api)
         #if !os(tvOS)
         _downloadService = State(initialValue: VideoDownloadService(api: api))
         #endif

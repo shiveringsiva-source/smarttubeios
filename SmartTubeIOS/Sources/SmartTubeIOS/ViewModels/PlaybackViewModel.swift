@@ -180,7 +180,11 @@ public final class PlaybackViewModel {
     /// Updated automatically when the device rotates or when the
     /// "Landscape Always Play" setting forces landscape mode.
     public var isLandscape: Bool = false
-    public internal(set) var likeStatus: LikeStatus = .none
+    let likeDislike: LikeDislikeController
+    let comments: CommentsController
+    public var likeStatus: LikeStatus { likeDislike.likeStatus }
+    public func like() { likeDislike.like(videoId: currentVideo?.id) }
+    public func dislike() { likeDislike.dislike(videoId: currentVideo?.id) }
     public internal(set) var statsForNerdsVisible: Bool = false
     public internal(set) var statsSnapshot: StatsForNerdsSnapshot = .empty
     /// End-screen cards to overlay during the final seconds of the video.
@@ -312,9 +316,15 @@ public final class PlaybackViewModel {
         set { qualityManager.hlsVariantURLs = newValue }
     }
     var controlsTimer: Task<Void, Never>?
-    @ObservationIgnored var sleepTimerTask: Task<Void, Never>?
+    let sleepTimer = SleepTimerController()
     /// Remaining minutes on the sleep timer (nil = off). Observable so PlayerView can show it.
-    public internal(set) var sleepTimerMinutes: Int? = nil
+    public var sleepTimerMinutes: Int? { sleepTimer.sleepTimerMinutes }
+    public func setSleepTimer(minutes: Int?) {
+        sleepTimer.setSleepTimer(minutes: minutes) { [weak self] in
+            self?.player.pause()
+            self?.isPlaying = false
+        }
+    }
     /// Available sleep timer durations in minutes.
     public static let sleepTimerOptions: [Int] = [15, 30, 45, 60]
     /// Position to seek to once the AVPlayerItem is ready.
@@ -431,6 +441,11 @@ public final class PlaybackViewModel {
         self.captionsManager = cam
         self.qualityManager = aqm
         self.audioManager = atm
+        self.likeDislike = LikeDislikeController(
+            api: api,
+            logError: { msg in playerLog.error("[likeDislike] \(msg)") }
+        )
+        self.comments = CommentsController(api: api)
 
         player.allowsExternalPlayback = true
         #if canImport(UIKit)

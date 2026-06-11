@@ -71,7 +71,7 @@ extension TOSPlayerViewModel {
             self.tracker.setTrackingURLs(urls)
             tosLog.notice("[watchtime] trackingURLs resolved from cache: \(urls != nil ? "account-bound" : "none")")
             if let status = cached.nextInfo?.likeStatus {
-                self.likeStatus = status
+                self.likeDislike.setLikeStatus(status)
                 tosLog.notice("[likeDislike] seeded likeStatus=\(String(describing: status), privacy: .public) from cached nextInfo")
             }
         }
