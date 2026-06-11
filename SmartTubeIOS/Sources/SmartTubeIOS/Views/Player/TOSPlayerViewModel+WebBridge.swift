@@ -96,11 +96,8 @@ extension TOSPlayerViewModel {
 
         case "autoUnmuted":
             // One-shot trace from stateDetectionJS's pollVideo: confirms the
-            // load-muted-then-unmute workaround actually dropped the mute once
-            // forward playback was observed (see its doc comment for why loading
-            // muted is unavoidable — WebKit's autoplay policy — and why this is
-            // the right moment to undo it). Logged at .notice so it survives
-            // xcresulttool diagnostic export — the empirical proof this fix works.
+            // load-muted-then-unmute workaround dropped the mute once forward
+            // playback was observed (see pollVideo's doc comment).
             let unmutedAt = (json["t"] as? Double) ?? -1
             let stillMuted = (json["muted"] as? Bool) ?? true
             tosLog.notice("[ytCallback] 🔊 auto-unmuted at t=\(unmutedAt, format: .fixed(precision: 2))s — video.muted now \(stillMuted, privacy: .public)")

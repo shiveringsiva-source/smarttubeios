@@ -1,6 +1,7 @@
 #if !os(tvOS)
 import Foundation
 import CoreFoundation
+import AVFoundation
 import WebKit
 import SmartTubeIOSCore
 import os
@@ -368,6 +369,18 @@ final class TOSPlayerViewModel: NSObject {
     // MARK: - Embed URL loader
 
     private func loadEmbed(videoId: String, startTime: Double) {
+        // TOSPlayerViewModel never instantiates PlaybackViewModel (PlayerRouter
+        // routes TOS and AVPlayer pipelines exclusively), so nothing else in the TOS
+        // pipeline activates the audio session. Without this, WKWebView's media
+        // engine can grab a brief moment of audio during init and then lose the
+        // route — mirrors PlaybackViewModel+Loading's setActive(true) call.
+        #if os(iOS)
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            tosLog.error("[audioSession] setActive(true) failed: \(error.localizedDescription, privacy: .public)")
+        }
+        #endif
         var comps = URLComponents(string: "https://www.youtube.com/embed/\(videoId)")!
         comps.queryItems = [
             URLQueryItem(name: "autoplay",       value: "1"),
@@ -522,16 +535,21 @@ final class TOSPlayerViewModel: NSObject {
             // muted (URL's mute=1 + the video.muted=true nudge above) exists solely
             // to satisfy WebKit's autoplay policy — autoplay is only ever guaranteed
             // to fire unmuted after a recent user gesture, so a muted start is the
-            // only reliable way to avoid landing on a frozen first frame. But the
-            // user did just tap a video expecting to hear it, so once we can SEE
-            // forward progress (t advancing past startup, video actually playing —
-            // not just "play() resolved" which can race ahead of real audio/video
-            // decode), drop the mute exactly once. Gated by _autoUnmuted so a later
-            // user-initiated mute (via YouTube's own controls=1 chrome) is never
-            // fought/overridden — this only ever fires for the initial autoplay kick.
+            // only reliable way to avoid landing on a frozen first frame. Once we can
+            // SEE forward progress (t advancing past startup), drop the mute exactly
+            // once. Gated by _autoUnmuted so a later user-initiated mute (via
+            // YouTube's own controls=1 chrome) is never fought/overridden.
+            //
+            // Both video.muted AND #movie_player.unMute() are needed: YouTube's
+            // player object keeps its own internal mute flag (seeded true from the
+            // mute=1 URL param) and periodically re-applies it onto video.muted,
+            // undoing a DOM-only override ~250ms later. unMute() updates that
+            // internal flag directly.
             if (!_autoUnmuted && !video.paused && t > 0.1) {
                 _autoUnmuted = true;
                 video.muted = false;
+                var ytPlayer = document.getElementById('movie_player');
+                if (ytPlayer && typeof ytPlayer.unMute === 'function') { ytPlayer.unMute(); }
                 postMsg({type: 'autoUnmuted', t: t, muted: video.muted});
             }
 
