@@ -97,6 +97,16 @@ final class TOSPlayerViewModel: NSObject {
     var sleepTimerMinutes: Int? = nil
     @ObservationIgnored var sleepTimerTask: Task<Void, Never>?
 
+    // MARK: - Comments
+    //
+    // Transferred from PlayerView+Overlays.swift's commentsOverlay/loadComments —
+    // another self-contained, AVPlayer-independent feature (pure InnerTubeAPI
+    // fetch). State lives here for the same reason as Like/Dislike above; see
+    // TOSPlayerViewModel+Comments.swift for loadComments().
+
+    var videoComments: [Comment] = []
+    var isLoadingComments = false
+
     // MARK: - Dependencies
 
     private(set) var settings: AppSettings = AppSettings()
