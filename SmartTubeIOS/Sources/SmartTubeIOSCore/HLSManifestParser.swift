@@ -78,3 +78,152 @@ public func parseHLSMasterManifest(_ manifestText: String, baseURL: URL) -> [Int
 
     return variants
 }
+
+/// Parses a map of stream height → variant URL from the HLS master manifest for a
+/// specific dubbed-audio content ID. Used by switchHLSLanguage to update hlsVariantURLs.
+/// If `contentID` is nil, returns original-audio variant URLs (no YT-EXT-AUDIO-CONTENT-ID).
+public func parseHLSVariantURLsForLanguage(
+    _ contentID: String?,
+    from manifest: String,
+    baseURL: URL
+) -> [Int: URL] {
+    let lines = manifest.components(separatedBy: "\n")
+    var result: [Int: URL] = [:]
+    var i = 0
+    while i < lines.count {
+        let line = lines[i].trimmingCharacters(in: .whitespaces)
+        if line.hasPrefix("#EXT-X-STREAM-INF:") {
+            let hasContentID = line.contains("YT-EXT-AUDIO-CONTENT-ID=")
+            let matches: Bool
+            if let lang = contentID {
+                matches = line.contains("YT-EXT-AUDIO-CONTENT-ID=\"\(lang)\"")
+                       || line.contains("YT-EXT-AUDIO-CONTENT-ID=\(lang)")
+            } else {
+                matches = !hasContentID
+            }
+            guard matches else { i += 2; continue }
+
+            var height = 0
+            if let resRange = line.range(of: #"RESOLUTION=\d+x(\d+)"#, options: .regularExpression) {
+                let resPart = String(line[resRange])
+                if let h = resPart.components(separatedBy: "x").last.flatMap(Int.init) {
+                    height = h
+                }
+            }
+            i += 1
+            while i < lines.count {
+                let candidate = lines[i].trimmingCharacters(in: .whitespaces)
+                if !candidate.isEmpty && !candidate.hasPrefix("#") { break }
+                i += 1
+            }
+            if i < lines.count, height > 0 {
+                let uriLine = lines[i].trimmingCharacters(in: .whitespaces)
+                let resolved: URL?
+                if uriLine.hasPrefix("http://") || uriLine.hasPrefix("https://") {
+                    resolved = URL(string: uriLine)
+                } else {
+                    let baseDir = baseURL.deletingLastPathComponent()
+                    resolved = URL(string: uriLine, relativeTo: baseDir).map { $0.absoluteURL }
+                }
+                if let url = resolved { result[height] = url }
+            }
+        }
+        i += 1
+    }
+    return result
+}
+
+/// Parses an HLS master M3U8 manifest and returns a map of stream height → variant URL
+/// for all streams present. Handles both absolute and relative URIs.
+/// Returns one URL per quality level — the first variant seen per height (original audio when
+/// available, first dubbed entry as fallback when the manifest omits no-CONTENT-ID variants).
+public func parseHLSAllVariants(from manifest: String, baseURL: URL) -> [Int: URL] {
+    let lines = manifest.components(separatedBy: "\n")
+    var result: [Int: URL] = [:]
+    var i = 0
+    while i < lines.count {
+        let line = lines[i].trimmingCharacters(in: .whitespaces)
+        if line.hasPrefix("#EXT-X-STREAM-INF:") {
+            var height = 0
+            if let resRange = line.range(of: #"RESOLUTION=\d+x(\d+)"#, options: .regularExpression) {
+                let resPart = String(line[resRange])
+                if let h = resPart.components(separatedBy: "x").last.flatMap(Int.init) {
+                    height = h
+                }
+            }
+            i += 1
+            while i < lines.count {
+                let candidate = lines[i].trimmingCharacters(in: .whitespaces)
+                if !candidate.isEmpty && !candidate.hasPrefix("#") { break }
+                i += 1
+            }
+            if i < lines.count, height > 0 {
+                let uriLine = lines[i].trimmingCharacters(in: .whitespaces)
+                let resolved: URL?
+                if uriLine.hasPrefix("http://") || uriLine.hasPrefix("https://") {
+                    resolved = URL(string: uriLine)
+                } else {
+                    let baseDir = baseURL.deletingLastPathComponent()
+                    resolved = URL(string: uriLine, relativeTo: baseDir).map { $0.absoluteURL }
+                }
+                if let url = resolved, result[height] == nil {
+                    // First entry per height wins — for YouTube's manifest order
+                    // (original first, then dubbed per quality), this naturally
+                    // selects the original audio variant.
+                    result[height] = url
+                }
+            }
+        }
+        i += 1
+    }
+    return result
+}
+
+/// Parses an HLS master M3U8 manifest and returns the URL of the best stream at ≥ `minHeight`.
+/// Handles both absolute URIs and relative paths (resolved against `baseURL`).
+public func parseHLSBestVariant(from manifest: String, baseURL: URL, minHeight: Int) -> URL? {
+    let lines = manifest.components(separatedBy: "\n")
+    var bestHeight = 0
+    var bestURL: URL?
+    var i = 0
+    while i < lines.count {
+        let line = lines[i].trimmingCharacters(in: .whitespaces)
+        if line.hasPrefix("#EXT-X-STREAM-INF:") {
+            // No CONTENT-ID guard needed: the `height > bestHeight` condition naturally
+            // selects the first entry per quality level (original audio in YouTube's
+            // manifest order, or the first dubbed entry if no original exists).
+            // Extract height from RESOLUTION=WxH
+            var height = 0
+            if let resRange = line.range(of: #"RESOLUTION=\d+x(\d+)"#, options: .regularExpression) {
+                let resPart = String(line[resRange])  // "RESOLUTION=1280x720"
+                if let h = resPart.components(separatedBy: "x").last.flatMap(Int.init) {
+                    height = h
+                }
+            }
+            // Skip to next non-empty, non-comment line (the URI)
+            i += 1
+            while i < lines.count {
+                let candidate = lines[i].trimmingCharacters(in: .whitespaces)
+                if !candidate.isEmpty && !candidate.hasPrefix("#") { break }
+                i += 1
+            }
+            if i < lines.count, height >= minHeight, height > bestHeight {
+                let uriLine = lines[i].trimmingCharacters(in: .whitespaces)
+                let resolved: URL?
+                if uriLine.hasPrefix("http://") || uriLine.hasPrefix("https://") {
+                    resolved = URL(string: uriLine)
+                } else {
+                    // Relative URI — resolve against the directory of the master manifest URL
+                    let baseDir = baseURL.deletingLastPathComponent()
+                    resolved = URL(string: uriLine, relativeTo: baseDir).map { $0.absoluteURL }
+                }
+                if let url = resolved {
+                    bestHeight = height
+                    bestURL = url
+                }
+            }
+        }
+        i += 1
+    }
+    return bestURL
+}

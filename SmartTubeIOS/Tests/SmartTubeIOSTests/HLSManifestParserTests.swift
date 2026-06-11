@@ -9,6 +9,11 @@ struct HLSManifestParserTests {
 
     private let base = URL(string: "https://cdn.example.com/hls/")!
 
+    /// parseHLSVariantURLsForLanguage / parseHLSAllVariants / parseHLSBestVariant resolve
+    /// relative URIs against `baseURL.deletingLastPathComponent()` — i.e. `baseURL` is the
+    /// master manifest's own URL, not its containing directory.
+    private let masterURL = URL(string: "https://cdn.example.com/hls/master.m3u8")!
+
     // MARK: - Empty / malformed
 
     @Test("empty manifest returns empty dictionary")
@@ -136,5 +141,123 @@ struct HLSManifestParserTests {
         let result = parseHLSMasterManifest(manifest, baseURL: base)
         // H.264 came first; HEVC must not overwrite it on any platform.
         #expect(result[1080] == URL(string: "https://cdn.example.com/1080p_h264.m3u8"))
+    }
+
+    // MARK: - parseHLSVariantURLsForLanguage
+
+    @Test("parseHLSVariantURLsForLanguage: nil contentID returns only variants without YT-EXT-AUDIO-CONTENT-ID")
+    func parseHLSVariantURLsForLanguage_nilContentID_returnsOriginalOnly() {
+        let manifest = """
+        #EXTM3U
+        #EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080
+        original_1080p.m3u8
+        #EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1280x720,YT-EXT-AUDIO-CONTENT-ID="es-ES.1"
+        dubbed_720p.m3u8
+        """
+        let result = parseHLSVariantURLsForLanguage(nil, from: manifest, baseURL: masterURL)
+        #expect(result[1080] == URL(string: "https://cdn.example.com/hls/original_1080p.m3u8"))
+        #expect(result[720] == nil)
+    }
+
+    @Test("parseHLSVariantURLsForLanguage: matching contentID returns only that dubbed track's variants")
+    func parseHLSVariantURLsForLanguage_matchingContentID_returnsDubbedTrack() {
+        let manifest = """
+        #EXTM3U
+        #EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080
+        original_1080p.m3u8
+        #EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080,YT-EXT-AUDIO-CONTENT-ID="es-ES.1"
+        dubbed_1080p.m3u8
+        #EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=854x480,YT-EXT-AUDIO-CONTENT-ID="es-ES.1"
+        dubbed_480p.m3u8
+        """
+        let result = parseHLSVariantURLsForLanguage("es-ES.1", from: manifest, baseURL: masterURL)
+        #expect(result.count == 2)
+        #expect(result[1080] == URL(string: "https://cdn.example.com/hls/dubbed_1080p.m3u8"))
+        #expect(result[480] == URL(string: "https://cdn.example.com/hls/dubbed_480p.m3u8"))
+    }
+
+    @Test("parseHLSVariantURLsForLanguage: contentID with no matching variants returns empty")
+    func parseHLSVariantURLsForLanguage_noMatch_returnsEmpty() {
+        let manifest = """
+        #EXTM3U
+        #EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080
+        original_1080p.m3u8
+        """
+        let result = parseHLSVariantURLsForLanguage("fr-FR.1", from: manifest, baseURL: base)
+        #expect(result.isEmpty)
+    }
+
+    // MARK: - parseHLSAllVariants
+
+    @Test("parseHLSAllVariants: empty manifest returns empty")
+    func parseHLSAllVariants_emptyManifest_returnsEmpty() {
+        #expect(parseHLSAllVariants(from: "", baseURL: base).isEmpty)
+    }
+
+    @Test("parseHLSAllVariants: returns one URL per height, first entry wins")
+    func parseHLSAllVariants_multipleHeights_firstEntryPerHeightWins() {
+        let manifest = """
+        #EXTM3U
+        #EXT-X-STREAM-INF:BANDWIDTH=15000000,RESOLUTION=1920x1080
+        first_1080p.m3u8
+        #EXT-X-STREAM-INF:BANDWIDTH=14000000,RESOLUTION=1920x1080
+        second_1080p.m3u8
+        #EXT-X-STREAM-INF:BANDWIDTH=8000000,RESOLUTION=1280x720
+        720p.m3u8
+        """
+        let result = parseHLSAllVariants(from: manifest, baseURL: masterURL)
+        #expect(result.count == 2)
+        #expect(result[1080] == URL(string: "https://cdn.example.com/hls/first_1080p.m3u8"))
+        #expect(result[720] == URL(string: "https://cdn.example.com/hls/720p.m3u8"))
+    }
+
+    @Test("parseHLSAllVariants: relative URI is resolved against baseURL")
+    func parseHLSAllVariants_relativeURI_resolvesAgainstBaseURL() {
+        let manifest = """
+        #EXTM3U
+        #EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080
+        1080p.m3u8
+        """
+        let result = parseHLSAllVariants(from: manifest, baseURL: masterURL)
+        #expect(result[1080] == URL(string: "https://cdn.example.com/hls/1080p.m3u8"))
+    }
+
+    // MARK: - parseHLSBestVariant
+
+    @Test("parseHLSBestVariant: returns nil when no variant meets minHeight")
+    func parseHLSBestVariant_noneMeetMinHeight_returnsNil() {
+        let manifest = """
+        #EXTM3U
+        #EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=854x480
+        480p.m3u8
+        """
+        let result = parseHLSBestVariant(from: manifest, baseURL: base, minHeight: 720)
+        #expect(result == nil)
+    }
+
+    @Test("parseHLSBestVariant: selects the highest height at or above minHeight")
+    func parseHLSBestVariant_selectsHighestAboveMinHeight() {
+        let manifest = """
+        #EXTM3U
+        #EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=854x480
+        480p.m3u8
+        #EXT-X-STREAM-INF:BANDWIDTH=8000000,RESOLUTION=1280x720
+        720p.m3u8
+        #EXT-X-STREAM-INF:BANDWIDTH=15000000,RESOLUTION=1920x1080
+        1080p.m3u8
+        """
+        let result = parseHLSBestVariant(from: manifest, baseURL: masterURL, minHeight: 720)
+        #expect(result == URL(string: "https://cdn.example.com/hls/1080p.m3u8"))
+    }
+
+    @Test("parseHLSBestVariant: relative URI is resolved against baseURL")
+    func parseHLSBestVariant_relativeURI_resolvesAgainstBaseURL() {
+        let manifest = """
+        #EXTM3U
+        #EXT-X-STREAM-INF:BANDWIDTH=15000000,RESOLUTION=1920x1080
+        1080p.m3u8
+        """
+        let result = parseHLSBestVariant(from: manifest, baseURL: masterURL, minHeight: 0)
+        #expect(result == URL(string: "https://cdn.example.com/hls/1080p.m3u8"))
     }
 }
