@@ -127,11 +127,15 @@ public struct TOSPlayerView: View {
                 YouTubeWebPlayerView(webView: vm.webView)
                     .ignoresSafeArea()
 
+                #if os(macOS)
                 // MARK: Top-right control cluster — more menu (like/dislike, sleep
                 // timer, share) + playback speed picker. See topRightControls for why
                 // these are native Menus rather than ports of the standard player's
-                // custom overlay views.
+                // custom overlay views. On iOS both live in the back-button row
+                // instead (see backButton()) — there's no on-screen back button here
+                // to anchor them to on macOS.
                 topRightControls(topInset: geo.safeAreaInsets.top)
+                #endif
 
                 #if os(iOS)
                 // MARK: Back button (iOS only)
@@ -276,10 +280,11 @@ public struct TOSPlayerView: View {
                 }
                 .accessibilityIdentifier("tosPlayer.backButton")
 
-                // Playback speed pill — placed here (rather than top-right) so it
-                // doesn't overlap the IFrame's own video-title/channel row, which
+                // Playback speed pill + more menu — placed here (rather than top-right)
+                // so they don't overlap the IFrame's own video-title/channel row, which
                 // sits just below the top-right corner.
                 speedButton
+                moreButton
 
                 Spacer()
             }
@@ -301,19 +306,17 @@ public struct TOSPlayerView: View {
     // as a prerequisite for richer transfers (queue, captions, description, etc.) —
     // this is the lightest possible version of that affordance, available today
     // without waiting on the controls:0 fork.
+    #if os(macOS)
     private func topRightControls(topInset: CGFloat) -> some View {
         HStack(spacing: 8) {
             Spacer()
             moreButton
-            #if os(macOS)
-            // On iOS the speed pill lives next to the back button (top-left) —
-            // see backButton(). macOS has no on-screen back button, so it stays here.
             speedButton
-            #endif
         }
         .padding(.top, max(topInset, 16))
         .padding(.trailing, 16)
     }
+    #endif
 
     /// Transferred from PlayerView+PickerOverlays.speedPickerOverlay — same source of
     /// truth (`AppSettings.availableSpeeds` / `store.settings.playbackSpeed`) and the
