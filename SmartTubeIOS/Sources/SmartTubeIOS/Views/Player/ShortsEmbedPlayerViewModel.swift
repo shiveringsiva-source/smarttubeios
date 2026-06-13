@@ -180,6 +180,8 @@ final class ShortsEmbedPlayerViewModel: NSObject {
     /// spike. Resets all per-video `@Observable` state before loading, per the design
     /// spec's Data Flow section.
     func loadShort(video: Video) {
+        transitionWatchHistory(to: video.id)
+
         videoId = video.id
         channelId = video.channelId
 
