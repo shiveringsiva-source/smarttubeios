@@ -241,6 +241,119 @@ struct SubscriptionParsingTests {
         #expect(video.id == "abc123")
         #expect(video.duration == 600)  // 10:00 = 600s
     }
+
+    /// Reproduces the real authenticated TVHTML5 `FEsubscriptions` response structure
+    /// (captured from a live account with 636 subscriptions): the tileRenderers live
+    /// inside an extra tvSecondaryNavRenderer/tvSecondaryNavSectionRenderer "tabs" layer
+    /// (one tab per subscribed channel) not present in simpler home/history responses:
+    ///   contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections[].tvSecondaryNavSectionRenderer.tabs[]
+    ///     .tabRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents[]
+    ///       .shelfRenderer.content.horizontalListRenderer.items[].tileRenderer
+    /// Reaching the tileRenderer requires more recursion depth than the simpler structures.
+    @Test func tvHTML5SubscriptionsTabWrapperParsed() async throws {
+        let mockSubscriptionsResponse: [String: Any] = [
+            "contents": [
+                "tvBrowseRenderer": [
+                    "content": [
+                        "tvSecondaryNavRenderer": [
+                            "sections": [
+                                [
+                                    "tvSecondaryNavSectionRenderer": [
+                                        "tabs": [
+                                            [
+                                                "tabRenderer": [
+                                                    "content": [
+                                                        "tvSurfaceContentRenderer": [
+                                                            "content": [
+                                                                "sectionListRenderer": [
+                                                                    "contents": [
+                                                                        [
+                                                                            "shelfRenderer": [
+                                                                                "content": [
+                                                                                    "horizontalListRenderer": [
+                                                                                        "items": [
+                                                                                            [
+                                                                                                "tileRenderer": [
+                                                                                                    "contentType": "TILE_CONTENT_TYPE_VIDEO",
+                                                                                                    "contentId": "A8ig2UPjOXQ",
+                                                                                                    "onSelectCommand": [
+                                                                                                        "watchEndpoint": ["videoId": "A8ig2UPjOXQ"]
+                                                                                                    ],
+                                                                                                    "metadata": [
+                                                                                                        "tileMetadataRenderer": [
+                                                                                                            "title": ["simpleText": "Oh no, it's an eBrain"],
+                                                                                                            "lines": [
+                                                                                                                [
+                                                                                                                    "lineRenderer": [
+                                                                                                                        "items": [
+                                                                                                                            [
+                                                                                                                                "lineItemRenderer": [
+                                                                                                                                    "text": ["runs": [["text": "Action Retro"]]]
+                                                                                                                                ]
+                                                                                                                            ]
+                                                                                                                        ]
+                                                                                                                    ]
+                                                                                                                ]
+                                                                                                            ]
+                                                                                                        ]
+                                                                                                    ],
+                                                                                                    "header": [
+                                                                                                        "tileHeaderRenderer": [
+                                                                                                            "thumbnail": [
+                                                                                                                "thumbnails": [
+                                                                                                                    ["url": "https://i.ytimg.com/vi/A8ig2UPjOXQ/hqdefault.jpg", "width": 480, "height": 360]
+                                                                                                                ]
+                                                                                                            ],
+                                                                                                            "thumbnailOverlays": [
+                                                                                                                [
+                                                                                                                    "thumbnailOverlayTimeStatusRenderer": [
+                                                                                                                        "text": ["simpleText": "24:31"],
+                                                                                                                        "style": "DEFAULT"
+                                                                                                                    ]
+                                                                                                                ]
+                                                                                                            ]
+                                                                                                        ]
+                                                                                                    ],
+                                                                                                    "onLongPressCommand": [
+                                                                                                        "showMenuCommand": [
+                                                                                                            "subtitle": ["simpleText": "Action Retro • @ActionRetro"]
+                                                                                                        ]
+                                                                                                    ]
+                                                                                                ]
+                                                                                            ]
+                                                                                        ]
+                                                                                    ]
+                                                                                ]
+                                                                            ]
+                                                                        ]
+                                                                    ]
+                                                                ]
+                                                            ]
+                                                        ]
+                                                    ]
+                                                ]
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+
+        let api = InnerTubeAPI()
+        let group = try await api.parseVideoGroupForTesting(mockSubscriptionsResponse, title: "Subscriptions")
+
+        #expect(group.videos.count == 1, "Should reach tileRenderer through the real FEsubscriptions tab wrapper chain")
+        let video = try #require(group.videos.first)
+        #expect(video.id == "A8ig2UPjOXQ")
+        #expect(video.title == "Oh no, it's an eBrain")
+        #expect(video.channelTitle == "Action Retro")
+        #expect(video.channelId == "@ActionRetro")
+        #expect(video.duration == 1471)  // 24:31
+    }
 }
 
 // MARK: - HistoryParsingTests

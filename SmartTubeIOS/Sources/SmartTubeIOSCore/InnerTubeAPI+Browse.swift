@@ -77,14 +77,6 @@ extension InnerTubeAPI {
             body["browseId"] = "FEsubscriptions"
         }
         let data = try await postTV(endpoint: "browse", body: body)
-        // DEBUG: dump subscriptions response to Desktop for renderer inspection
-        if continuationToken == nil,
-           let jsonData = try? JSONSerialization.data(withJSONObject: data, options: [.prettyPrinted]),
-           let jsonStr = String(data: jsonData, encoding: .utf8) {
-            let path = "/Users/milikadelic/Desktop/subs_browse_p1.json"
-            try? jsonStr.write(toFile: path, atomically: true, encoding: .utf8)
-            tubeLog.notice("DEBUG: wrote subscriptions browse response to \(path, privacy: .public)")
-        }
         let group = try parseVideoGroup(from: data, title: "Subscriptions")
         // Preserve the API's arrival order — YouTube returns tiles in the order
         // it considers most relevant. Sorting by date re-inserts new pages'
