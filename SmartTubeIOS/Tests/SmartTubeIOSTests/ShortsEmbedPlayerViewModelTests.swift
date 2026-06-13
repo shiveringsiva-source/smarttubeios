@@ -47,5 +47,72 @@ struct ShortsEmbedPlayerViewModelTests {
         #expect(vm.duration == 0)
         #expect(vm.isReady == false)
     }
+
+    @Test("checkSponsorSkip with no loaded segments does nothing")
+    func checkSponsorSkipNoSegments() {
+        let vm = ShortsEmbedPlayerViewModel(api: InnerTubeAPI())
+        vm.duration = 60
+
+        vm.checkSponsorSkip(at: 5)
+
+        #expect(vm.currentToastSegment == nil)
+        #expect(vm.activeSkipEnd == nil)
+        #expect(vm.pendingSkipLog == nil)
+    }
+
+    @Test("checkSponsorSkip auto-skips a sponsor segment and records a pending skip log")
+    func checkSponsorSkipAutoSkipsSponsorSegment() {
+        let vm = ShortsEmbedPlayerViewModel(api: InnerTubeAPI())
+        vm.duration = 60
+        vm.sponsorSegments = [SponsorSegment(start: 5, end: 10, category: .sponsor)]
+
+        vm.checkSponsorSkip(at: 6)
+
+        #expect(vm.activeSkipEnd == 10)
+        #expect(vm.currentToastSegment == nil)
+        #expect(vm.pendingSkipLog?.category == .sponsor)
+        #expect(vm.pendingSkipLog?.targetTime == 10)
+    }
+
+    @Test("checkSponsorSkip shows a toast for an intro segment instead of skipping")
+    func checkSponsorSkipShowsToastForIntroSegment() {
+        let vm = ShortsEmbedPlayerViewModel(api: InnerTubeAPI())
+        vm.duration = 60
+        vm.sponsorSegments = [SponsorSegment(start: 5, end: 10, category: .intro)]
+
+        vm.checkSponsorSkip(at: 6)
+
+        #expect(vm.currentToastSegment?.category == .intro)
+        #expect(vm.activeSkipEnd == nil)
+        #expect(vm.pendingSkipLog == nil)
+    }
+
+    @Test("logSkipLanding clears the pending log once the seek lands")
+    func logSkipLandingClearsPendingLogOnLanding() {
+        let vm = ShortsEmbedPlayerViewModel(api: InnerTubeAPI())
+        vm.pendingSkipLog = PendingSkipLog(
+            category: .sponsor, segmentStart: 5, segmentEnd: 10, beforeTime: 6, targetTime: 10
+        )
+
+        vm.logSkipLanding(at: 10)
+
+        #expect(vm.pendingSkipLog == nil)
+    }
+
+    @Test("logSkipLanding times out after 16 ticks without landing")
+    func logSkipLandingTimesOutWithoutLanding() {
+        let vm = ShortsEmbedPlayerViewModel(api: InnerTubeAPI())
+        vm.pendingSkipLog = PendingSkipLog(
+            category: .sponsor, segmentStart: 5, segmentEnd: 10, beforeTime: 6, targetTime: 10
+        )
+
+        for _ in 0..<16 {
+            vm.logSkipLanding(at: 6)
+            #expect(vm.pendingSkipLog != nil)
+        }
+        vm.logSkipLanding(at: 6)
+
+        #expect(vm.pendingSkipLog == nil)
+    }
 }
 #endif

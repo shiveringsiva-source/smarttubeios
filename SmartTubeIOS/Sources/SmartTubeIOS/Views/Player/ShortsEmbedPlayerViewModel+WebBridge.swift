@@ -60,6 +60,9 @@ extension ShortsEmbedPlayerViewModel {
                 CFNotificationName("com.void.smarttube.shortsplayer.ready" as CFString),
                 nil, nil, true
             )
+            // Kick off SponsorBlock segment loading for this Short — parity with
+            // TOSPlayerViewModel+WebBridge.swift's "ready" case.
+            Task { await self.fetchSponsorSegments() }
             // Apply the user's saved playback-speed preference — parity with
             // TOSPlayerViewModel+WebBridge.swift's "ready" case.
             if settings.playbackSpeed != 1.0 {
@@ -120,6 +123,11 @@ extension ShortsEmbedPlayerViewModel {
                 )
             }
             playerState = newState
+            checkSponsorSkip(at: t)
+            // Confirm/observe the landing of any in-flight auto-skip seek (no-op when
+            // none is pending — see PendingSkipLog for why this must happen here, on
+            // the next observed tick, rather than synchronously after seekTo()).
+            logSkipLanding(at: t)
 
         case "error":
             let code = (json["code"] as? Int) ?? -1
