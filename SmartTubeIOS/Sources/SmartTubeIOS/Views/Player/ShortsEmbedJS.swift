@@ -95,8 +95,15 @@ enum ShortsEmbedJS {
             var t = video.currentTime || 0;
 
             if (_prevState === -2) {
+                var dur = video.duration || 0;
+                if (dur <= 0) {
+                    // Metadata not loaded yet on this poll — stay in the "not yet
+                    // ready" sentinel state and try again on the next 250ms tick
+                    // rather than firing "ready" with a bogus duration of 0.
+                    return;
+                }
                 _prevState = s;
-                postMsg({type: 'ready', duration: video.duration || 0,
+                postMsg({type: 'ready', duration: dur,
                          readyState: video.readyState, buffered: video.buffered.length});
             }
 
