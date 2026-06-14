@@ -180,10 +180,16 @@ final class PlayerGhostStreamRegressionUITests: XCTestCase {
 
 final class ShortsGhostStreamRegressionUITests: XCTestCase {
 
-    /// Real YouTube Short IDs used for direct-launch testing.
-    /// Tried in order; the first set launches the Shorts player without navigating
-    /// through the home feed, avoiding auth dependency on parallel clone simulators.
-    private static let shortIDs = ["MCv4EyEFgVg", "pPvd8UxmCGY", "fKopy74weus"]
+    /// Real YouTube video IDs used for direct-launch testing.
+    /// Launches the Shorts player without navigating through the home feed,
+    /// avoiding auth dependency on parallel clone simulators.
+    ///
+    /// These three videos are long-running, durable, embeddable uploads chosen
+    /// to avoid the staleness that hit the previous IDs (`MCv4EyEFgVg` /
+    /// `pPvd8UxmCGY` both started returning "Video unavailable" / iframeError(153),
+    /// which made the (working-as-designed) `advanceAfterError()` recovery path
+    /// auto-advance the index mid-test — see task #248).
+    private static let shortIDs = ["dQw4w9WgXcQ", "9bZkp7q19f0", "kJQP7kiw5Fk"]
 
     private var app: XCUIApplication!
 
