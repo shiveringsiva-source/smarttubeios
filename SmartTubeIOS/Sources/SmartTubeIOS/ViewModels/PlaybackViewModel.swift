@@ -301,6 +301,13 @@ public final class PlaybackViewModel {
     /// True while `replaceCurrentItem` is executing; guards the rate observer from
     /// treating the transient rate-drop as an unexpected external pause.
     var isSwappingItem: Bool = false
+    /// True while an AVAudioSession interruption (e.g. an incoming phone call) is in
+    /// progress. Suppresses the rate-observer's stall detection/recovery so a
+    /// deliberate interruption-pause isn't mistaken for a playback stall (#244).
+    var isHandlingAudioInterruption: Bool = false
+    /// Captures `isPlaying` at the start of an audio interruption so playback can be
+    /// resumed on `.ended` only if it was actually playing before the call (#244).
+    var wasPlayingBeforeInterruption: Bool = false
     #if canImport(WebKit)
     /// Set to true when BotGuardWebViewRunner successfully produces a minted (non-websafe-fallback)
     /// PO token for the current video. Allows the inner rqh=1 guard in attemptComposition to

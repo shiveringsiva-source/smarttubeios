@@ -39,7 +39,12 @@ extension PlaybackViewModel {
                 // were playing so we can resume when it ends.
                 playerLog.notice("[interruption] began — pausing player")
                 Task { @MainActor [weak self] in
-                    self?.player.pause()
+                    guard let self else { return }
+                    self.wasPlayingBeforeInterruption = self.isPlaying
+                    self.isHandlingAudioInterruption = true
+                    self.player.pause()
+                    self.isPlaying = false
+                    self.updateNowPlayingPlayback()
                 }
             case .ended:
                 let optionsValue = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
@@ -52,9 +57,13 @@ extension PlaybackViewModel {
                     } catch {
                         playerLog.error("[interruption] setActive failed: \(error.localizedDescription)")
                     }
-                    if options.contains(.shouldResume) && self.isPlaying {
+                    if options.contains(.shouldResume) && self.wasPlayingBeforeInterruption {
                         self.player.rate = Float(self.settings.playbackSpeed)
+                        self.isPlaying = true
+                        self.updateNowPlayingPlayback()
                     }
+                    self.isHandlingAudioInterruption = false
+                    self.wasPlayingBeforeInterruption = false
                 }
             @unknown default:
                 break
