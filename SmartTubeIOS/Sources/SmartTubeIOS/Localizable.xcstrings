@@ -8598,6 +8598,7 @@
       }
     },
     "Force IPv4 (VPN users)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -9555,6 +9556,7 @@
 
     },
     "In-App Mini Player" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -14042,6 +14044,7 @@
       }
     },
     "Picture in Picture" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
