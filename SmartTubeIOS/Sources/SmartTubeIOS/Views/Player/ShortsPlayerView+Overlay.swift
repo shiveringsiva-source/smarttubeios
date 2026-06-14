@@ -43,6 +43,11 @@ extension ShortsPlayerView {
 
             Spacer()
         }
+        // Make the whole overlay (including the transparent Spacer regions)
+        // hit-testable for the DragGesture below — otherwise SwiftUI only
+        // hit-tests the non-transparent back button / index area, and swipes
+        // over empty space fall through to the WKWebView untouched.
+        .contentShape(Rectangle())
         // Allow swipe navigation even when the controls overlay is on screen.
         // .simultaneousGesture fires alongside button taps so controls remain
         // interactive while vertical swipes still drive Shorts navigation.
