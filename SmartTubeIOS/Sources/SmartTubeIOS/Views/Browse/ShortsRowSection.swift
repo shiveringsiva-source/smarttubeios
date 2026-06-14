@@ -66,7 +66,12 @@ struct ShortsRowSection: View {
         .focusSection()
         #else
         ScrollView(.horizontal, showsIndicators: true) {
-            LazyHStack(alignment: .top, spacing: videoGridRowSpacing) {
+            // Eager HStack (not LazyHStack): the endless-scroll cascade pre-loads
+            // dozens of cards into `videos` in the background (preloadMoreShorts),
+            // and a LazyHStack would only materialize the few cards near the
+            // visible viewport, leaving the rest invisible (and untestable via
+            // accessibility) until the user manually scrolls past them.
+            HStack(alignment: .top, spacing: videoGridRowSpacing) {
                 ForEach(videos) { video in
                     ShortsCardView(video: video, onTap: { onSelect(video) })
                         .frame(width: cardWidth, height: cardWidth * 16 / 9)

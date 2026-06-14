@@ -33,6 +33,9 @@ public final class HomeViewModel {
     /// Continuation token from the last FEshorts fetch; used by loadMoreShortsIfNeeded.
     private var shortsNextPageToken: String? = nil
     private var isLoadingMoreShorts: Bool = false
+    /// Background cascade started after `load()` finishes; keeps paging Shorts
+    /// content toward `preloadMoreShorts`'s threshold. Cancelled on the next `load()`.
+    private var shortsPreloadTask: Task<Void, Never>? = nil
     public private(set) var isRefreshing: Bool = false
     /// Timestamp of the last successful load. Used for staleness checks.
     public private(set) var loadedAt: Date? = nil
@@ -183,6 +186,7 @@ public final class HomeViewModel {
 
     public func load() {
         loadTask?.cancel()
+        shortsPreloadTask?.cancel()
         loadedAt = nil
         isRefreshing = true
         shortsVideos = []
@@ -240,6 +244,11 @@ public final class HomeViewModel {
             let merged = self.mergedVideos
             let mergedShorts = merged.filter { $0.isShort }.count
             homeLog.notice("load complete: merged=\(merged.count) regular=\(merged.count - mergedShorts) mergedShorts=\(mergedShorts) shortsSection=\(shortsVideos.count)")
+            // Keep paging Shorts content in the background toward preloadMoreShorts's
+            // higher threshold, without delaying the load completion above.
+            shortsPreloadTask = Task { @MainActor [weak self] in
+                await self?.preloadMoreShorts()
+            }
         }
     }
 
@@ -332,38 +341,49 @@ public final class HomeViewModel {
         guard !isLoadingMoreShorts, shortsNextPageToken != nil || subsToken != nil else { return }
         isLoadingMoreShorts = true
         defer { isLoadingMoreShorts = false }
+        _ = await fetchOneShortsPage()
+    }
+
+    /// Fetches one increment of Shorts content: a FEshorts search-continuation page
+    /// if available, falling back to one subscriptions-continuation page if the
+    /// search page is exhausted or returned nothing new. Search results land in
+    /// `shortsVideos`; subs results land in `sections[subscriptions].videos` — both
+    /// are surfaced together via `homeShortsVideos`.
+    /// Returns `true` if any new videos were appended.
+    private func fetchOneShortsPage() async -> Bool {
         // Phase 1: one search page (srch: token from fetchShorts).
         if let token = shortsNextPageToken {
-            homeLog.notice("loadNextShortsPage search: fetching token=\(String(token.prefix(16)))\u{2026}")
+            homeLog.notice("fetchOneShortsPage search: fetching token=\(String(token.prefix(16)))\u{2026}")
             do {
                 let more = try await api.fetchShortsMore(continuationToken: token)
                 let existingIDs = Set(shortsVideos.map(\.id))
                 let newVideos = more.videos.filter { !existingIDs.contains($0.id) }
                 shortsVideos.append(contentsOf: newVideos)
                 shortsNextPageToken = more.nextPageToken
-                homeLog.notice("loadNextShortsPage search: added \(newVideos.count) total=\(shortsVideos.count) hasMore=\(more.nextPageToken != nil)")
+                homeLog.notice("fetchOneShortsPage search: added \(newVideos.count) total=\(shortsVideos.count) hasMore=\(more.nextPageToken != nil)")
                 if !newVideos.isEmpty {
-                    return // yielded new Shorts; next scroll loads the next page
+                    return true
                 }
                 // Search page returned 0 new Shorts — fall through to Phase 2
             } catch {
-                homeLog.error("loadNextShortsPage search: failed: \(error.localizedDescription)")
+                homeLog.error("fetchOneShortsPage search: failed: \(error.localizedDescription)")
                 shortsNextPageToken = nil
             }
         }
-        // Phase 2: one subs page when search is exhausted.
-        // Loading one page per call lets user-triggered scrolls append more pages lazily.
+        // Phase 2: one subs page when search is exhausted or returned nothing new.
         if let idx = sections.firstIndex(where: { $0.section.type == .subscriptions }),
            let token = sections[idx].nextPageToken {
-            homeLog.notice("loadNextShortsPage subs: fetching token=\(String(token.prefix(16)))\u{2026}")
+            homeLog.notice("fetchOneShortsPage subs: fetching token=\(String(token.prefix(16)))\u{2026}")
             let more = await Self.fetchMoreVideos(type: .subscriptions, token: token, api: api)
             let existingIDs = Set(sections[idx].videos.map(\.id))
             let newVideos = more.0.filter { !existingIDs.contains($0.id) }
             sections[idx].videos.append(contentsOf: newVideos)
             sections[idx].nextPageToken = more.1
             let newShorts = newVideos.filter { $0.isShort }.count
-            homeLog.notice("loadNextShortsPage subs: added \(newVideos.count) (\(newShorts) shorts) hasMore=\(more.1 != nil)")
+            homeLog.notice("fetchOneShortsPage subs: added \(newVideos.count) (\(newShorts) shorts) hasMore=\(more.1 != nil)")
+            return !newVideos.isEmpty
         }
+        return false
     }
 
     /// Auto-loads an additional page of FEshorts if the current count falls below
@@ -381,7 +401,7 @@ public final class HomeViewModel {
         }
         guard shortsVideos.count < threshold, shortsNextPageToken != nil else {
             // If search token is exhausted but subs has a continuation, Phase 2 of
-            // loadNextShortsPage will cover it. Nothing to do here.
+            // fetchOneShortsPage will cover it. Nothing to do here.
             homeLog.notice("loadMoreShortsIfNeeded: skipped count=\(shortsVideos.count) hasToken=\(shortsNextPageToken != nil) loading=\(isLoadingMoreShorts)")
             return
         }
@@ -389,22 +409,39 @@ public final class HomeViewModel {
         defer { isLoadingMoreShorts = false }
         var loopIteration = 0
         // Loop until we have at least `threshold` items or pages run out.
-        while shortsVideos.count < threshold, let token = shortsNextPageToken {
+        while shortsVideos.count < threshold, shortsNextPageToken != nil {
             loopIteration += 1
-            homeLog.notice("loadMoreShortsIfNeeded: loop=\(loopIteration) count=\(shortsVideos.count) threshold=\(threshold) token=\(token.prefix(16))…")
-            do {
-                let more = try await api.fetchShortsMore(continuationToken: token)
-                let existingIDs = Set(shortsVideos.map(\.id))
-                let newVideos = more.videos.filter { !existingIDs.contains($0.id) }
-                shortsVideos.append(contentsOf: newVideos)
-                shortsNextPageToken = more.nextPageToken
-                homeLog.notice("loadMoreShortsIfNeeded: added \(newVideos.count) total=\(shortsVideos.count)")
-                if newVideos.isEmpty {
-                    // No new content on this page — avoid an infinite loop.
-                    break
-                }
-            } catch {
-                homeLog.error("loadMoreShortsIfNeeded: fetch failed: \(error.localizedDescription)")
+            homeLog.notice("loadMoreShortsIfNeeded: loop=\(loopIteration) count=\(shortsVideos.count) threshold=\(threshold)")
+            guard await fetchOneShortsPage() else { break }
+        }
+    }
+
+    /// Continues fetching Shorts pages in the background (search continuation, then
+    /// subscriptions continuation) until `homeShortsVideos.count` reaches
+    /// `preloadHighThreshold` or both sources are exhausted. Started as a
+    /// fire-and-forget task after `load()` finishes its fast initial fill
+    /// (`loadMoreShortsIfNeeded`), so the Shorts row keeps growing for an
+    /// endless-scroll experience without delaying `isRefreshing = false`.
+    private func preloadMoreShorts() async {
+        #if os(tvOS)
+        let preloadHighThreshold = 50
+        #else
+        let preloadHighThreshold = 40
+        #endif
+        guard !isLoadingMoreShorts else { return }
+        isLoadingMoreShorts = true
+        defer { isLoadingMoreShorts = false }
+        var loopIteration = 0
+        while !Task.isCancelled, homeShortsVideos.count < preloadHighThreshold {
+            let subsToken = sections.first { $0.section.type == .subscriptions }?.nextPageToken
+            guard shortsNextPageToken != nil || subsToken != nil else {
+                homeLog.notice("preloadMoreShorts: stopping — no continuation tokens left, count=\(homeShortsVideos.count)")
+                break
+            }
+            loopIteration += 1
+            homeLog.notice("preloadMoreShorts: iteration=\(loopIteration) count=\(homeShortsVideos.count)/\(preloadHighThreshold)")
+            guard await fetchOneShortsPage() else {
+                homeLog.notice("preloadMoreShorts: stopping — page returned no new videos")
                 break
             }
         }

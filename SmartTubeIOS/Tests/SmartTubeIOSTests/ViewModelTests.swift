@@ -27,6 +27,10 @@ final class MockInnerTubeAPI: InnerTubeAPIProtocol {
     var historyResult: VideoGroup = VideoGroup(title: "History", videos: [])
     var shortsResult: VideoGroup = VideoGroup(title: "Shorts", videos: [])
     var shortsMoreResult: VideoGroup = VideoGroup(title: "Shorts", videos: [])
+    /// When set, overrides `shortsMoreResult` and is called for each
+    /// `fetchShortsMore` invocation — lets tests vary the response per call
+    /// (e.g. to simulate a multi-page continuation sequence).
+    var shortsMoreHandler: ((String) -> VideoGroup)? = nil
     var musicResult: VideoGroup = VideoGroup(title: "Music", videos: [])
     var gamingResult: VideoGroup = VideoGroup(title: "Gaming", videos: [])
     var newsResult: VideoGroup = VideoGroup(title: "News", videos: [])
@@ -87,6 +91,7 @@ final class MockInnerTubeAPI: InnerTubeAPIProtocol {
     func fetchShortsMore(continuationToken: String) async throws -> VideoGroup {
         calls.append(Call(method: "fetchShortsMore", args: [continuationToken]))
         if let e = errorToThrow { throw e }
+        if let handler = shortsMoreHandler { return handler(continuationToken) }
         return shortsMoreResult
     }
 
@@ -368,6 +373,59 @@ struct HomeViewModelTests {
         #expect(!ids.contains("srt0_EEEEE") == false) // original kept
         #expect(ids.contains("srt10_FFFFF"))
         #expect(ids.contains("srt11_FFFFF"))
+    }
+
+    @Test("preloadMoreShorts loops fetching pages until homeShortsVideos reaches the high threshold")
+    func preloadMoreShortsLoopsUntilThreshold() async {
+        let mock = MockInnerTubeAPI()
+        let initialShorts = (0..<3).map { Video(id: "srt\($0)_AAAAA", title: "Short \($0)", channelTitle: "Ch", isShort: true) }
+        mock.shortsResult = VideoGroup(title: "Shorts", videos: initialShorts, nextPageToken: "tok_0")
+        mock.homeRowsResult = []
+        mock.subscriptionsResult = VideoGroup(title: "Subs", videos: [])
+
+        // Each call returns 5 fresh shorts plus a continuation token, so the
+        // background preload loop must run several iterations to cross the
+        // 40-item high threshold.
+        var callCount = 0
+        mock.shortsMoreHandler = { _ in
+            callCount += 1
+            let page = (0..<5).map { i in
+                Video(id: "more\(callCount)_\(i)_GGGGG", title: "More \(callCount)-\(i)", channelTitle: "Ch", isShort: true)
+            }
+            return VideoGroup(title: "Shorts", videos: page, nextPageToken: "tok_\(callCount)")
+        }
+
+        let vm = HomeViewModel(api: mock)
+        vm.load()
+        await waitForTasks()
+
+        // 3 initial + repeated pages of 5 must reach the 40-item preload threshold.
+        #expect(vm.homeShortsVideos.count >= 40)
+        // Reaching 40 from 3 (+5/page) requires looping across multiple pages,
+        // not just the single page loadMoreShortsIfNeeded fetches for its
+        // own (lower) threshold.
+        let shortsMoreCallCount = mock.calls.filter { $0.method == "fetchShortsMore" }.count
+        #expect(shortsMoreCallCount >= 7)
+    }
+
+    @Test("preloadMoreShorts stops immediately when no continuation tokens remain")
+    func preloadMoreShortsStopsWithNoTokens() async {
+        let mock = MockInnerTubeAPI()
+        let initialShorts = (0..<2).map { Video(id: "srt\($0)_HHHHH", title: "Short \($0)", channelTitle: "Ch", isShort: true) }
+        // No continuation token from the initial fetch, and no subs section
+        // continuation either — both sources are exhausted from the start.
+        mock.shortsResult = VideoGroup(title: "Shorts", videos: initialShorts, nextPageToken: nil)
+        mock.homeRowsResult = []
+        mock.subscriptionsResult = VideoGroup(title: "Subs", videos: [])
+
+        let vm = HomeViewModel(api: mock)
+        vm.load()
+        await waitForTasks()
+
+        // Below the 40-item threshold, but with no tokens left preload must
+        // not call fetchShortsMore at all.
+        #expect(vm.homeShortsVideos.count == 2)
+        #expect(!mock.calls.contains(where: { $0.method == "fetchShortsMore" }))
     }
 }
 
