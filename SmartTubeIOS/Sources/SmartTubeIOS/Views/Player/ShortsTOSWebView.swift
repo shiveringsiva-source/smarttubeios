@@ -33,7 +33,7 @@ struct ShortsTOSWebView: UIViewRepresentable {
         webView.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(webView)
         NSLayoutConstraint.activate([
-            webView.topAnchor.constraint(equalTo: container.topAnchor),
+            webView.topAnchor.constraint(equalTo: container.safeAreaLayoutGuide.topAnchor),
             webView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             webView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
