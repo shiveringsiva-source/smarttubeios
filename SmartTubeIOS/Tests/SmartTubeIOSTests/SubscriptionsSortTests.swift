@@ -64,12 +64,14 @@ struct SubscriptionsSortTests {
         #expect(sorted[2].title == "Zebra Channel")
     }
 
-    /// After paginating subscriptions, the merged feed must remain globally sorted
-    /// newest-first even when page 2 videos interleave with page 1 videos.
+    /// After paginating subscriptions, new videos must be appended at the bottom of
+    /// the feed without re-sorting the already-rendered videos.
     ///
-    /// Reproduces the bug: "today → 4 days ago → 2 days ago → 1 day ago" (wrong)
-    /// Expected:           "today → 2 days ago → 1 day ago → 4 days ago" (correct)
-    @Test func paginatedSubscriptionsRemainGloballySorted() async {
+    /// Re-sorting on every page load reorders rows that are already on screen, which
+    /// is jarring mid-scroll (videos jump to a different position). Page 2 may contain
+    /// videos that are newer than some of page 1's videos, but they must still land
+    /// at the end of the list, not interleaved.
+    @Test func paginatedSubscriptionsAppendNewVideosAtBottomWithoutResort() async {
         let now = Date()
         let vidToday = Video(id: "today", title: "Today",   channelTitle: "Ch",
                              publishedAt: now)
@@ -96,8 +98,8 @@ struct SubscriptionsSortTests {
 
         #expect(vm.videoGroups[0].videos.count == 2, "page 1 should load 2 videos")
 
-        // Page 2: 2 days ago and 1 day ago (sorted newest-first by fetchSubscriptions)
-        // These interleave with page 1 — 1d and 2d belong between "today" and "4d".
+        // Page 2: 2 days ago and 1 day ago — newer than "4d" but must still be appended
+        // after it, not interleaved between "today" and "4d".
         mock.subscriptionsResult = VideoGroup(
             title: "Subs",
             videos: [vid2D, vid1D],
@@ -111,10 +113,11 @@ struct SubscriptionsSortTests {
 
         let merged = vm.videoGroups[0].videos
         #expect(merged.count == 4, "all 4 videos should be present after merge")
-        // Strict newest-first: today > 1d > 2d > 4d
+        // Page 1's order is preserved, page 2's videos are appended at the bottom
+        // in the order the API returned them.
         #expect(merged[0].id == "today")
-        #expect(merged[1].id == "1d")
+        #expect(merged[1].id == "4d")
         #expect(merged[2].id == "2d")
-        #expect(merged[3].id == "4d")
+        #expect(merged[3].id == "1d")
     }
 }

@@ -537,13 +537,12 @@ public final class BrowseViewModel {
                     browseLog.notice("fetchNextPage cancelled: section=\(section.title)")
                 } else {
                     browseLog.notice("fetchNextPage success: section=\(section.title) newVideos=\(group.videos.count) nextToken=\(group.nextPageToken != nil)")
+                    // Append new videos at the bottom without re-sorting. Re-sorting the
+                    // already-rendered feed after every page reorders visible rows mid-scroll,
+                    // which is jarring. The initial load (loadContent) sorts once before
+                    // anything is on screen; subsequent pages are simply appended in the
+                    // order the API returns them.
                     mergeIntoFirstGroup(group)
-                    // Re-sort newest-first after merging the new page. The YouTube
-                    // subscriptions API returns each page in roughly-reverse-chronological
-                    // order, but page boundaries don't align with publish dates — a video
-                    // from page 2 can be newer than the oldest video on page 1. Sorting
-                    // here keeps the merged feed globally ordered by publishedAt.
-                    videoGroups[0].videos.sort { ($0.publishedAt ?? .distantPast) > ($1.publishedAt ?? .distantPast) }
                 }
             case .history:
                 let group = try await retryWithBackoff(label: "BrowseVM[\(section.title)]") {
