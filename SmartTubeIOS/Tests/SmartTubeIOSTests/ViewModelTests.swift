@@ -492,6 +492,23 @@ struct BrowseViewModelTests {
         #expect(mock.calls.contains { $0.method == "fetchShorts" })
     }
 
+    @Test("loadContent for .shorts with zero results normalizes videoGroups to empty")
+    func loadShortsWithEmptyResultClearsVideoGroups() async {
+        let mock = MockInnerTubeAPI()
+        mock.shortsResult = VideoGroup(title: "Shorts", videos: [])
+
+        let section = BrowseSection(id: "shorts", title: "Shorts", type: .shorts)
+        let vm = BrowseViewModel(api: mock, initialSection: section)
+        vm.loadContent(for: section, refresh: true, source: "test")
+        await waitForTasks()
+
+        // videoGroups must be [] (not [VideoGroup(videos: [])]) so the Home
+        // Shorts chip's empty state ("Nothing here yet") can render — a
+        // 1-element array with no videos is indistinguishable from "has content"
+        // to sectionFeed's videoGroups.isEmpty check.
+        #expect(vm.videoGroups.isEmpty)
+    }
+
     @Test("Error on non-auth section sets error property")
     func errorOnFetchSetsErrorProperty() async {
         struct TestError: Error {}

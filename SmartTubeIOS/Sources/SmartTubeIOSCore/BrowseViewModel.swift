@@ -447,7 +447,7 @@ public final class BrowseViewModel {
 
             case .shorts:
                 let group = try await api.fetchShorts()
-                if !Task.isCancelled { videoGroups = [group] }
+                if !Task.isCancelled { videoGroups = group.videos.isEmpty ? [] : [group] }
 
             case .music:
                 let group = try await api.fetchMusic()

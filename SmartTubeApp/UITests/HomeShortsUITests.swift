@@ -204,8 +204,11 @@ final class HomeShortsUITests: XCTestCase {
             try captureAndSkip("Section container not found after Shorts chip tap — network issue.", in: app)
         }
 
+        // The Shorts chip renders its vertical list via ShortsRowSection, whose
+        // cards carry "shorts.card.*" identifiers (not "video.card.*", which is
+        // used by the regular grid/row sections for other chips).
         let hasContent = sectionContainer.descendants(matching: .any)
-                             .matching(NSPredicate(format: "identifier BEGINSWITH 'video.card.'"))
+                             .matching(NSPredicate(format: "identifier BEGINSWITH 'video.card.' OR identifier BEGINSWITH 'shorts.card.'"))
                              .count > 0
         let hasEmpty   = app.staticTexts["Nothing here yet"].exists
                       || app.staticTexts["Sign in to see your library"].exists
