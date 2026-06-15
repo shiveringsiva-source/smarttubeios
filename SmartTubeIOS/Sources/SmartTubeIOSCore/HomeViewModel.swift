@@ -182,6 +182,16 @@ public final class HomeViewModel {
         mergedVideos.removeAll { $0.channelId == id }
     }
 
+    /// Cancels all in-flight and background work (the main load task, the
+    /// Shorts preload loop, and the feed-hide notification observers). Callers
+    /// that create short-lived `HomeViewModel` instances — e.g. tests — should
+    /// call this when done to avoid orphaned tasks bleeding state into later use.
+    public func cancel() {
+        loadTask?.cancel()
+        shortsPreloadTask?.cancel()
+        hideObserverTasks.forEach { $0.cancel() }
+    }
+
     // MARK: - Public API
 
     public func load() {

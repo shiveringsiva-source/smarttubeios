@@ -22,6 +22,17 @@ struct LocalSubscriptionFeedServiceTests {
         LocalChannel(id: id, title: title)
     }
 
+    /// Builds a `LocalSubscriptionFeedService` backed by `RouterURLProtocol`,
+    /// seeding its routes for this test. `RouterURLProtocol.routes` is a
+    /// shared static — callers must clear it (e.g. `defer { RouterURLProtocol.routes = [:] }`)
+    /// so a route set here can't leak into a concurrently-running test.
+    private func makeService(with routes: [String: Data]) -> LocalSubscriptionFeedService {
+        RouterURLProtocol.routes = routes
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [RouterURLProtocol.self]
+        return LocalSubscriptionFeedService(session: URLSession(configuration: config))
+    }
+
     // MARK: - Empty store
 
     @Test("fetchFeed returns empty array when no channels are followed")
@@ -153,13 +164,8 @@ struct LocalSubscriptionFeedServiceTests {
         let uploadsURL = YouTubeRSS.feedURL(for: channelId).absoluteString
         let shortsURL  = YouTubeRSS.shortsFeedURL(for: channelId).absoluteString
 
-        let session = URLSession(configuration: {
-            let config = URLSessionConfiguration.ephemeral
-            RouterURLProtocol.routes = [uploadsURL: uploadsXML, shortsURL: shortsXML]
-            config.protocolClasses = [RouterURLProtocol.self]
-            return config
-        }())
-        let service = LocalSubscriptionFeedService(session: session)
+        let service = makeService(with: [uploadsURL: uploadsXML, shortsURL: shortsXML])
+        defer { RouterURLProtocol.routes = [:] }
         let videos = await service.fetchFeed(store: store, cache: cache, api: api)
 
         let vid1 = videos.first(where: { $0.id == "vid1" })
@@ -180,13 +186,8 @@ struct LocalSubscriptionFeedServiceTests {
         let uploadsURL = YouTubeRSS.feedURL(for: channelId).absoluteString
 
         // Shorts URL returns failure; uploads URL returns data normally.
-        let session = URLSession(configuration: {
-            let config = URLSessionConfiguration.ephemeral
-            RouterURLProtocol.routes = [uploadsURL: uploadsXML]
-            config.protocolClasses = [RouterURLProtocol.self]
-            return config
-        }())
-        let service = LocalSubscriptionFeedService(session: session)
+        let service = makeService(with: [uploadsURL: uploadsXML])
+        defer { RouterURLProtocol.routes = [:] }
         let videos = await service.fetchFeed(store: store, cache: cache, api: api)
 
         #expect(videos.allSatisfy { !$0.isShort }, "No video should be marked isShort when Shorts feed is unavailable")

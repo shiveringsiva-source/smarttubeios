@@ -28,6 +28,20 @@ private func postHideChannel(id: String) {
     )
 }
 
+/// Posts `.hideVideoFromFeed` and waits for the ViewModel's notification
+/// observer task to process it before returning.
+private func postHideVideoAndWait(id: String) async {
+    postHideVideo(id: id)
+    try? await Task.sleep(for: .milliseconds(100))
+}
+
+/// Posts `.hideChannelFromFeed` and waits for the ViewModel's notification
+/// observer task to process it before returning.
+private func postHideChannelAndWait(id: String) async {
+    postHideChannel(id: id)
+    try? await Task.sleep(for: .milliseconds(100))
+}
+
 // MARK: - SearchViewModel
 
 @Suite("SearchViewModel feed hide notifications")
@@ -64,8 +78,7 @@ struct SearchViewModelFeedHideTests {
         ])
         #expect(vm.results.count == 2)
 
-        postHideVideo(id: id2)
-        try await Task.sleep(for: .milliseconds(100))
+        await postHideVideoAndWait(id: id2)
 
         #expect(vm.results.count == 1)
         #expect(vm.results.first?.id == id1)
@@ -76,8 +89,7 @@ struct SearchViewModelFeedHideTests {
         let id = "search-no-change-\(UUID().uuidString)"
         let vm = try await loadedVM(videos: [makeVideo(id: id)])
 
-        postHideVideo(id: "search-unknown-\(UUID().uuidString)")
-        try await Task.sleep(for: .milliseconds(100))
+        await postHideVideoAndWait(id: "search-unknown-\(UUID().uuidString)")
 
         #expect(vm.results.count == 1)
     }
@@ -93,8 +105,7 @@ struct SearchViewModelFeedHideTests {
         ])
         #expect(vm.results.count == 3)
 
-        postHideChannel(id: channel1)
-        try await Task.sleep(for: .milliseconds(100))
+        await postHideChannelAndWait(id: channel1)
 
         #expect(vm.results.count == 1)
         #expect(vm.results.first?.channelId == channel2)
@@ -105,8 +116,7 @@ struct SearchViewModelFeedHideTests {
         let channel = "search-ch-safe-\(UUID().uuidString)"
         let vm = try await loadedVM(videos: [makeVideo(id: "vd-\(UUID().uuidString)", channelId: channel)])
 
-        postHideChannel(id: "search-unknown-ch-\(UUID().uuidString)")
-        try await Task.sleep(for: .milliseconds(100))
+        await postHideChannelAndWait(id: "search-unknown-ch-\(UUID().uuidString)")
 
         #expect(vm.results.count == 1)
     }
@@ -143,8 +153,7 @@ struct ChannelViewModelFeedHideTests {
         ])
         #expect(vm.videos.count == 2)
 
-        postHideVideo(id: id2)
-        try await Task.sleep(for: .milliseconds(100))
+        await postHideVideoAndWait(id: id2)
 
         #expect(vm.videos.count == 1)
         #expect(vm.videos.first?.id == id1)
@@ -160,8 +169,7 @@ struct ChannelViewModelFeedHideTests {
         ])
         #expect(vm.videos.count == 2)
 
-        postHideChannel(id: ch1)
-        try await Task.sleep(for: .milliseconds(100))
+        await postHideChannelAndWait(id: ch1)
 
         #expect(vm.videos.count == 1)
         #expect(vm.videos.first?.channelId == ch2)
@@ -200,8 +208,7 @@ struct PlaylistViewModelFeedHideTests {
         ])
         #expect(vm.videos.count == 2)
 
-        postHideVideo(id: id2)
-        try await Task.sleep(for: .milliseconds(100))
+        await postHideVideoAndWait(id: id2)
 
         #expect(vm.videos.count == 1)
         #expect(vm.videos.first?.id == id1)
@@ -218,8 +225,7 @@ struct PlaylistViewModelFeedHideTests {
         ])
         #expect(vm.videos.count == 3)
 
-        postHideChannel(id: ch1)
-        try await Task.sleep(for: .milliseconds(100))
+        await postHideChannelAndWait(id: ch1)
 
         #expect(vm.videos.count == 1)
         #expect(vm.videos.first?.channelId == ch2)

@@ -204,8 +204,40 @@ private func waitForTasks() async {
     try? await Task.sleep(for: .milliseconds(50))
 }
 
+/// Waits for the background `shortsPreloadTask` (spawned at the end of
+/// `load()`) to finish its multi-iteration loop. `waitForTasks()` is sized
+/// for a single async fetch and returns long before the preload loop's
+/// later iterations complete, so a left-running task can bleed mock call
+/// counts into whichever test runs next. Polls until `homeShortsVideos`
+/// stops growing for a few consecutive yields, or a timeout is reached.
+@MainActor
+private func waitForShortPreloadCompletion(_ vm: HomeViewModel) async {
+    var lastCount = vm.homeShortsVideos.count
+    var unchangedYields = 0
+    let deadline = Date().addingTimeInterval(2)
+    while Date() < deadline {
+        await Task.yield()
+        let newCount = vm.homeShortsVideos.count
+        if newCount == lastCount {
+            unchangedYields += 1
+            if unchangedYields >= 3 { break }
+        } else {
+            unchangedYields = 0
+        }
+        lastCount = newCount
+    }
+}
+
 private func makeVideo(_ id: String) -> Video {
     Video(id: id, title: "Video \(id)", channelTitle: "Channel")
+}
+
+/// Creates a `SearchViewModel` backed by a uniquely-suited `SearchHistoryStore`
+/// instead of `.shared`, so tests don't read/write the same `UserDefaults`
+/// search-history entries across the suite.
+@MainActor
+private func makeSearchViewModel(api: any InnerTubeAPIProtocol) -> SearchViewModel {
+    SearchViewModel(api: api, historyStore: SearchHistoryStore(suiteName: "test-\(UUID().uuidString)"))
 }
 
 // MARK: - HomeViewModelTests
@@ -221,6 +253,7 @@ struct HomeViewModelTests {
         mock.subscriptionsResult = VideoGroup(title: "Subs", videos: [makeVideo("vid_0000002")])
 
         let vm = HomeViewModel(api: mock)
+        defer { vm.cancel() }
         vm.load()
         await waitForTasks()
 
@@ -236,6 +269,7 @@ struct HomeViewModelTests {
         mock.subscriptionsResult = VideoGroup(title: "Subs", videos: [])
 
         let vm = HomeViewModel(api: mock)
+        defer { vm.cancel() }
         vm.load()
         await waitForTasks()
 
@@ -250,6 +284,7 @@ struct HomeViewModelTests {
         mock.subscriptionsResult = VideoGroup(title: "Subs", videos: [])
 
         let vm = HomeViewModel(api: mock)
+        defer { vm.cancel() }
         vm.load()
         await waitForTasks()
 
@@ -266,6 +301,7 @@ struct HomeViewModelTests {
         mock.subscriptionsResult = VideoGroup(title: "Subs", videos: subVideos)
 
         let vm = HomeViewModel(api: mock)
+        defer { vm.cancel() }
         vm.load()
         await waitForTasks()
 
@@ -283,6 +319,7 @@ struct HomeViewModelTests {
         mock.subscriptionsResult = VideoGroup(title: "Subs", videos: [])
 
         let vm = HomeViewModel(api: mock)
+        defer { vm.cancel() }
         vm.load()
         await waitForTasks()
 
@@ -299,6 +336,7 @@ struct HomeViewModelTests {
         mock.subscriptionsResult = VideoGroup(title: "Subs", videos: [])
 
         let vm = HomeViewModel(api: mock)
+        defer { vm.cancel() }
         vm.load()
         await waitForTasks()
 
@@ -321,6 +359,7 @@ struct HomeViewModelTests {
         mock.subscriptionsResult = VideoGroup(title: "Subs", videos: [])
 
         let vm = HomeViewModel(api: mock)
+        defer { vm.cancel() }
         vm.load()
         await waitForTasks()
 
@@ -340,6 +379,7 @@ struct HomeViewModelTests {
         mock.subscriptionsResult = VideoGroup(title: "Subs", videos: [])
 
         let vm = HomeViewModel(api: mock)
+        defer { vm.cancel() }
         vm.load()
         await waitForTasks()
 
@@ -364,6 +404,7 @@ struct HomeViewModelTests {
         mock.subscriptionsResult = VideoGroup(title: "Subs", videos: [])
 
         let vm = HomeViewModel(api: mock)
+        defer { vm.cancel() }
         vm.load()
         await waitForTasks()
 
@@ -396,8 +437,10 @@ struct HomeViewModelTests {
         }
 
         let vm = HomeViewModel(api: mock)
+        defer { vm.cancel() }
         vm.load()
         await waitForTasks()
+        await waitForShortPreloadCompletion(vm)
 
         // 3 initial + repeated pages of 5 must reach the 40-item preload threshold.
         #expect(vm.homeShortsVideos.count >= 40)
@@ -419,8 +462,10 @@ struct HomeViewModelTests {
         mock.subscriptionsResult = VideoGroup(title: "Subs", videos: [])
 
         let vm = HomeViewModel(api: mock)
+        defer { vm.cancel() }
         vm.load()
         await waitForTasks()
+        await waitForShortPreloadCompletion(vm)
 
         // Below the 40-item threshold, but with no tokens left preload must
         // not call fetchShortsMore at all.
@@ -548,7 +593,7 @@ struct SearchViewModelTests {
         let mock = MockInnerTubeAPI()
         mock.searchResult = VideoGroup(title: "Results", videos: [makeVideo("result_AAAAA")])
 
-        let vm = SearchViewModel(api: mock)
+        let vm = makeSearchViewModel(api: mock)
         vm.query = "swift programming"
         vm.search()
         await waitForTasks()
@@ -562,7 +607,7 @@ struct SearchViewModelTests {
         let mock = MockInnerTubeAPI()
         mock.searchResult = VideoGroup(title: "Results", videos: [makeVideo("result_AAAAA")])
 
-        let vm = SearchViewModel(api: mock)
+        let vm = makeSearchViewModel(api: mock)
         vm.query = "   "
         vm.search()
         await waitForTasks()
@@ -578,7 +623,7 @@ struct SearchViewModelTests {
         let page2 = VideoGroup(title: "R", videos: [makeVideo("p2_0000002")])
         mock.searchResult = page1
 
-        let vm = SearchViewModel(api: mock)
+        let vm = makeSearchViewModel(api: mock)
         vm.query = "test"
         vm.search()
         await waitForTasks()
@@ -599,7 +644,7 @@ struct SearchViewModelTests {
         let mock = MockInnerTubeAPI()
         mock.searchResult = VideoGroup(title: "R", videos: [])
 
-        let vm = SearchViewModel(api: mock)
+        let vm = makeSearchViewModel(api: mock)
         vm.query = "query"
         vm.search()
         await waitForTasks()
@@ -612,7 +657,7 @@ struct SearchViewModelTests {
         let mock = MockInnerTubeAPI()
         mock.searchResult = VideoGroup(title: "R", videos: [makeVideo("vid_AAAAAAA")])
 
-        let vm = SearchViewModel(api: mock)
+        let vm = makeSearchViewModel(api: mock)
         vm.query = "swift"
         vm.search()
         await waitForTasks()
