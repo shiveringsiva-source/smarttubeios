@@ -154,6 +154,12 @@ final class ShortsEmbedPlayerViewModel: NSObject {
             in: .page
         ))
         contentController.addUserScript(WKUserScript(
+            source: ShortsEmbedJS.playerControlsHiderJS,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false,
+            in: .page
+        ))
+        contentController.addUserScript(WKUserScript(
             source: ShortsEmbedJS.stateDetectionJS,
             injectionTime: .atDocumentEnd,
             forMainFrameOnly: false,

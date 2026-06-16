@@ -34,6 +34,35 @@ enum ShortsEmbedJS {
     })();
     """
 
+    /// Injected at `.atDocumentStart` into every frame. Adds a `<style>` tag that
+    /// hides all YouTube player chrome elements that remain visible even with
+    /// `controls=0`: top/bottom bars, gradients, watermark, pause overlay,
+    /// bezel animation, end-screen cards. Running at document-start means the CSS
+    /// is in place before YouTube's JS renders any of these elements.
+    static let playerControlsHiderJS: String = """
+    (function() {
+        try {
+            var css = [
+                '.ytp-chrome-top',
+                '.ytp-chrome-bottom',
+                '.ytp-gradient-top',
+                '.ytp-gradient-bottom',
+                '.ytp-watermark',
+                '.ytp-pause-overlay',
+                '.ytp-cued-thumbnail-overlay',
+                '.ytp-bezel-container',
+                '.ytp-endscreen-content',
+                '.ytp-ce-element',
+                '.ytp-cards-button',
+                '.ytp-cards-teaser'
+            ].join(',') + '{display:none!important}';
+            var s = document.createElement('style');
+            s.textContent = css;
+            (document.head || document.documentElement).appendChild(s);
+        } catch(e) {}
+    })();
+    """
+
     /// Injected at `.atDocumentEnd` into every frame — verbatim copy of
     /// `TOSPlayerViewModel.stateDetectionJS` (TOSPlayerViewModel.swift:480-587). Polls
     /// the `<video>` element every 250ms and relays `ping`/`ready`/`tick`/`stateChange`/
