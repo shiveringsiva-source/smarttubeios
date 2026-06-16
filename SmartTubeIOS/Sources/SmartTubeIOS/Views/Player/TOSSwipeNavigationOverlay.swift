@@ -23,6 +23,8 @@ private let swipeLog = Logger(subsystem: "com.void.smarttube.app", category: "TO
 struct TOSSwipeNavigationOverlay: UIViewRepresentable {
     var onSwipeLeft: () -> Void
     var onSwipeRight: () -> Void
+    /// Called on any tap anywhere on the player — used to toggle the controls overlay.
+    var onTap: (() -> Void)? = nil
     var isEnabled: Bool = true
     /// Touches below this fraction of the screen height are ignored, leaving
     /// YouTube's bottom scrubber/control-bar free to handle horizontal drags.
@@ -39,18 +41,25 @@ struct TOSSwipeNavigationOverlay: UIViewRepresentable {
         pan.delegate = context.coordinator
         context.coordinator.pan = pan
 
-        view.managedGestureRecognizers = [pan]
+        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
+        tap.cancelsTouchesInView = false
+        tap.delegate = context.coordinator
+        context.coordinator.tap = tap
+
+        view.managedGestureRecognizers = [pan, tap]
         return view
     }
 
     func updateUIView(_ uiView: PassthroughGestureView, context: Context) {
         context.coordinator.parent = self
         context.coordinator.pan?.isEnabled = isEnabled
+        context.coordinator.tap?.isEnabled = isEnabled
     }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var parent: TOSSwipeNavigationOverlay
         weak var pan: UIPanGestureRecognizer?
+        weak var tap: UITapGestureRecognizer?
         private let minDistance: CGFloat = 40
 
         init(_ parent: TOSSwipeNavigationOverlay) {
@@ -63,9 +72,9 @@ struct TOSSwipeNavigationOverlay: UIViewRepresentable {
         }
 
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            // The recognizer is re-homed onto the UIWindow via PassthroughGestureView.
-            // gestureRecognizer.view IS the window, so .window returns nil — use the
-            // view directly instead.
+            // Pan only fires in the top verticalActivationFraction of the screen.
+            // Tap fires everywhere — no vertical restriction.
+            guard gestureRecognizer === pan else { return true }
             let window = (gestureRecognizer.view as? UIWindow) ?? gestureRecognizer.view?.window
             guard let window else { return true }
             let y = touch.location(in: window).y
@@ -73,6 +82,10 @@ struct TOSSwipeNavigationOverlay: UIViewRepresentable {
             let accept = y <= window.bounds.height * fraction
             swipeLog.debug("[shouldReceive] y=\(Int(y)) height=\(Int(window.bounds.height)) fraction=\(fraction, format: .fixed(precision: 2)) → \(accept ? "accept" : "reject")")
             return accept
+        }
+
+        @MainActor @objc func handleTap(_ gr: UITapGestureRecognizer) {
+            parent.onTap?()
         }
 
         @MainActor @objc func handlePan(_ gr: UIPanGestureRecognizer) {

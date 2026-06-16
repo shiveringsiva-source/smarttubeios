@@ -67,6 +67,24 @@ public struct TOSPlayerView: View {
     /// minimize-to-mini-player like the vm-owned properties above.
     @State private var showCommentsSheet = false
 
+    #if os(iOS)
+    /// Controls (back button, speed, more) are visible initially and auto-hide
+    /// after `controlsHideDelay` seconds. A tap anywhere on the player toggles them.
+    @State private var controlsVisible = true
+    @State private var controlsHideTask: Task<Void, Never>? = nil
+    private let controlsHideDelay: Double = 4
+
+    private func showControls() {
+        controlsHideTask?.cancel()
+        withAnimation(.easeInOut(duration: 0.2)) { controlsVisible = true }
+        controlsHideTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(controlsHideDelay))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.3)) { controlsVisible = false }
+        }
+    }
+    #endif
+
     public init(video: Video, api: InnerTubeAPI, onFallback: @escaping () -> Void = {}) {
         self.video = video
         self.onFallback = onFallback
@@ -163,7 +181,8 @@ public struct TOSPlayerView: View {
                 // YouTube's own bottom scrubber/control-bar drags are unaffected.
                 TOSSwipeNavigationOverlay(
                     onSwipeLeft: { vm.playNext() },
-                    onSwipeRight: { vm.playPrevious() }
+                    onSwipeRight: { vm.playPrevious() },
+                    onTap: { showControls() }
                 )
                 .ignoresSafeArea()
                 .accessibilityHidden(true)
@@ -175,6 +194,8 @@ public struct TOSPlayerView: View {
                 // status bar — see backButton's doc comment for why `topInset` must
                 // NOT be added here too.
                 backButton(vm: vm)
+                    .opacity(controlsVisible ? 1 : 0)
+                    .allowsHitTesting(controlsVisible)
                 #endif
 
                 // MARK: SponsorBlock skip toast (bottom-centre)
@@ -208,6 +229,9 @@ public struct TOSPlayerView: View {
         .onAppear {
             vm.updateSettings(store.settings)
             vm.startIfNeeded()
+            #if os(iOS)
+            showControls()
+            #endif
         }
         // Pause the embedded <video> element when this view leaves the hierarchy.
         //
@@ -226,6 +250,7 @@ public struct TOSPlayerView: View {
         // watching"/history never worked for TOS sessions — see WatchtimeTracker).
         .onDisappear {
             #if os(iOS)
+            controlsHideTask?.cancel()
             // On iOS, only pause when fully stopped — not when minimizing to mini-player.
             // TOSPlayerStateStore.stop() already calls vm.pause() + vm.saveProgress()
             // before releasing the vm, so we only log here in that case.
@@ -283,6 +308,12 @@ public struct TOSPlayerView: View {
             tosViewLog.notice("[TOSPlayerView] ⚠️ fatal error — triggering fallback to standard player")
             onFallback()
         }
+        #if os(iOS)
+        // Show controls briefly whenever a new video loads via swipe navigation
+        // (tosState.vm is replaced by TOSPlayerStateStore.play). Without this the
+        // controls stay hidden if the user swiped while they were already hidden.
+        .onChange(of: vm.videoId) { _, _ in showControls() }
+        #endif
         )
     }
 
