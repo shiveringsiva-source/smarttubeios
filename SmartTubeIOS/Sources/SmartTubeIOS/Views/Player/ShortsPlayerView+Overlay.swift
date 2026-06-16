@@ -43,6 +43,13 @@ extension ShortsPlayerView {
 
             Spacer()
         }
+        // Tapping the overlay background (outside the back button) toggles
+        // play/pause — this is the primary unpause path when the video is paused
+        // and the controls overlay is visible. The back button above intercepts
+        // its own tap so it is NOT forwarded to this gesture.
+        #if os(iOS)
+        .onTapGesture { vm.togglePlayPause() }
+        #endif
         // Make the whole overlay (including the transparent Spacer regions)
         // hit-testable for the DragGesture below — otherwise SwiftUI only
         // hit-tests the non-transparent back button / index area, and swipes
