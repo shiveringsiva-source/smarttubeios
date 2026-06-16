@@ -163,8 +163,7 @@ public struct TOSPlayerView: View {
                 // YouTube's own bottom scrubber/control-bar drags are unaffected.
                 TOSSwipeNavigationOverlay(
                     onSwipeLeft: { vm.playNext() },
-                    onSwipeRight: { vm.playPrevious() },
-                    isEnabled: vm.hasNext || vm.hasPrevious
+                    onSwipeRight: { vm.playPrevious() }
                 )
                 .ignoresSafeArea()
                 .accessibilityHidden(true)
