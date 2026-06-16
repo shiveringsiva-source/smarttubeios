@@ -52,6 +52,8 @@ final class ShortsEmbedPlayerViewModel: NSObject {
     /// first, `playerError` is set to `.webViewLoadFailed` so the new `advanceAfterError()`
     /// (below) can skip to the next Short.
     var readyTimeoutTask: Task<Void, Never>?
+    /// Tracks the in-flight SponsorBlock fetch so it can be cancelled on swipe.
+    var sponsorTask: Task<Void, Never>?
 
     // MARK: - SponsorBlock
     //
@@ -198,6 +200,9 @@ final class ShortsEmbedPlayerViewModel: NSObject {
     /// spec's Data Flow section.
     func loadShort(video: Video) {
         transitionWatchHistory(to: video.id)
+
+        sponsorTask?.cancel()
+        sponsorTask = nil
 
         videoId = video.id
         channelId = video.channelId

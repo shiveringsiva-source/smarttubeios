@@ -67,7 +67,8 @@ extension ShortsEmbedPlayerViewModel {
             )
             // Kick off SponsorBlock segment loading for this Short — parity with
             // TOSPlayerViewModel+WebBridge.swift's "ready" case.
-            Task { await self.fetchSponsorSegments() }
+            sponsorTask?.cancel()
+            sponsorTask = Task { await self.fetchSponsorSegments() }
             // Apply the user's saved playback-speed preference — parity with
             // TOSPlayerViewModel+WebBridge.swift's "ready" case.
             if settings.playbackSpeed != 1.0 {

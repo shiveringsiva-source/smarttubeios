@@ -60,7 +60,9 @@ public final class TOSPlayerStateStore {
     //
     // Pushed in play(video:api:) whenever a *different* video is opened while one
     // is already loaded. popHistory() is used by TOSPlayerView's onPlayPrevious
-    // wiring to re-play the prior video on swipe-right.
+    // wiring to re-play the prior video on swipe-right. Capped at 20 entries so
+    // Video objects don't accumulate without bound across a long swipe session.
+    private static let maxHistoryDepth = 20
     private(set) var history: [Video] = []
 
     // MARK: - Seen video IDs (loop prevention)
@@ -104,8 +106,9 @@ public final class TOSPlayerStateStore {
         }
 
         // Push the outgoing video onto the navigation history so swipe-right
-        // (playPrevious) can return to it.
+        // (playPrevious) can return to it. FIFO-evict when the cap is reached.
         if let current = currentVideo, current.id != video.id {
+            if history.count >= Self.maxHistoryDepth { history.removeFirst() }
             history.append(current)
         }
 
@@ -194,6 +197,8 @@ public final class TOSPlayerStateStore {
         tosStoreLog.notice("[TOSPlayerStateStore] stop — currentPresentation=\(String(describing: self.presentation))")
         vm?.pause()
         vm?.saveProgress()
+        vm?.onPlayNext = nil
+        vm?.onPlayPrevious = nil
         vm = nil
         currentVideo = nil
         presentation = .hidden

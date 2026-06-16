@@ -96,6 +96,8 @@ extension ShortsEmbedPlayerViewModel {
         cancelControlsHide()
         readyTimeoutTask?.cancel()
         readyTimeoutTask = nil
+        sponsorTask?.cancel()
+        sponsorTask = nil
         saveProgress()
     }
 }
