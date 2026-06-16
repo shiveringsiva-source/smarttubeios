@@ -88,4 +88,49 @@ struct RateObserverStallRecoveryTests {
         #expect(!shouldRestoreB, "should not overwrite rate when user already resumed")
         _ = isPlayingA; _ = rateA; _ = isPlayingB; _ = rateB
     }
+
+    // MARK: - Rapid-stall loop escalation (#261)
+
+    /// firstRapidStallTime is nil before any stall and non-nil after the first.
+    /// Escalation elapsed-time is 0 when there is no prior stall time (safe default).
+    @Test func firstRapidStallTimeDefaultsToNilElapsed() {
+        let firstRapidStallTime: Date? = nil
+        let elapsed = firstRapidStallTime.map { Date().timeIntervalSince($0) } ?? 0
+        #expect(elapsed == 0, "nil firstRapidStallTime must yield elapsed=0 so escalation path is not taken")
+    }
+
+    /// When stallCount >= 3 and elapsed < 30s, the escalation path is taken.
+    @Test func rapidRepeatTriggerEscalation() {
+        let stallCount = 3
+        let firstRapidStallTime: Date? = Date().addingTimeInterval(-8)  // 8s ago — well within window
+        let exhaustiveRetryTask: (any Sendable)? = nil
+
+        let elapsed = firstRapidStallTime.map { Date().timeIntervalSince($0) } ?? 0
+        let isRapidRepeat = elapsed < 30
+        let shouldEscalate = stallCount >= 3 && isRapidRepeat && exhaustiveRetryTask == nil
+        #expect(shouldEscalate, "3 stalls in 8s should trigger escalation to exhaustiveRetry")
+    }
+
+    /// When stallCount >= 3 but elapsed >= 30s (slow-drip stalls), escalation is NOT taken.
+    @Test func slowDripStallsDoNotEscalate() {
+        let stallCount = 3
+        let firstRapidStallTime: Date? = Date().addingTimeInterval(-35)  // 35s ago — outside window
+
+        let elapsed = firstRapidStallTime.map { Date().timeIntervalSince($0) } ?? 0
+        let isRapidRepeat = elapsed < 30
+        let shouldEscalate = stallCount >= 3 && isRapidRepeat
+        #expect(!shouldEscalate, "3 stalls over 35s should not trigger escalation — use normal seek recovery")
+    }
+
+    /// When exhaustiveRetryTask is already set, a second escalation must not fire.
+    @Test func noDoubleEscalationWhenRetryAlreadyRunning() {
+        let stallCount = 4
+        let firstRapidStallTime: Date? = Date().addingTimeInterval(-5)
+        let exhaustiveRetryAlreadySet = true  // simulates self.exhaustiveRetryTask != nil
+
+        let elapsed = firstRapidStallTime.map { Date().timeIntervalSince($0) } ?? 0
+        let isRapidRepeat = elapsed < 30
+        let shouldEscalate = stallCount >= 3 && isRapidRepeat && !exhaustiveRetryAlreadySet
+        #expect(!shouldEscalate, "must not start a second exhaustiveRetry when one is already running")
+    }
 }

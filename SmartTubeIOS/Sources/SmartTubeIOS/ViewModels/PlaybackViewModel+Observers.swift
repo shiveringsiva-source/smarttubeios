@@ -53,6 +53,7 @@ extension PlaybackViewModel {
                     self.isPlaying = false
                     playerLog.notice("[rateObserver] player.rate→0 while isPlaying=true — syncing isPlaying=false")
                     self.stallCount += 1
+                    if self.firstRapidStallTime == nil { self.firstRapidStallTime = Date() }
                     let t = Int(self.currentTime)
                     let stallError = NSError(
                         domain: "SmartTube.PlaybackStall",
@@ -76,7 +77,24 @@ extension PlaybackViewModel {
                     // !isSwappingItem to avoid interfering with intentional item swaps.
                     // Capped at 3 attempts per item, same as the notification-based path.
                     let recoveryCount = self.stallCount
-                    if recoveryCount <= 3 {
+                    let elapsed = self.firstRapidStallTime.map { Date().timeIntervalSince($0) } ?? 0
+                    let isRapidRepeat = elapsed < 30
+                    if recoveryCount >= 3 && isRapidRepeat && self.exhaustiveRetryTask == nil {
+                        // Rapid stall loop: seeks are re-stalling immediately because the
+                        // format URL is expired or rate-limited (CDN returns the same broken
+                        // URL after each seek). Escalate to exhaustiveRetry instead of
+                        // another wasted seek. Guard on exhaustiveRetryTask == nil to avoid
+                        // launching duplicate retries if further stalls fire during retry.
+                        if let video = self.currentVideo {
+                            playerLog.notice("[rateObserver] rapid stall loop — \(recoveryCount) stalls in \(Int(elapsed))s — escalating to exhaustiveRetry")
+                            let loopError = NSError(
+                                domain: "SmartTube.PlaybackStall",
+                                code: 2,
+                                userInfo: [NSLocalizedDescriptionKey: "Stall loop \(recoveryCount)× in \(Int(elapsed))s — format unrecoverable, escalating"]
+                            )
+                            self.exhaustiveRetryTask = Task { await self.exhaustiveRetry(video: video, originalError: loopError) }
+                        }
+                    } else if recoveryCount <= 3 {
                         Task { @MainActor [weak self] in
                             try? await Task.sleep(nanoseconds: 2_000_000_000)
                             guard let self, !self.isPlaying, self.player.rate == 0,
