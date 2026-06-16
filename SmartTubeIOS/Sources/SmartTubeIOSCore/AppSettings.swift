@@ -47,6 +47,7 @@ public struct AppSettings: Codable {
     public var compactThumbnails: Bool
     public var hideShorts: Bool
     public var hideLiveShorts: Bool
+    public var hideVideoPremieres: Bool
     /// When `true` (default), a per-device `visitorData` token is included in home-feed
     /// requests so YouTube tailors recommendations to this device.
     /// When `false`, the token is cleared and YouTube returns its default shared feed.
@@ -238,6 +239,7 @@ public struct AppSettings: Codable {
         compactThumbnails    = false
         hideShorts           = false
         hideLiveShorts       = false
+        hideVideoPremieres   = false
         perDeviceRecommendationsEnabled = true
         themeName            = .system
         enabledSections      = BrowseSection.defaultSections.map(\.type)
@@ -317,6 +319,7 @@ extension AppSettings {
         case compactThumbnails
         case hideShorts
         case hideLiveShorts
+        case hideVideoPremieres
         case perDeviceRecommendationsEnabled
         case themeName
         case enabledSections
@@ -359,6 +362,7 @@ extension AppSettings {
         compactThumbnails            = c.safeDecode(Bool.self,              forKey: .compactThumbnails,            default: d.compactThumbnails)
         hideShorts                   = c.safeDecode(Bool.self,              forKey: .hideShorts,                   default: d.hideShorts)
         hideLiveShorts               = c.safeDecode(Bool.self,              forKey: .hideLiveShorts,               default: d.hideLiveShorts)
+        hideVideoPremieres           = c.safeDecode(Bool.self,              forKey: .hideVideoPremieres,           default: d.hideVideoPremieres)
         perDeviceRecommendationsEnabled = c.safeDecode(Bool.self,           forKey: .perDeviceRecommendationsEnabled, default: d.perDeviceRecommendationsEnabled)
         themeName                    = c.safeDecode(ThemeName.self,         forKey: .themeName,                    default: d.themeName)
         enabledSections              = c.safeDecode([BrowseSection.SectionType].self, forKey: .enabledSections,   default: d.enabledSections)

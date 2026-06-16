@@ -346,6 +346,7 @@ public struct HomeView: View {
     private var feedContent: some View {
         let hideShorts = store.settings.hideShorts
         let hideLiveShorts = store.settings.hideLiveShorts
+        let hideVideoPremieres = store.settings.hideVideoPremieres
         let isShorts = selectedSection.type == .shorts
         let applyHideShorts = hideShorts && selectedSection.type != .history
 
@@ -368,6 +369,7 @@ public struct HomeView: View {
             var videos = g.videos
             if applyHideShorts { videos = videos.filter { !$0.isShort } }
             if hideLiveShorts { videos = videos.filter { !($0.isLive && $0.isShort) } }
+            if hideVideoPremieres { videos = videos.filter { !$0.isUpcoming } }
             copy.videos = videos
             return copy
         }
@@ -381,6 +383,7 @@ public struct HomeView: View {
             .flatMap(\.videos)
             .filter { !applyHideShorts || !$0.isShort }
             .filter { !hideLiveShorts || !($0.isLive && $0.isShort) }
+            .filter { !hideVideoPremieres || !$0.isUpcoming }
             .filter { isShorts || !$0.isShort }
 
         // The raw last video of the last group is the canonical pagination trigger for
