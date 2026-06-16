@@ -19,7 +19,7 @@ public enum ShortsEmbedURL {
         comps.queryItems = [
             URLQueryItem(name: "autoplay",       value: "1"),
             URLQueryItem(name: "mute",           value: "1"),
-            URLQueryItem(name: "controls",       value: "1"),
+            URLQueryItem(name: "controls",       value: "0"),
             URLQueryItem(name: "playsinline",    value: "1"),
             URLQueryItem(name: "rel",            value: "0"),
             URLQueryItem(name: "iv_load_policy", value: "3"),

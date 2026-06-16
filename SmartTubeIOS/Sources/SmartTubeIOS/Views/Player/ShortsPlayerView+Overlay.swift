@@ -21,6 +21,31 @@ extension ShortsPlayerView {
             .padding(.trailing, 20)
     }
 
+    // MARK: - Pause indicator
+    //
+    // Shown whenever the video is paused and not ended — gives visible feedback
+    // that the video is paused (and a tap target) since controls=0 removes
+    // YouTube's native centre-pause button from the embed chrome.
+    // Independent of controlsVisible so it appears even when the controls
+    // overlay is hidden. Tap calls togglePlayPause() to resume.
+
+    #if os(iOS)
+    var pauseIndicator: some View {
+        Group {
+            if !vm.isPlaying && !vm.videoEnded {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.white)
+                    .padding(24)
+                    .background(.black.opacity(0.5))
+                    .clipShape(Circle())
+                    .onTapGesture { vm.togglePlayPause() }
+                    .accessibilityIdentifier("shorts.pauseIndicator")
+            }
+        }
+    }
+    #endif
+
     // MARK: - Overlay
 
     var shortsOverlay: some View {
