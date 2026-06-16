@@ -199,11 +199,6 @@ public struct ShortsPlayerView: View {
                     .animation(.easeInOut(duration: 0.2), value: vm.controlsVisible)
             }
         }
-        #if os(iOS)
-        .overlay {
-            pauseIndicator
-        }
-        #endif
         .overlay {
             #if os(iOS)
             if let msg = vm.errorMessage {
