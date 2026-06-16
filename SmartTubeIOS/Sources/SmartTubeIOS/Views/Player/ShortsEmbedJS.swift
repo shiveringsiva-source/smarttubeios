@@ -63,11 +63,17 @@ enum ShortsEmbedJS {
                     // overridable by a child's visibility:visible !important, so
                     // the video stays rendered even while all its ancestors are
                     // invisible — no z-index or class-name dependency needed.
+                    // position:fixed is required: height:100% on the video resolves
+                    // to 0 when the parent div has height:auto (no explicit height).
+                    // With position:fixed the containing block is the iframe viewport,
+                    // so height:100% = full iframe height (confirmed via [DIAG] eval:
+                    // w=402 h=0 before fix — width was correct but height was zero).
                     s.textContent =
                         'html,body{background:#000!important;' +
                             'margin:0!important;padding:0!important}' +
                         'body *{visibility:hidden!important}' +
                         'video{visibility:visible!important;' +
+                            'position:fixed!important;top:0!important;left:0!important;' +
                             'width:100%!important;height:100%!important;' +
                             'object-fit:cover!important;background:#000!important}';
                     (document.head || document.documentElement).appendChild(s);

@@ -56,6 +56,40 @@ extension ShortsEmbedPlayerViewModel {
             if embedFrameInfo == nil {
                 embedFrameInfo = frameInfo
                 shortsLog.notice("[frame] captured embed iframe frameInfo — isMainFrame=\(frameInfo.isMainFrame, privacy: .public) url=\(frameInfo.request.url?.absoluteString ?? "nil", privacy: .public)")
+
+                // DIAGNOSTIC: inspect video element's actual computed state so we
+                // can understand why visibility CSS is or isn't working.
+                let diagJS = """
+                (function() {
+                    var v = document.querySelector('video');
+                    if (!v) return JSON.stringify({found:false,
+                        bodyChildren:Array.from(document.body.children).slice(0,5).map(function(e){return e.tagName+'/'+e.id+'/'+e.className.substring(0,40)})});
+                    var cs = window.getComputedStyle(v);
+                    var r = v.getBoundingClientRect();
+                    return JSON.stringify({
+                        found:true,
+                        visibility:cs.visibility,
+                        display:cs.display,
+                        opacity:cs.opacity,
+                        w:Math.round(r.width),
+                        h:Math.round(r.height),
+                        top:Math.round(r.top),
+                        inShadow:(v.getRootNode()!==document),
+                        parentTag:v.parentElement?v.parentElement.tagName:'none',
+                        parentId:v.parentElement?v.parentElement.id:'none',
+                        hasCss:!!document.getElementById('__st_css'),
+                        stHiderEl:!!document.getElementById('__st_hider')
+                    });
+                })()
+                """
+                webView.evaluateJavaScript(diagJS, in: frameInfo, in: .page) { result in
+                    switch result {
+                    case .success(let val):
+                        shortsLog.notice("[DIAG] video computed state: \(String(describing: val), privacy: .public)")
+                    case .failure(let err):
+                        shortsLog.notice("[DIAG] eval error: \(err, privacy: .public)")
+                    }
+                }
             }
             isReady = true
             duration = (json["duration"] as? Double) ?? 0
