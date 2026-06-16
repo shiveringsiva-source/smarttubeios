@@ -139,7 +139,7 @@ extension InnerTubeAPI {
             webBody["videoId"] = videoId
             let tvData  = try await postTV(endpoint: "next", body: tvBody)
             let webData = try await post(endpoint: "next", body: webBody)
-            let videos   = parseRelatedVideos(from: tvData)
+            let videos   = parseRelatedVideos(from: webData)   // WEB client has compactVideoRenderer; TV client does not
             let status   = parseLikeStatus(from: tvData)
             let chapters = parseChapters(from: webData)
             tubeLog.notice("fetchNextInfo (auth) → related=\(videos.count, privacy: .public) chapters=\(chapters.count, privacy: .public)")
