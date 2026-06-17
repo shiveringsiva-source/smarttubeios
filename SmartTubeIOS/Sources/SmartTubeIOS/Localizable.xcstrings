@@ -9168,6 +9168,9 @@
         }
       }
     },
+    "Hide Live Shorts" : {
+
+    },
     "Hide Shorts" : {
       "comment" : "Settings toggle to hide YouTube Shorts from feeds",
       "extractionState" : "manual",
@@ -9263,6 +9266,9 @@
           }
         }
       }
+    },
+    "Hide Video Premieres" : {
+
     },
     "Highlight" : {
       "comment" : "SponsorBlock category display name",

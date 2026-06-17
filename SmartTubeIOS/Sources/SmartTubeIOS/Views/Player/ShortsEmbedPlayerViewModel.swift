@@ -317,6 +317,20 @@ final class ShortsEmbedPlayerViewModel: NSObject {
         eval("seekTo(\(seconds))", "(function(){var v=document.querySelector('video');var ifr=document.querySelectorAll('iframe').length;if(v){v.currentTime=\(seconds);}return {found: !!v, iframes: ifr, currentTime: v ? v.currentTime : null};})();")
     }
 
+    /// Shows the native `<video controls>` UI inside the embed iframe (play/pause,
+    /// scrubber, time). Called when the player pauses so the user has something to
+    /// interact with. The native controls live in WebKit's shadow DOM and are not
+    /// affected by our `body * { visibility:hidden }` CSS, so they always show on
+    /// top of the video regardless of the style injection.
+    func showEmbedControls() {
+        eval("embedControls(on)", "(function(){var v=document.querySelector('video');if(v)v.controls=true;})();")
+    }
+
+    /// Hides the native `<video controls>` UI. Called when playback resumes.
+    func hideEmbedControls() {
+        eval("embedControls(off)", "(function(){var v=document.querySelector('video');if(v)v.controls=false;})();")
+    }
+
     func setPlaybackRate(_ rate: Double) {
         eval("setPlaybackRate(\(rate))", "(function(){var v=document.querySelector('video');var ifr=document.querySelectorAll('iframe').length;if(v){v.playbackRate=\(rate);}return {found: !!v, iframes: ifr, playbackRate: v ? v.playbackRate : null};})();")
     }

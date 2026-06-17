@@ -23,7 +23,7 @@ import UIKit
 struct SwipeGestureOverlay: UIViewRepresentable {
     var onSwipeUp:        () -> Void
     var onSwipeDown:      () -> Void
-    var onTap:            () -> Void
+    var onTap:            (CGPoint) -> Void
     var onTwoFingerTap:   () -> Void = {}
     var onPanChanged:     ((CGFloat) -> Void)?
     var onSwipeCancelled: (() -> Void)?
@@ -38,7 +38,7 @@ struct SwipeGestureOverlay: UIViewRepresentable {
         pan.cancelsTouchesInView = false
         pan.delegate = context.coordinator
 
-        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap))
+        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
         tap.cancelsTouchesInView = false
         tap.delegate = context.coordinator
         tap.require(toFail: pan)
@@ -86,7 +86,11 @@ struct SwipeGestureOverlay: UIViewRepresentable {
             }
         }
 
-        @MainActor @objc func handleTap() { parent.onTap() }
+        @MainActor @objc func handleTap(_ gr: UITapGestureRecognizer) {
+            // location(in: nil) returns window coordinates, same space as
+            // UIScreen.main.bounds — used by the caller to distinguish tap zones.
+            parent.onTap(gr.location(in: nil))
+        }
         @MainActor @objc func handleTwoFingerTap() { parent.onTwoFingerTap() }
     }
 }

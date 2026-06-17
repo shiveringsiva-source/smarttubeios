@@ -55,21 +55,29 @@ public struct ShortsPlayerView: View {
             Color.black.ignoresSafeArea()
 
             #if os(iOS)
-            ShortsTOSWebView(vm: vm)
-                .ignoresSafeArea()
-                .accessibilityHidden(true)
-
-            // The persistent WKWebView retains the outgoing Short's last-painted
-            // frame across an iframe-src swap until the new embed renders its
-            // first frame. Cover it until "ready" fires for the new Short, so the
-            // gap shows as blank (per the design spec) instead of a stale frame
-            // from the previous video.
-            if !vm.isReady {
-                Color.black.ignoresSafeArea()
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-                    .accessibilityIdentifier("shorts.loadingCover")
+            // Size the embed to its natural 9:16 aspect ratio and center it in the
+            // screen, so equal blank margins appear above and below the video. This
+            // moves the native HTML5 controls away from the very bottom edge.
+            GeometryReader { geo in
+                let videoH = min(geo.size.height, geo.size.width * 16.0 / 9.0)
+                ZStack {
+                    // Color.clear fills the ZStack to the full screen so the inner
+                    // views are centered; allowsHitTesting(false) keeps it passthrough.
+                    Color.clear.allowsHitTesting(false)
+                    ShortsTOSWebView(vm: vm)
+                        .frame(width: geo.size.width, height: videoH)
+                        .accessibilityHidden(true)
+                    // Cover the video area (not the margins) while the new embed loads.
+                    if !vm.isReady {
+                        Color.black
+                            .frame(width: geo.size.width, height: videoH)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                            .accessibilityIdentifier("shorts.loadingCover")
+                    }
+                }
             }
+            .ignoresSafeArea()
             #else
             if ProcessInfo.processInfo.arguments.contains("--uitesting") {
                 Color.black.ignoresSafeArea()
@@ -110,7 +118,16 @@ public struct ShortsPlayerView: View {
                         loadMoreAtStart()
                     }
                 },
-                onTap: { },
+                onTap: { point in
+                    // Native controls occupy the bottom ~12% of the screen (the HTML5
+                    // controls bar at the bottom of the 9:16 embed). Taps there are
+                    // passed through to WKWebView when paused so native controls work.
+                    // Taps anywhere above that: toggle play/pause regardless of state.
+                    let screenH = UIScreen.main.bounds.height
+                    let inNativeControlsArea = point.y / screenH > 0.88
+                    if vm.playerState == .paused && inNativeControlsArea { return }
+                    vm.togglePlayPause()
+                },
                 onTwoFingerTap: {},
                 onPanChanged: { dy in
                     guard !isTransitioning else { return }
@@ -157,13 +174,10 @@ public struct ShortsPlayerView: View {
             }
             #endif
         }
-        // Single-tap always toggles play/pause. The UIKit recognizer in
-        // SwipeGestureOverlay is a no-op tap so this SwiftUI gesture is the sole
-        // toggle path — avoids double-firing togglePlayPause() on the same touch.
-        // togglePlayPause() calls showControls() internally, so the back button
-        // appears for 3 s after every tap.
-        .contentShape(Rectangle())
-        .onTapGesture { vm.togglePlayPause() }
+        // Single-tap always toggles play/pause via the UIKit window-level tap
+        // recognizer inside SwipeGestureOverlay (onTap above). WKWebView absorbs
+        // UIKit touches before this SwiftUI view sees them, so .onTapGesture here
+        // would never fire — the window-level path is the only reliable one.
         .offset(y: slideOffset)
         .background(Color.black.ignoresSafeArea())
         #if os(tvOS)
@@ -191,12 +205,12 @@ public struct ShortsPlayerView: View {
             indexBadge
         }
         .overlay {
-            if vm.controlsVisible {
+            if shouldShowControlsOverlay {
                 shortsOverlay
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("shorts.controlsOverlay")
                     .transition(.opacity)
-                    .animation(.easeInOut(duration: 0.2), value: vm.controlsVisible)
+                    .animation(.easeInOut(duration: 0.2), value: shouldShowControlsOverlay)
             }
         }
         .overlay {
@@ -272,6 +286,9 @@ public struct ShortsPlayerView: View {
         .onChange(of: vm.playerState) { _, newState in
             if newState == .ended {
                 handleShortEnded()
+            } else if newState == .playing {
+                // Restart auto-hide timer so controls fade out 3s after playback resumes.
+                vm.showControls()
             }
         }
         .onChange(of: vm.playerError) { _, newError in
@@ -281,5 +298,9 @@ public struct ShortsPlayerView: View {
         }
         #endif
         } // NavigationStack
+    }
+
+    private var shouldShowControlsOverlay: Bool {
+        vm.controlsVisible
     }
 }

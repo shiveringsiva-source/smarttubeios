@@ -23,9 +23,38 @@ extension ShortsPlayerView {
 
     // MARK: - Overlay
 
+    // When paused, the SwiftUI overlay must NOT use .contentShape(Rectangle()).
+    // That modifier makes the full-screen UIHostingView the UIKit hit-test target,
+    // blocking every touch from reaching the native HTML5 video controls inside
+    // WKWebView. Without .contentShape, only the back button (which has a visible
+    // background) is hit-testable; touches anywhere else fall through to WKWebView.
+    // Swipe navigation while paused is handled by the window-level UIPanGestureRecognizer
+    // in SwipeGestureOverlay, which fires regardless of which UIView owns the touch.
+
+    @ViewBuilder
     var shortsOverlay: some View {
+        #if os(iOS)
+        // When paused, skip .contentShape so the UIHostingView doesn't intercept UIKit
+        // touches in the transparent Spacer region — native controls need direct delivery.
+        // Swipe navigation while paused is handled by the window-level UIPanGestureRecognizer
+        // in SwipeGestureOverlay (fires regardless of which UIView owns the touch).
+        if vm.playerState == .paused {
+            overlayStack
+        } else {
+            overlayStack
+                .contentShape(Rectangle())
+                .simultaneousGesture(overlaySwipeGesture)
+        }
+        #else
+        // tvOS: no playerState on PlaybackViewModel, no DragGesture; contentShape for
+        // D-pad focus but no swipe gesture (navigation via .onMoveCommand instead).
+        overlayStack
+            .contentShape(Rectangle())
+        #endif
+    }
+
+    private var overlayStack: some View {
         VStack(spacing: 0) {
-            // Top bar: back + index indicator
             HStack {
                 Button { dismiss() } label: {
                     Image(systemName: AppSymbol.chevronLeft)
@@ -43,43 +72,41 @@ extension ShortsPlayerView {
 
             Spacer()
         }
-        // Tapping the overlay background (outside the back button) toggles
-        // play/pause — this is the primary unpause path when the video is paused
-        // and the controls overlay is visible. The back button above intercepts
-        // its own tap so it is NOT forwarded to this gesture.
-        #if os(iOS)
-        .onTapGesture { vm.togglePlayPause() }
-        #endif
-        // Make the whole overlay (including the transparent Spacer regions)
-        // hit-testable for the DragGesture below — otherwise SwiftUI only
-        // hit-tests the non-transparent back button / index area, and swipes
-        // over empty space fall through to the WKWebView untouched.
-        .contentShape(Rectangle())
-        // Allow swipe navigation even when the controls overlay is on screen.
-        // .simultaneousGesture fires alongside button taps so controls remain
-        // interactive while vertical swipes still drive Shorts navigation.
-        #if !os(tvOS)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 50, coordinateSpace: .global)
-                .onEnded { value in
-                    guard !isTransitioning else { return }
-                    let dy = value.translation.height
-                    guard abs(dy) > abs(value.translation.width) else { return }
-                    if dy < 0 {
-                        if let next = ShortsNavigation.targetIndex(
-                            vertical: -100, horizontal: 0,
-                            current: currentIndex, count: videos.count
-                        ) { performVerticalTransition(direction: -1) { goTo(next) } }
-                        else { withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { slideOffset = 0 } }
+        // Play/pause taps are handled by the window-level UITapGestureRecognizer in
+        // SwipeGestureOverlay (onTap: { vm.togglePlayPause() }). A SwiftUI
+        // .onTapGesture here would never fire — WKWebView absorbs UIKit touches
+        // before the hosting UIView's gesture recognizers see them.
+    }
+
+    // Swipe navigation gesture applied to the overlay when playing (contentShape active).
+    // tvOS has no DragGesture — handled via .onMoveCommand in ShortsPlayerView.
+    #if !os(tvOS)
+    private var overlaySwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 50, coordinateSpace: .global)
+            .onEnded { value in
+                guard !isTransitioning else { return }
+                let dy = value.translation.height
+                guard abs(dy) > abs(value.translation.width) else { return }
+                if dy < 0 {
+                    if let next = ShortsNavigation.targetIndex(
+                        vertical: -100, horizontal: 0,
+                        current: currentIndex, count: videos.count
+                    ) {
+                        performVerticalTransition(direction: -1) { goTo(next) }
                     } else {
-                        if let prev = ShortsNavigation.targetIndex(
-                            vertical: 100, horizontal: 0,
-                            current: currentIndex, count: videos.count
-                        ) { performVerticalTransition(direction: 1) { goTo(prev) } }
-                        else { loadMoreAtStart() }
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { slideOffset = 0 }
+                    }
+                } else {
+                    if let prev = ShortsNavigation.targetIndex(
+                        vertical: 100, horizontal: 0,
+                        current: currentIndex, count: videos.count
+                    ) {
+                        performVerticalTransition(direction: 1) { goTo(prev) }
+                    } else {
+                        loadMoreAtStart()
                     }
                 }
-        )
-        #endif
+            }
     }
+    #endif
 }
