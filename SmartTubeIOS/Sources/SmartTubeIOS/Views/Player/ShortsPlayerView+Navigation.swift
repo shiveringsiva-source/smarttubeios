@@ -35,8 +35,33 @@ extension ShortsPlayerView {
 
     func goTo(_ index: Int) {
         guard index >= 0, index < videos.count else { return }
+
+        #if os(iOS)
+        // Hot path: if a pre-warmed VM is ready for this exact next Short, swap it in
+        // immediately — no reload, no black-screen delay. The old VM is stopped async
+        // so it doesn't block the transition. If the standby isn't ready (or this is a
+        // backward swipe), fall back to a normal loadVideo.
+        if index == currentIndex + 1,
+           let readyStandby = standbyVM,
+           readyStandby.isReady {
+            let oldVM = vm
+            standbyVM = nil
+            vm = readyStandby         // triggers ShortsTOSWebView to attach the new WKWebView
+            currentIndex = index
+            let video = videos[index]
+            CrashlyticsLogger.setIntendedVideo(id: video.id, title: video.title)
+            vm.activate()             // clears isStandby, starts playback
+            Task(priority: .background) { oldVM.stop() }
+            shortsLog.notice("[goTo] standby swap — index=\(index, privacy: .public) isReady=\(readyStandby.isReady, privacy: .public)")
+        } else {
+            currentIndex = index
+            loadVideo(at: index)
+        }
+        #else
         currentIndex = index
         loadVideo(at: index)
+        #endif
+
         // Pre-fetch more Shorts when within 2 of the end.
         if index >= videos.count - 2 {
             loadMoreIfNeeded()

@@ -21,6 +21,10 @@ struct ShortsTOSWebView: UIViewRepresentable {
 
     func updateUIView(_ uiView: UIView, context: Context) {
         if vm.webView.superview !== uiView {
+            // Remove the previously attached WKWebView before adding the new one.
+            // On a standby swap, the old webView is still a subview of the container;
+            // without this, both the old and new webViews end up stacked in the container.
+            uiView.subviews.forEach { $0.removeFromSuperview() }
             attach(to: uiView)
         }
     }
