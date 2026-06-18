@@ -37,17 +37,34 @@ enum ShortsEmbedJS {
     /// Injected at `.atDocumentStart` into every frame. Hides all YouTube Shorts
     /// chrome without depending on class names or z-index tricks.
     ///
-    /// Key insight: `visibility:hidden` on an ancestor can be overridden by
-    /// `visibility:visible !important` on a descendant (unlike `display:none`,
-    /// which cannot). So blanket-hiding `body *` and re-showing only `video`
-    /// works regardless of how YouTube nests its stacking contexts or what
-    /// class names it uses — channel header, Shorts logo, share button, and
-    /// pause bezel all disappear; the raw video element stays visible.
+    /// Earlier version blanket-hid every `body *` via `visibility:hidden` and
+    /// re-showed only `video` with `visibility:visible !important` — CSS-spec-legal
+    /// (a descendant CAN override an ancestor's `visibility:hidden`), but setting
+    /// `visibility:hidden` on an ancestor of a hardware-composited `<video>` layer
+    /// is a known WebKit footgun (the ancestor's subtree can lose layer promotion
+    /// regardless of a descendant's own `visibility`). #275's investigation found
+    /// real on-screen black frames via `ShortsVisualPlaybackUITests`' pixel-brightness
+    /// assertions, but ALSO found that a large fraction of embeds fail within a few
+    /// seconds with a generic iframe error 153 ("An error occurred. Please try again
+    /// later.") — separate from this CSS and likely the dominant cause of the
+    /// reported black screens (see `advanceAfterError` / the per-VM `[ytCallback] ❌
+    /// player error` log lines). Disabling this script entirely did not reliably fix
+    /// brightness in every trial, so the CSS is not confirmed as the sole cause.
+    ///
+    /// This version is changed as a no-regret hardening regardless: it never sets
+    /// `visibility:hidden` on any ancestor of `<video>`. It walks up from the video
+    /// to `<body>`, tags every ancestor on that path with `__st_keep` (kept
+    /// `visibility:visible`, but stripped of its own background/border/shadow so it
+    /// doesn't paint a visible box), and only blanket-hides elements OFF that path —
+    /// i.e. true UI chrome siblings (channel header, Shorts logo, share button,
+    /// pause bezel), never anything in the video's own compositing chain.
     ///
     /// `window === window.top` guard: bails immediately in the wrapper page so
     /// we do not accidentally hide the `<iframe>` itself in the outer document.
     ///
-    /// MutationObserver re-adds the `<style>` tag if YouTube's JS removes it.
+    /// MutationObserver re-runs `apply()` whenever YouTube's JS mutates the DOM —
+    /// re-tagging the path (cheap) and reusing the existing `<style>` tag (CSS
+    /// rules are static; only which elements carry `__st_keep` can change).
     static let playerControlsHiderJS: String = """
     (function() {
         // Only run inside the YouTube embed iframe, not the wrapper page.
@@ -55,23 +72,35 @@ enum ShortsEmbedJS {
 
         function apply() {
             try {
+                var video = document.querySelector('video');
+                if (!video) return;
+
+                // Tag the video's ancestor chain so the blanket-hide rule below
+                // never touches anything in its compositing path.
+                document.querySelectorAll('.__st_keep').forEach(function(el) {
+                    el.classList.remove('__st_keep');
+                });
+                var node = video.parentElement;
+                while (node && node !== document.documentElement) {
+                    node.classList.add('__st_keep');
+                    node = node.parentElement;
+                }
+
                 if (!document.getElementById('__st_css')) {
                     var s = document.createElement('style');
                     s.id = '__st_css';
-                    // Blanket-hide every body descendant, then re-show only the
-                    // <video>. visibility:hidden (unlike display:none) is
-                    // overridable by a child's visibility:visible !important, so
-                    // the video stays rendered even while all its ancestors are
-                    // invisible — no z-index or class-name dependency needed.
-                    // position:fixed is required: height:100% on the video resolves
-                    // to 0 when the parent div has height:auto (no explicit height).
-                    // With position:fixed the containing block is the iframe viewport,
-                    // so height:100% = full iframe height (confirmed via [DIAG] eval:
+                    // position:fixed is required on video: height:100% resolves to 0
+                    // when the parent div has height:auto (no explicit height). With
+                    // position:fixed the containing block is the iframe viewport, so
+                    // height:100% = full iframe height (confirmed via [DIAG] eval:
                     // w=402 h=0 before fix — width was correct but height was zero).
                     s.textContent =
                         'html,body{background:#000!important;' +
                             'margin:0!important;padding:0!important}' +
                         'body *{visibility:hidden!important}' +
+                        '.__st_keep{visibility:visible!important;' +
+                            'background:transparent!important;border:none!important;' +
+                            'box-shadow:none!important}' +
                         'video{visibility:visible!important;' +
                             'position:fixed!important;top:0!important;left:0!important;' +
                             'width:100%!important;height:100%!important;' +

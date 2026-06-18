@@ -55,7 +55,7 @@ extension ShortsPlayerView {
             CrashlyticsLogger.setIntendedVideo(id: video.id, title: video.title)
             vm.activate()             // clears isStandby, starts playback
             Task(priority: .background) { oldVM.stop() }
-            shortsLog.notice("[goTo] standby swap — index=\(index, privacy: .public) isReady=\(readyStandby.isReady, privacy: .public)")
+            shortsLog.notice("[goTo] standby swap — index=\(index, privacy: .public) promoted=\(readyStandby.logTag, privacy: .public) videoId=\(video.id, privacy: .public) retired=\(oldVM.logTag, privacy: .public)")
         } else {
             currentIndex = index
             loadVideo(at: index)
@@ -110,12 +110,13 @@ extension ShortsPlayerView {
         // a backgrounded tab), so the embed must be mounted BEFORE
         // loadShortAsStandby starts polling for isReady, not after. See #274.
         standbyVM = standby
+        shortsLog.notice("[prewarm] starting — \(standby.logTag, privacy: .public) nextVideo=\(nextVideo.id, privacy: .public) forIndex=\(index, privacy: .public)")
         Task(priority: .userInitiated) {
             await standby.loadShortAsStandby(video: nextVideo)
             if currentIndex == index {
-                shortsLog.notice("[prewarm] standby ready — nextVideo=\(nextVideo.id, privacy: .public) isReady=\(standby.isReady, privacy: .public)")
+                shortsLog.notice("[prewarm] standby ready — \(standby.logTag, privacy: .public) nextVideo=\(nextVideo.id, privacy: .public) isReady=\(standby.isReady, privacy: .public)")
             } else {
-                shortsLog.notice("[prewarm] standby discarded — user already moved past index \(index, privacy: .public)")
+                shortsLog.notice("[prewarm] standby discarded — \(standby.logTag, privacy: .public) user already moved past index \(index, privacy: .public)")
             }
         }
     }

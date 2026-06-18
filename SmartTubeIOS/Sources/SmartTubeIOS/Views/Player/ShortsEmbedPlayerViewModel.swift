@@ -87,7 +87,7 @@ final class ShortsEmbedPlayerViewModel: NSObject {
     func setSleepTimer(minutes: Int?) {
         sleepTimer.setSleepTimer(minutes: minutes) { [weak self] in
             self?.pause()
-            shortsLog.notice("[sleepTimer] fired — pausing playback")
+            shortsLog.notice("[\(self?.logTag ?? "vm?", privacy: .public)] [sleepTimer] fired — pausing playback")
         }
     }
 
@@ -106,6 +106,13 @@ final class ShortsEmbedPlayerViewModel: NSObject {
     // MARK: - Internal
 
     let webView: WKWebView
+    /// Distinguishes concurrent VM instances (active + standby) in the shared
+    /// `shortsLog` stream — every prior debugging session lost time correlating
+    /// which of two simultaneously-running VMs produced a given log line. See #275.
+    let instanceId: Int
+    private static var nextInstanceId = 0
+    /// Short tag prefixed onto every log line — e.g. "vm3" or "vm3/standby".
+    var logTag: String { "vm\(instanceId)\(isStandby ? "/standby" : "")" }
     /// Set by `loadShort(video:)`. Read by Task 6's `fetchSponsorSegments()` and
     /// Task 7's watch-history tracking — hence `private(set)`, not `private`.
     private(set) var videoId: String = ""
@@ -138,6 +145,8 @@ final class ShortsEmbedPlayerViewModel: NSObject {
     init(api: InnerTubeAPI) {
         self.api = api
         self.tracker = WatchtimeTracker(api: api)
+        ShortsEmbedPlayerViewModel.nextInstanceId += 1
+        self.instanceId = ShortsEmbedPlayerViewModel.nextInstanceId
 
         let config = WKWebViewConfiguration()
         config.mediaTypesRequiringUserActionForPlayback = []
@@ -174,9 +183,15 @@ final class ShortsEmbedPlayerViewModel: NSObject {
 
         self.webView = WKWebView(frame: .zero, configuration: config)
         #if os(iOS)
-        self.webView.isOpaque = false
-        self.webView.backgroundColor = .clear
-        self.webView.scrollView.backgroundColor = .clear
+        // isOpaque=false forces WebKit into software compositing, which silently
+        // disables the hardware-accelerated <video> layer — the JS bridge still
+        // reports ready/playing correctly (that's all JS-driven), but no video
+        // frames ever reach the screen, just a black rect. Mirrors
+        // TOSPlayerViewModel.swift:282-284 (the working regular-video pipeline),
+        // which has always used isOpaque=true/.black. See #275.
+        self.webView.isOpaque = true
+        self.webView.backgroundColor = .black
+        self.webView.scrollView.backgroundColor = .black
         #endif
 
         super.init()
@@ -291,12 +306,12 @@ final class ShortsEmbedPlayerViewModel: NSObject {
         do {
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            shortsLog.error("[audioSession] setActive(true) failed: \(error.localizedDescription, privacy: .public)")
+            shortsLog.error("[\(self.logTag, privacy: .public)] [audioSession] setActive(true) failed: \(error.localizedDescription, privacy: .public)")
         }
         #endif
         let url = ShortsEmbedURL.embedURL(videoId: videoId)
         let html = ShortsEmbedURL.htmlWrapper(embedURL: url)
-        shortsLog.notice("[loadShort] initial load — videoId=\(videoId, privacy: .public)")
+        shortsLog.notice("[\(self.logTag, privacy: .public)] [loadShort] initial load — videoId=\(videoId, privacy: .public)")
         webView.loadHTMLString(html, baseURL: URL(string: "https://www.example.com")!)
     }
 
@@ -305,7 +320,7 @@ final class ShortsEmbedPlayerViewModel: NSObject {
     /// Task 1's `ShortsEmbedSrcSwapSpikeViewModel.swapToNextVideo()`.
     private func swapEmbed(to videoId: String) {
         let url = ShortsEmbedURL.embedURL(videoId: videoId)
-        shortsLog.notice("[loadShort] src swap — videoId=\(videoId, privacy: .public)")
+        shortsLog.notice("[\(self.logTag, privacy: .public)] [loadShort] src swap — videoId=\(videoId, privacy: .public)")
         eval("swap", "document.getElementById('yt').src = '\(url.absoluteString)';")
     }
 
@@ -321,7 +336,7 @@ final class ShortsEmbedPlayerViewModel: NSObject {
             try? await Task.sleep(for: .seconds(9))
             guard let self, !Task.isCancelled else { return }
             guard self.videoId == videoId, !self.isReady else { return }
-            shortsLog.notice("[loadShort] ready TIMEOUT — videoId=\(videoId, privacy: .public) after 9s")
+            shortsLog.notice("[\(self.logTag, privacy: .public)] [loadShort] ready TIMEOUT — videoId=\(videoId, privacy: .public) after 9s")
             self.playerError = .webViewLoadFailed
         }
     }
@@ -381,9 +396,9 @@ final class ShortsEmbedPlayerViewModel: NSObject {
         webView.evaluateJavaScript(js, in: embedFrameInfo, in: .page) { result in
             switch result {
             case .success(let value):
-                shortsLog.notice("[eval] \(label, privacy: .public) result: \(String(describing: value), privacy: .public)")
+                shortsLog.notice("[\(self.logTag, privacy: .public)] [eval] \(label, privacy: .public) result: \(String(describing: value), privacy: .public)")
             case .failure(let error):
-                shortsLog.notice("[eval] \(label, privacy: .public) ERROR: \(String(describing: error), privacy: .public)")
+                shortsLog.notice("[\(self.logTag, privacy: .public)] [eval] \(label, privacy: .public) ERROR: \(String(describing: error), privacy: .public)")
             }
         }
     }
