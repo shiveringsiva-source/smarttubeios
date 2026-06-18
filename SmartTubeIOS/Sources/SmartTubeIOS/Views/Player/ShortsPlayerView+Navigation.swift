@@ -104,14 +104,18 @@ extension ShortsPlayerView {
         let nextVideo = videos[nextIndex]
         let standby = ShortsEmbedPlayerViewModel(api: api)
         standby.updateSettings(store.settings)
+        // Attach to the view hierarchy immediately (ShortsPlayerView hosts standbyVM
+        // in a hidden ShortsTOSWebView) — an unattached WKWebView never progresses
+        // past readyState 0 (WebKit throttles media loading the same way it does for
+        // a backgrounded tab), so the embed must be mounted BEFORE
+        // loadShortAsStandby starts polling for isReady, not after. See #274.
+        standbyVM = standby
         Task(priority: .userInitiated) {
             await standby.loadShortAsStandby(video: nextVideo)
-            // Only keep standby if the user hasn't already moved past this video.
             if currentIndex == index {
-                standbyVM = standby
                 shortsLog.notice("[prewarm] standby ready — nextVideo=\(nextVideo.id, privacy: .public) isReady=\(standby.isReady, privacy: .public)")
             } else {
-                shortsLog.notice("[prewarm] standby discarded — user swiped before pre-warm finished")
+                shortsLog.notice("[prewarm] standby discarded — user already moved past index \(index, privacy: .public)")
             }
         }
     }

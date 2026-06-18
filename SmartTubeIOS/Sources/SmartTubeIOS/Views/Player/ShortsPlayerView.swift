@@ -71,6 +71,18 @@ public struct ShortsPlayerView: View {
                     ShortsTOSWebView(vm: vm)
                         .frame(width: geo.size.width, height: videoH)
                         .accessibilityHidden(true)
+                    // Host the standby's WKWebView in the real view hierarchy, just
+                    // invisible (opacity, not removed) — an unattached WKWebView never
+                    // progresses past readyState 0 (WebKit treats it like a backgrounded
+                    // tab and throttles media loading), so prewarmStandby's loadShortAsStandby
+                    // would hang forever waiting for "ready" without this. See #274.
+                    if let standby = standbyVM {
+                        ShortsTOSWebView(vm: standby)
+                            .frame(width: geo.size.width, height: videoH)
+                            .opacity(0.001)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
                     // Cover the video area (not the margins) while the new embed loads.
                     if !vm.isReady {
                         Color.black

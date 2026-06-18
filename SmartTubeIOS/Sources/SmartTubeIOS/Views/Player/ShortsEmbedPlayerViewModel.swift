@@ -265,9 +265,21 @@ final class ShortsEmbedPlayerViewModel: NSObject {
 
     /// Promotes this VM from standby to active: clears the standby flag and
     /// begins playback. Call after swapping this VM into the active `vm` slot.
+    ///
+    /// The "ready" Darwin notification is posted here rather than relying on a
+    /// fresh JS message — "ready" only fires once per page load, and it already
+    /// fired (suppressed) back when this VM was still in standby mode, so no
+    /// second one is coming. "tickstarted"/"playing" aren't re-posted here: the
+    /// next 250ms poll naturally re-fires them once `isStandby` is false, since
+    /// `hasReceivedFirstTick` was never set and `playerState` is still `.paused`.
     func activate() {
         isStandby = false
         play()
+        CFNotificationCenterPostNotification(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            CFNotificationName("com.void.smarttube.shortsplayer.ready" as CFString),
+            nil, nil, true
+        )
     }
 
     /// First-ever load for this session — loads the HTML wrapper page via
