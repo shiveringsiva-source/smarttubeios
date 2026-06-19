@@ -292,6 +292,14 @@ extension PlaybackViewModel {
         loadTask = nil
         exhaustiveRetryTask?.cancel()
         exhaustiveRetryTask = nil
+        // rateObserver's KVO closure can independently re-spawn a brand-new
+        // exhaustiveRetryTask (see setupRateObserver()'s "rapid stall loop"
+        // escalation) — it was never invalidated outside deinit, so it kept firing
+        // after suspend() and undoing the cancellation above, recreating the same
+        // crash task-190 was supposed to have fixed. Re-established in resume().
+        // Firebase: a013be1c, regressed June 8 in 4.4(2) — still happening in 4.6.
+        rateObserver?.invalidate()
+        rateObserver = nil
         #if canImport(WebKit)
         wkHLSEarlyTask?.cancel()
         wkHLSEarlyTask = nil
@@ -328,6 +336,9 @@ extension PlaybackViewModel {
         // Re-register lock screen commands (removed in suspend()).
         setupRemoteCommandCenter()
         #endif
+        // Re-establish the rate KVO observer (invalidated in suspend()) so isPlaying
+        // stays in sync with the player again for this resumed session.
+        setupRateObserver()
         player.rate = Float(settings.playbackSpeed)
         isPlaying = true
         showControls()
@@ -338,6 +349,12 @@ extension PlaybackViewModel {
     }
 
     func loadAsync(video: Video) async {
+        // Defensive re-establish: guarantees rateObserver is live for every load,
+        // even if this view model instance went through suspend() (which
+        // invalidates it) and is now loading a different video directly via
+        // load()/loadAsync() rather than resume(). Idempotent — safe to call even
+        // when already set up.
+        setupRateObserver()
         isLoading = true
         stallCount = 0
         firstRapidStallTime = nil
