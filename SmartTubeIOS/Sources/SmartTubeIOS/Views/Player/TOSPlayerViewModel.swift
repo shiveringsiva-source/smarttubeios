@@ -239,6 +239,11 @@ final class TOSPlayerViewModel: NSObject {
         // video player when the user taps play, taking control away from the WKWebView.
         config.allowsInlineMediaPlayback = true
         config.allowsAirPlayForMediaPlayback = true
+        // Explicit (default may vary across iOS versions) — required for the native
+        // PiP button to appear in the embedded <video>'s controls. Investigated as
+        // part of #283 (background play/PiP support); does not by itself enable PiP
+        // or background audio — see task-283 for what was actually tried and learned.
+        config.allowsPictureInPictureMediaPlayback = true
         #endif
 
         let contentController = WKUserContentController()
@@ -448,10 +453,14 @@ final class TOSPlayerViewModel: NSObject {
         // engine can grab a brief moment of audio during init and then lose the
         // route — mirrors PlaybackViewModel+Loading's setActive(true) call.
         #if os(iOS)
+        // Same .playback/.moviePlayback category PlaybackViewModel uses — more
+        // correct than leaving the category unset, though confirmed (#283) this
+        // alone does not make TOS audio survive backgrounding; see task-283.
         do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            tosLog.error("[audioSession] setActive(true) failed: \(error.localizedDescription, privacy: .public)")
+            tosLog.error("[audioSession] setCategory/setActive failed: \(error.localizedDescription, privacy: .public)")
         }
         #endif
         var comps = URLComponents(string: "https://www.youtube.com/embed/\(videoId)")!
