@@ -499,7 +499,7 @@ final class TOSPlayerViewModel: NSObject {
             <iframe id="yt"
                 src="\(embedURL.absoluteString)"
                 frameborder="0"
-                allow="autoplay; encrypted-media; fullscreen"
+                allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
                 allowfullscreen>
             </iframe>
         </body>
