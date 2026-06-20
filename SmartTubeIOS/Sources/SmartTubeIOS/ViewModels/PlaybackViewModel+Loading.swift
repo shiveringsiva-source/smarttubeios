@@ -1173,6 +1173,13 @@ extension PlaybackViewModel {
         stallObserverTask = nil
         durationObserverTask?.cancel()
         durationObserverTask = nil
+        // Defense-in-depth, same reasoning as suspend(): a live rateObserver's KVO
+        // closure can independently spawn a new exhaustiveRetryTask after this
+        // function returns. stop()'s synchronous pause()/isPlaying=false ordering
+        // happens to make that unreachable today, but invalidating here removes the
+        // dependency on that ordering. Re-established defensively in loadAsync().
+        rateObserver?.invalidate()
+        rateObserver = nil
         #if canImport(UIKit)
         UIApplication.shared.isIdleTimerDisabled = false
         clearNowPlayingInfo()
