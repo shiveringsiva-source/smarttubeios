@@ -320,15 +320,25 @@ final class TOSPlayerIOSUITests: XCTestCase {
                        "App must remain running after unlocking")
     }
 
-    /// Regression investigation for GitHub #111: "Tap on video to move the
-    /// slider stops playback instead of showing and bringing up only the
-    /// slider". TOSSwipeNavigationOverlay's tap recognizer has
-    /// cancelsTouchesInView=false (deliberately, so the PAN gesture doesn't
-    /// steal YouTube's native bottom scrubber drag) — but this is also applied
-    /// to the TAP recognizer, meaning a tap in the video area could reach BOTH
+    /// Regression test for GitHub #111: "Tap on video to move the slider
+    /// stops playback instead of showing and bringing up only the slider".
+    ///
+    /// Root cause: TOSSwipeNavigationOverlay's tap recognizer is attached to
+    /// the window (so it observes touches outside its own hit-testing view)
+    /// with cancelsTouchesInView=false — deliberately, so the PAN gesture
+    /// doesn't steal YouTube's native bottom scrubber drag. The same setting
+    /// applies to the TAP recognizer, so a tap in the video area reaches BOTH
     /// our showControls() handler AND YouTube's own native tap-to-toggle-play
-    /// handler underneath. This taps mid-screen (well above the native
-    /// controls bar) and checks whether a spurious "paused" state fires.
+    /// handler on the underlying <video> element — confirmed via device log:
+    /// a "tick state: 1 → 2" (playing → paused) lands within ~100-300ms of
+    /// the tap, consistently reproducible with genuine (non-stalled) playback.
+    ///
+    /// Fix (TOSPlayerView.swift onTap): rather than trying to block/cancel the
+    /// touch at the UIKit layer (tried and reverted — disrupted SwiftUI's own
+    /// button touch tracking, breaking the back button and landscape lock
+    /// button), this detects the spurious pause after the fact and undoes it
+    /// — so a brief pause→play flicker is expected and acceptable; what must
+    /// NOT happen is the video staying paused.
     func testTOSPlayerTapToShowControlsDoesNotStopPlaybackDiagnostic() throws {
         launchApp()
         guard let cards = waitForVideoCards() else {
@@ -352,9 +362,17 @@ final class TOSPlayerIOSUITests: XCTestCase {
         // Tap mid-screen — well above the native controls bar (bottom ~12%).
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)).tap()
 
-        let result = XCTWaiter().wait(for: [spuriousPause], timeout: 2)
-        XCTAssertNotEqual(result, .completed,
-            "REPRO #111: tapping to reveal controls also paused the video — state.2 (paused) fired within 2s of the tap")
+        let pauseResult = XCTWaiter().wait(for: [spuriousPause], timeout: 2)
+        guard pauseResult == .completed else {
+            // No pause at all — the ideal outcome.
+            return
+        }
+        // A pause happened — TOSPlayerView's recovery logic polls for up to
+        // 1s and should bring playback back. Give it a margin beyond that.
+        let resumedNote = XCTDarwinNotificationExpectation(notificationName: "com.void.smarttube.tosplayer.playing")
+        let resumeResult = XCTWaiter().wait(for: [resumedNote], timeout: 3)
+        XCTAssertEqual(resumeResult, .completed,
+            "Tap caused a spurious pause and playback never resumed — TOSPlayerView's detect-and-undo recovery did not fire")
     }
 }
 #endif // os(iOS)

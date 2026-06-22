@@ -199,10 +199,15 @@ public struct TOSPlayerView: View {
                         showControls()
                         guard wasPlaying else { return }
                         Task { @MainActor in
-                            try? await Task.sleep(for: .milliseconds(250))
-                            if vm.playerState == .paused {
+                            // A single fixed-delay check raced the tick-polling
+                            // round-trip and missed the pause arriving slightly
+                            // late — poll repeatedly over a longer window instead.
+                            for _ in 0..<10 {
+                                try? await Task.sleep(for: .milliseconds(100))
+                                guard vm.playerState == .paused else { continue }
                                 tosViewLog.notice("[tap] undoing spurious pause after tap-to-show-controls (#111)")
                                 vm.play()
+                                break
                             }
                         }
                     }
