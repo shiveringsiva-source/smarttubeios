@@ -147,6 +147,72 @@ struct ChannelHandleResolutionTests {
         #expect(channel.title == "Nieuwsuur")
     }
 
+    // MARK: - resolve_url returns urlEndpoint (no browseId) → search fallback
+
+    /// Regression test for GitHub issue #79: `@nieuwsuur` redirects to a legacy
+    /// custom-URL slug ("/Nieuwsuur") rather than a true `@handle`. Confirmed
+    /// live against YouTube: resolve_url returns a `urlEndpoint` (not
+    /// `browseEndpoint`, no error) for this channel, and `/browse` with
+    /// `browseId: "@nieuwsuur"` then returns HTTP 400 — the old fallback
+    /// ("pass the handle through unchanged") does not hold here. The fix adds
+    /// a search-based fallback: search for the handle and match a
+    /// `channelRenderer` result's `canonicalBaseUrl` against it.
+    @Test("fetchChannel(@handle) falls back to search when resolve_url returns a urlEndpoint")
+    func fetchChannelFallsBackToSearchWhenResolveUrlReturnsUrlEndpoint() async throws {
+        let searchResponse: [String: Any] = [
+            "contents": [
+                "twoColumnSearchResultsRenderer": [
+                    "primaryContents": [
+                        "sectionListRenderer": [
+                            "contents": [
+                                [
+                                    "itemSectionRenderer": [
+                                        "contents": [
+                                            [
+                                                "channelRenderer": [
+                                                    "channelId": Self.canonicalChannelId,
+                                                    "title": ["simpleText": "Nieuwsuur"],
+                                                    "longBylineText": [
+                                                        "runs": [
+                                                            [
+                                                                "navigationEndpoint": [
+                                                                    "browseEndpoint": [
+                                                                        "browseId": Self.canonicalChannelId,
+                                                                        "canonicalBaseUrl": "/@nieuwsuur"
+                                                                    ]
+                                                                ]
+                                                            ]
+                                                        ]
+                                                    ]
+                                                ]
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+        MultiEndpointURLProtocol.responses = [
+            // resolve_url: urlEndpoint instead of browseEndpoint — no browseId, no error.
+            "navigation/resolve_url": (200, [
+                "endpoint": [
+                    "urlEndpoint": ["url": "https://www.youtube.com/Nieuwsuur"]
+                ]
+            ]),
+            "search": (200, searchResponse),
+            "browse": (200, Self.channelBrowseResponse)
+        ]
+        let api = makeAPI()
+
+        let (channel, _) = try await api.fetchChannel(channelId: Self.channelHandle)
+
+        #expect(channel.id == Self.canonicalChannelId)
+        #expect(channel.title == "Nieuwsuur")
+    }
+
     // MARK: - UC… ID bypasses handle resolution entirely
 
     /// When the channelId is already in UC… format, no resolve_url call is made and

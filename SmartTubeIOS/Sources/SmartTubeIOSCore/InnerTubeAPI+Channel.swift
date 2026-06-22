@@ -61,11 +61,18 @@ extension InnerTubeAPI {
     /// Resolves a YouTube `@handle` to the canonical `UC…` channel ID using the
     /// InnerTube `navigation/resolve_url` endpoint.
     ///
-    /// Falls back to returning the handle unchanged when the endpoint does not return
-    /// a recognised `browseId` — YouTube's `/browse` endpoint has accepted `@handle`
-    /// as a `browseId` directly since 2022, so the browse call in `fetchChannel` will
-    /// still succeed. `parseChannel` then extracts the canonical ID from the
-    /// `channelMetadataRenderer.externalId` field in the browse response.
+    /// Some channels (e.g. ones still on a legacy custom-URL slug rather than a
+    /// true `@handle` — confirmed live for `@nieuwsuur`, which redirects to
+    /// `/Nieuwsuur`) make `resolve_url` return a `urlEndpoint` instead of a
+    /// `browseEndpoint`, with no `browseId` anywhere in the response. The old
+    /// fallback ("pass the handle through unchanged, /browse accepts @handle as
+    /// browseId") does NOT hold for these — confirmed live: `/browse` with
+    /// `browseId: "@nieuwsuur"` returns HTTP 400 — which is GitHub issue #79.
+    ///
+    /// So when `resolve_url` doesn't yield a `browseId`, fall back to searching
+    /// for the handle and matching a `channelRenderer` result's
+    /// `canonicalBaseUrl` against it — this is how the real channel ID
+    /// (`UCExcZNwh_3Mwm4fF4VSiu2w` for `@nieuwsuur`) was found and verified live.
     private func resolveChannelHandle(_ handle: String) async throws -> String {
         let handleURL = "https://www.youtube.com/\(handle)"
         var body = makeBody(client: webClientContext)
@@ -82,15 +89,54 @@ extension InnerTubeAPI {
             }
             // Some channels return a urlEndpoint instead of browseEndpoint — fall through.
             let topKeys = data.keys.joined(separator: ", ")
-            tubeLog.warning("resolveChannelHandle: unexpected response keys=[\(topKeys, privacy: .public)] — falling back to handle-as-browseId")
+            tubeLog.warning("resolveChannelHandle: unexpected response keys=[\(topKeys, privacy: .public)] — trying search fallback")
         } catch {
             // resolve_url threw (e.g. HTTP error, consent wall in EU) — fall through.
-            tubeLog.warning("resolveChannelHandle: resolve_url threw \(error, privacy: .public) — falling back to handle-as-browseId")
+            tubeLog.warning("resolveChannelHandle: resolve_url threw \(error, privacy: .public) — trying search fallback")
         }
-        // Fallback: pass the handle through unchanged. YouTube's /browse endpoint
-        // accepts @handle as a browseId and will resolve it server-side.
-        // parseChannel will then extract the canonical UC… ID from externalId.
+        if let found = try await searchForChannelHandle(handle) {
+            tubeLog.notice("resolveChannelHandle: search fallback resolved \(handle, privacy: .public) → \(found, privacy: .public)")
+            return found
+        }
+        // Last resort: pass the handle through unchanged. YouTube's /browse
+        // endpoint accepts @handle as a browseId for most (but not all) channels.
+        tubeLog.warning("resolveChannelHandle: search fallback found no match — falling back to handle-as-browseId")
         return handle
+    }
+
+    /// Searches for `handle` (e.g. "@nieuwsuur") and returns the `UC…` channel ID
+    /// of the first `channelRenderer` result whose `canonicalBaseUrl` matches it.
+    private func searchForChannelHandle(_ handle: String) async throws -> String? {
+        let query = handle.hasPrefix("@") ? String(handle.dropFirst()) : handle
+        var body = makeBody(client: webClientContext)
+        body["query"] = query
+        body["params"] = "EgIQAg%3D%3D" // search filter: channels only
+        let data = try await post(endpoint: "search", body: body)
+        let targetPath = "/" + handle.lowercased()
+
+        var found: String? = nil
+        func walk(_ obj: Any, depth: Int = 0) {
+            guard found == nil, depth < 50 else { return }
+            if let dict = obj as? [String: Any] {
+                if let renderer = dict["channelRenderer"] as? [String: Any],
+                   let channelId = renderer["channelId"] as? String, !channelId.isEmpty {
+                    let runs = ((renderer["longBylineText"] as? [String: Any])?["runs"] as? [[String: Any]]) ?? []
+                    let canonicalBaseUrl = runs.first
+                        .flatMap { ($0["navigationEndpoint"] as? [String: Any]) }
+                        .flatMap { ($0["browseEndpoint"] as? [String: Any]) }
+                        .flatMap { $0["canonicalBaseUrl"] as? String }
+                    if canonicalBaseUrl?.lowercased() == targetPath {
+                        found = channelId
+                        return
+                    }
+                }
+                for value in dict.values { walk(value, depth: depth + 1) }
+            } else if let arr = obj as? [Any] {
+                for item in arr { walk(item, depth: depth + 1) }
+            }
+        }
+        walk(data)
+        return found
     }
 
     private func parseChannel(from json: [String: Any], channelId: String) throws -> (Channel, VideoGroup) {
