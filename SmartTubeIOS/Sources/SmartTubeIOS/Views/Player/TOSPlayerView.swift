@@ -186,15 +186,7 @@ public struct TOSPlayerView: View {
                 TOSSwipeNavigationOverlay(
                     onSwipeLeft: { vm.playNext() },
                     onSwipeRight: { vm.playPrevious() },
-                    onTap: { point in
-                        guard store.settings.tosPlayerControlsMode == .minimal else {
-                            showControls(); return
-                        }
-                        let screenH = UIScreen.main.bounds.height
-                        let inNativeControlsArea = point.y / screenH > 0.88
-                        if vm.playerState == .paused && inNativeControlsArea { return }
-                        if vm.playerState == .paused { vm.play() } else { showControls() }
-                    }
+                    onTap: { _ in showControls() }
                 )
                 .ignoresSafeArea()
                 .accessibilityHidden(true)

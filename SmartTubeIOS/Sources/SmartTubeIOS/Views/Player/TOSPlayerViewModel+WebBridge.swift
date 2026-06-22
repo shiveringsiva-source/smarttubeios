@@ -54,31 +54,6 @@ extension TOSPlayerViewModel {
                 embedFrameInfo = frameInfo
                 tosLog.notice("[frame] captured embed iframe frameInfo — isMainFrame=\(frameInfo.isMainFrame, privacy: .public) url=\(frameInfo.request.url?.absoluteString ?? "nil", privacy: .public)")
             }
-            if settings.tosPlayerControlsMode == .minimal {
-                // Hide YouTube's own UI chrome (title, channel, share, logo) so only
-                // the raw <video> element shows. Same CSS-blanket approach as Shorts.
-                // MutationObserver re-applies if YouTube's JS removes the style tag.
-                eval("hideYTChrome", """
-                (function() {
-                    if (window === window.top) return;
-                    function apply() {
-                        if (document.getElementById('__st_css')) return;
-                        var s = document.createElement('style');
-                        s.id = '__st_css';
-                        s.textContent =
-                            'html,body{background:#000!important;margin:0!important;padding:0!important}' +
-                            'body *{visibility:hidden!important}' +
-                            'video{visibility:visible!important;position:fixed!important;' +
-                                'top:0!important;left:0!important;' +
-                                'width:100%!important;height:100%!important;' +
-                                'object-fit:contain!important;background:#000!important}';
-                        (document.head || document.documentElement).appendChild(s);
-                    }
-                    apply();
-                    new MutationObserver(apply).observe(document.documentElement, {childList:true, subtree:true});
-                })();
-                """)
-            }
             isReady = true
             duration = (json["duration"] as? Double) ?? 0
             tosLog.notice("[ytCallback] ready — duration=\(self.duration, format: .fixed(precision: 1))s")
@@ -119,14 +94,11 @@ extension TOSPlayerViewModel {
             updateNowPlayingPlayback()
             #endif
             if playerState == .playing {
-                if settings.tosPlayerControlsMode == .minimal { hideEmbedControls() }
                 CFNotificationCenterPostNotification(
                     CFNotificationCenterGetDarwinNotifyCenter(),
                     CFNotificationName("com.void.smarttube.tosplayer.playing" as CFString),
                     nil, nil, true
                 )
-            } else if playerState == .paused {
-                if settings.tosPlayerControlsMode == .minimal { showEmbedControls() }
             }
 
         case "autoUnmuted":

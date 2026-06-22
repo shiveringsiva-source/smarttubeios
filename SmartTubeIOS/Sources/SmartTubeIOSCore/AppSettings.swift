@@ -148,17 +148,6 @@ public struct AppSettings: Codable {
     /// Opt-in experiment — has no effect on tvOS.
     public var useTOSPlayerOnMac: Bool
 
-    /// Controls style for the iOS TOS/embed player.
-    /// `.full`    — YouTube's own chrome (`controls=1`): always-visible scrubber, branding, title.
-    /// `.minimal` — CSS-hidden chrome (`controls=0`): clean video while playing; native browser
-    ///              controls appear only when paused (tap centre to resume).
-    public var tosPlayerControlsMode: TOSControlsMode
-
-    public enum TOSControlsMode: String, Codable, CaseIterable, Sendable {
-        case full    = "full"
-        case minimal = "minimal"
-    }
-
     // Note: there is no `useTOSPlayerOnIOS` setting. The TOS-compliant player is
     // always used on iOS (PlayerRouter.open(), gated #if os(iOS)) — see
     // SettingsStore.useTOSPlayerOnIOS, which is a non-persisted, hardcoded-true
@@ -284,7 +273,6 @@ public struct AppSettings: Codable {
         #else
         useTOSPlayerOnMac    = false
         #endif
-        tosPlayerControlsMode = .full
         settingsVersion      = 1
     }
 }
@@ -349,7 +337,6 @@ extension AppSettings {
         case preferH264
         case iCloudSyncEnabled
         case useTOSPlayerOnMac
-        case tosPlayerControlsMode
     }
 
     public init(from decoder: Decoder) throws {
@@ -393,6 +380,5 @@ extension AppSettings {
         preferH264                   = c.safeDecode(Bool.self,              forKey: .preferH264,                   default: d.preferH264)
         iCloudSyncEnabled            = c.safeDecode(Bool.self,              forKey: .iCloudSyncEnabled,            default: d.iCloudSyncEnabled)
         useTOSPlayerOnMac            = c.safeDecode(Bool.self,              forKey: .useTOSPlayerOnMac,            default: d.useTOSPlayerOnMac)
-        tosPlayerControlsMode        = c.safeDecode(TOSControlsMode.self,  forKey: .tosPlayerControlsMode,        default: d.tosPlayerControlsMode)
     }
 }

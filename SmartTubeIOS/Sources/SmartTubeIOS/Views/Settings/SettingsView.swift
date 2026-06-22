@@ -164,14 +164,6 @@ public struct SettingsView: View {
             }
             #endif
 
-            #if os(iOS)
-            Picker("Player Controls", selection: $store.settings.tosPlayerControlsMode) {
-                Text("Full").tag(AppSettings.TOSControlsMode.full)
-                Text("Minimal").tag(AppSettings.TOSControlsMode.minimal)
-            }
-            .accessibilityIdentifier("settings.tosPlayerControlsModePicker")
-            #endif
-
             Toggle("Loop Video", isOn: $store.settings.loopEnabled)
             Toggle("Shuffle", isOn: $store.settings.shuffleEnabled)
 
