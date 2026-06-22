@@ -54,6 +54,34 @@ extension TOSPlayerViewModel {
         onPlayNext?(next)
     }
 
+    /// Called when the embed reports `playerState == .ended`. Mirrors
+    /// PlaybackViewModel+Navigation.handlePlaybackEnd()'s gating exactly:
+    /// loop takes priority, then queue/playlist continuation happens
+    /// unconditionally (matches the AVPlayer pipeline — playlist intent implies
+    /// sequential playback regardless of the general Autoplay toggle), and only
+    /// the final "suggestions" fallback is gated by `settings.autoplayEnabled`.
+    /// `playNext()` already contains the queue-vs-suggestions logic, so this only
+    /// needs to add the gating `handlePlaybackEnd()` itself doesn't have.
+    func handlePlaybackEnd() {
+        if settings.loopEnabled {
+            tosLog.notice("[navigation] handlePlaybackEnd — loop enabled, replaying")
+            seekTo(0)
+            play()
+            return
+        }
+        if playlistId == CurrentQueueStore.playlistID {
+            tosLog.notice("[navigation] handlePlaybackEnd — queue context, advancing unconditionally")
+            playNext()
+            return
+        }
+        guard settings.autoplayEnabled else {
+            tosLog.notice("[navigation] handlePlaybackEnd — autoplay disabled, leaving native end screen")
+            return
+        }
+        tosLog.notice("[navigation] handlePlaybackEnd — autoplay enabled, advancing to suggestion")
+        playNext()
+    }
+
     /// Swipe-right handler.
     /// - CurrentQueue: go to the previous queue item, wrapping to last at start.
     /// - Suggestions: re-play the most recent history entry.

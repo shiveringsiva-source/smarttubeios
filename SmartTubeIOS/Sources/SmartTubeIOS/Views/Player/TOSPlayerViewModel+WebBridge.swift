@@ -99,6 +99,13 @@ extension TOSPlayerViewModel {
                     CFNotificationName("com.void.smarttube.tosplayer.playing" as CFString),
                     nil, nil, true
                 )
+            } else if playerState == .ended {
+                // #109: TOSPlayerViewModel never had any end-of-video handling at
+                // all — never ported from PlaybackViewModel+Navigation.handlePlaybackEnd()
+                // when TOS became the iOS default. Without this, every video just
+                // stops at YouTube's own native "replay" end screen regardless of
+                // the Autoplay/queue settings.
+                handlePlaybackEnd()
             }
 
         case "autoUnmuted":
