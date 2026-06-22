@@ -74,6 +74,9 @@ public struct TOSPlayerView: View {
     @State private var controlsVisible = false
     @State private var controlsHideTask: Task<Void, Never>? = nil
     private let controlsHideDelay: Double = 4
+    /// User-forced landscape, independent of the device's physical rotation lock.
+    /// See `tosPlayer.landscapeLockButton`'s doc comment.
+    @State private var isLandscapeLocked = false
 
     private func showControls() {
         controlsHideTask?.cancel()
@@ -238,6 +241,11 @@ public struct TOSPlayerView: View {
         .onAppear {
             vm.updateSettings(store.settings)
             vm.startIfNeeded()
+            #if os(iOS)
+            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+            let physicallyLandscape = UIDevice.current.orientation.isLandscape
+            OrientationManager.shared.playerIsActive = isLandscapeLocked || store.settings.landscapeAlwaysPlay || physicallyLandscape
+            #endif
         }
         // Pause the embedded <video> element when this view leaves the hierarchy.
         //
@@ -257,6 +265,8 @@ public struct TOSPlayerView: View {
         .onDisappear {
             #if os(iOS)
             controlsHideTask?.cancel()
+            UIDevice.current.endGeneratingDeviceOrientationNotifications()
+            OrientationManager.shared.playerIsActive = false
             // On iOS, only pause when fully stopped — not when minimizing to mini-player.
             // TOSPlayerStateStore.stop() already calls vm.pause() + vm.saveProgress()
             // before releasing the vm, so we only log here in that case.
@@ -319,6 +329,21 @@ public struct TOSPlayerView: View {
         // (tosState.vm is replaced by TOSPlayerStateStore.play). Without this the
         // controls stay hidden if the user swiped while they were already hidden.
         .onChange(of: vm.videoId) { _, _ in showControls() }
+        // Keep landscape advertised to UIKit in sync with physical rotation, the
+        // shared "Landscape Always Play" setting, and the lock button — mirrors
+        // PlayerView+Lifecycle.swift's identical orientation-sync modifiers.
+        .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+            let orientation = UIDevice.current.orientation
+            guard orientation.isValidInterfaceOrientation else { return }
+            OrientationManager.shared.playerIsActive =
+                isLandscapeLocked || store.settings.landscapeAlwaysPlay || orientation.isLandscape
+        }
+        .onChange(of: store.settings.landscapeAlwaysPlay) { _, alwaysLandscape in
+            OrientationManager.shared.playerIsActive = isLandscapeLocked || alwaysLandscape
+        }
+        .onChange(of: isLandscapeLocked) { _, isLocked in
+            OrientationManager.shared.playerIsActive = isLocked || store.settings.landscapeAlwaysPlay
+        }
         #endif
         )
     }
@@ -361,6 +386,23 @@ public struct TOSPlayerView: View {
                 // sits just below the top-right corner.
                 speedButton(vm: vm)
                 moreButton(vm: vm)
+
+                // Landscape lock — lets the user force landscape playback without
+                // disabling their device's portrait orientation lock. Ported from
+                // PlayerView+ControlElements.swift (the old AVPlayer pipeline) —
+                // this was never carried over when TOS became the iOS default,
+                // which is why it disappeared for users who had it before.
+                Button {
+                    isLandscapeLocked.toggle()
+                } label: {
+                    Image(systemName: isLandscapeLocked ? "lock.rotation" : "lock.rotation.open")
+                        .font(.title2)
+                        .foregroundStyle(.white)
+                        .padding(12)
+                        .background(.black.opacity(0.4))
+                        .clipShape(Circle())
+                }
+                .accessibilityIdentifier("tosPlayer.landscapeLockButton")
 
                 Spacer()
             }

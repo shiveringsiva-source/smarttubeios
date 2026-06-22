@@ -268,5 +268,56 @@ final class TOSPlayerIOSUITests: XCTestCase {
         )
         print("[TOS-iOS] ✓ stateLabel absent — no unexpected re-presentation after stop")
     }
+
+    /// Regression test for the landscape lock button — ported from
+    /// PlayerView+ControlElements.swift to TOSPlayerView when it was discovered
+    /// missing after TOS became the iOS default (it was never carried over).
+    /// Mirrors AudioAndLandscapePlayerUITests.testLandscapeLockButtonExistsInPlayer/
+    /// testLandscapeLockButtonToggles, adapted to TOS's helpers.
+    func testTOSPlayerLandscapeLockButtonExistsAndToggles() throws {
+        launchApp()
+        guard let cards = waitForVideoCards() else {
+            throw XCTSkip("No video cards found — network unavailable or home feed empty")
+        }
+        guard let card = firstNonShortCard(from: cards) else {
+            throw XCTSkip("No non-short video card found in first 20 cards")
+        }
+        let playingNote = XCTDarwinNotificationExpectation(notificationName: "com.void.smarttube.tosplayer.playing")
+        guard openTOSPlayer(from: card) != nil else {
+            throw XCTSkip("tosPlayer.stateLabel did not appear — TOS player was not opened")
+        }
+        guard XCTWaiter().wait(for: [playingNote], timeout: 20) == .completed else {
+            throw XCTSkip("playing notification never fired — IFrame embed failed to load")
+        }
+
+        // Controls (including the lock button) are hidden until tapped — same
+        // pattern as showControls() in AudioAndLandscapePlayerUITests. Tap the
+        // player area (the gesture overlay isn't accessibility-exposed, so use a
+        // raw coordinate) to reveal them. Must wait for "playing" first — tapping
+        // while paused calls vm.play() instead of showControls().
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        // Let the controls' 0.2s fade-in animation settle before probing hittability.
+        Thread.sleep(forTimeInterval: 0.5)
+
+        let lockButton = app.buttons["tosPlayer.landscapeLockButton"]
+        XCTAssertTrue(lockButton.waitForExistence(timeout: 10),
+                      "tosPlayer.landscapeLockButton must appear in the player controls overlay")
+        XCTAssertTrue(lockButton.isHittable, "Landscape lock button must be tappable once controls are shown")
+
+        // Tap to lock landscape.
+        lockButton.tap()
+        XCTAssertEqual(app.state, .runningForeground,
+                       "App must remain running after tapping the landscape lock button")
+        Thread.sleep(forTimeInterval: 2)
+
+        // Tap again to unlock — re-reveal controls first since they may have
+        // auto-hidden during the 2s wait.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        Thread.sleep(forTimeInterval: 0.5)
+        XCTAssertTrue(lockButton.waitForExistence(timeout: 5), "Lock button must still exist after first tap")
+        lockButton.tap()
+        XCTAssertEqual(app.state, .runningForeground,
+                       "App must remain running after unlocking")
+    }
 }
 #endif // os(iOS)
