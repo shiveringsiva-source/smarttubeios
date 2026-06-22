@@ -197,11 +197,27 @@ final class MockInnerTubeAPI: InnerTubeAPIProtocol {
 
 /// Yields control enough times so internal @MainActor Tasks spawned by
 /// the ViewModel can complete against an immediately-returning mock API.
-private func waitForTasks() async {
-    // Three yields cover: (1) task starts, (2) async call returns, (3) state written back
-    for _ in 0..<3 { await Task.yield() }
-    // Short sleep ensures child tasks scheduled on the global executor also finish.
-    try? await Task.sleep(for: .milliseconds(50))
+///
+/// Without `until:`, this is a fixed delay (3 yields + 50ms) — fine when the
+/// global executor is lightly loaded, but flaky under heavy parallel test
+/// contention (confirmed: running the full `swift test` suite reliably
+/// produced failures here that a `--filter ViewModelTests --no-parallel` run
+/// never does — the underlying async work just hadn't completed yet when the
+/// fixed delay elapsed). Pass `until:` for any assertion that depends on a
+/// specific condition to poll for it directly instead of guessing a delay.
+@MainActor
+private func waitForTasks(timeout: TimeInterval = 2, until condition: (@MainActor () -> Bool)? = nil) async {
+    guard let condition else {
+        for _ in 0..<3 { await Task.yield() }
+        try? await Task.sleep(for: .milliseconds(50))
+        return
+    }
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+        await Task.yield()
+        if condition() { return }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
 }
 
 /// Waits for the background `shortsPreloadTask` (spawned at the end of
@@ -255,7 +271,10 @@ struct HomeViewModelTests {
         let vm = HomeViewModel(api: mock)
         defer { vm.cancel() }
         vm.load()
-        await waitForTasks()
+        await waitForTasks(until: {
+            let methods = mock.calls.map(\.method)
+            return methods.contains("fetchHomeRows") && methods.contains("fetchSubscriptions")
+        })
 
         let methods = mock.calls.map(\.method)
         #expect(methods.contains("fetchHomeRows"))
@@ -286,7 +305,9 @@ struct HomeViewModelTests {
         let vm = HomeViewModel(api: mock)
         defer { vm.cancel() }
         vm.load()
-        await waitForTasks()
+        await waitForTasks(until: {
+            vm.sections.first { $0.section.type == .home }?.videos.isEmpty == false
+        })
 
         let homeState = vm.sections.first { $0.section.type == .home }
         #expect(homeState?.videos.isEmpty == false)
@@ -406,7 +427,7 @@ struct HomeViewModelTests {
         let vm = HomeViewModel(api: mock)
         defer { vm.cancel() }
         vm.load()
-        await waitForTasks()
+        await waitForTasks(until: { vm.shortsVideos.count >= 5 })
 
         // 3 initial + 2 new (duplicate filtered out) = 5
         #expect(vm.shortsVideos.count == 5)
@@ -489,7 +510,7 @@ struct BrowseViewModelTests {
         let vm = BrowseViewModel(api: mock, initialSection: section)
         await vm.updateAuthToken("fake-token")  // authenticated path
         vm.loadContent(for: section, refresh: true, source: "test")
-        await waitForTasks()
+        await waitForTasks(until: { !vm.videoGroups.isEmpty })
 
         #expect(mock.calls.contains { $0.method == "fetchSubscriptions" })
         #expect(!vm.videoGroups.isEmpty)
@@ -504,7 +525,7 @@ struct BrowseViewModelTests {
         let section = BrowseSection(id: "history", title: "History", type: .history)
         let vm = BrowseViewModel(api: mock, initialSection: section)
         vm.loadContent(for: section, refresh: true, source: "test")
-        await waitForTasks()
+        await waitForTasks(until: { vm.videoGroups.first?.videos.first != nil })
 
         #expect(mock.calls.contains { $0.method == "fetchHistory" })
         #expect(vm.videoGroups.first?.videos.first?.id == "histvid_AAAA")
@@ -532,7 +553,7 @@ struct BrowseViewModelTests {
         let section = BrowseSection(id: "shorts", title: "Shorts", type: .shorts)
         let vm = BrowseViewModel(api: mock, initialSection: section)
         vm.loadContent(for: section, refresh: true, source: "test")
-        await waitForTasks()
+        await waitForTasks(until: { mock.calls.contains { $0.method == "fetchShorts" } })
 
         #expect(mock.calls.contains { $0.method == "fetchShorts" })
     }
@@ -563,7 +584,7 @@ struct BrowseViewModelTests {
         let section = BrowseSection(id: "shorts", title: "Shorts", type: .shorts)
         let vm = BrowseViewModel(api: mock, initialSection: section)
         vm.loadContent(for: section, refresh: true, source: "test")
-        await waitForTasks()
+        await waitForTasks(until: { vm.error != nil })
 
         #expect(vm.error != nil)
     }
@@ -576,7 +597,16 @@ struct BrowseViewModelTests {
         let section = BrowseSection(id: "subscriptions", title: "Subscriptions", type: .subscriptions)
         let vm = BrowseViewModel(api: mock, initialSection: section)
         vm.loadContent(for: section, refresh: true, source: "test")
-        await waitForTasks()
+        // isLoading is false both before the fetch starts and after it ends, so
+        // it can't be the polling condition on its own — and requiring a
+        // recorded mock call doesn't work either, since unauthenticated
+        // .subscriptions takes a local-store path that never calls the mock API
+        // at all (see "Empty subscriptions (local path)" above). loadedAt is set
+        // inside fetchSection's withThrowingTaskGroup body (BrowseViewModel.swift:475),
+        // which can fire before the outer function (and its `defer { isLoading = false }`)
+        // actually returns if other group children are still running — so require
+        // both signals together rather than relying on loadedAt alone.
+        await waitForTasks(until: { vm.loadedAt != nil && !vm.isLoading })
 
         #expect(!vm.isLoading)
     }
@@ -689,7 +719,7 @@ struct PlaylistViewModelTests {
 
         let vm = PlaylistViewModel(api: mock)
         vm.load(playlistId: "PLtest1234567")
-        await waitForTasks()
+        await waitForTasks(until: { vm.videos.count == 2 })
 
         #expect(vm.videos.count == 2)
         #expect(mock.calls.contains { $0.method == "fetchPlaylistVideos" })
@@ -702,7 +732,7 @@ struct PlaylistViewModelTests {
 
         let vm = PlaylistViewModel(api: mock)
         vm.load(playlistId: "PLtest1234567")
-        await waitForTasks()
+        await waitForTasks(until: { vm.videos.first != nil })
 
         #expect(vm.videos.first?.playlistId == "PLtest1234567")
     }
@@ -752,7 +782,7 @@ struct PlaylistViewModelTests {
 
         let vm = PlaylistViewModel(api: mock)
         vm.load(playlistId: "PLtest1234567")
-        await waitForTasks()
+        await waitForTasks(until: { !vm.isLoading && !mock.calls.isEmpty })
 
         #expect(!vm.isLoading)
     }
