@@ -319,5 +319,42 @@ final class TOSPlayerIOSUITests: XCTestCase {
         XCTAssertEqual(app.state, .runningForeground,
                        "App must remain running after unlocking")
     }
+
+    /// Regression investigation for GitHub #111: "Tap on video to move the
+    /// slider stops playback instead of showing and bringing up only the
+    /// slider". TOSSwipeNavigationOverlay's tap recognizer has
+    /// cancelsTouchesInView=false (deliberately, so the PAN gesture doesn't
+    /// steal YouTube's native bottom scrubber drag) — but this is also applied
+    /// to the TAP recognizer, meaning a tap in the video area could reach BOTH
+    /// our showControls() handler AND YouTube's own native tap-to-toggle-play
+    /// handler underneath. This taps mid-screen (well above the native
+    /// controls bar) and checks whether a spurious "paused" state fires.
+    func testTOSPlayerTapToShowControlsDoesNotStopPlaybackDiagnostic() throws {
+        launchApp()
+        guard let cards = waitForVideoCards() else {
+            throw XCTSkip("No video cards found — network unavailable or home feed empty")
+        }
+        guard let card = firstNonShortCard(from: cards) else {
+            throw XCTSkip("No non-short video card found in first 20 cards")
+        }
+        let playingNote = XCTDarwinNotificationExpectation(notificationName: "com.void.smarttube.tosplayer.playing")
+        guard openTOSPlayer(from: card) != nil else {
+            throw XCTSkip("tosPlayer.stateLabel did not appear — TOS player was not opened")
+        }
+        guard XCTWaiter().wait(for: [playingNote], timeout: 20) == .completed else {
+            throw XCTSkip("playing notification never fired — IFrame embed failed to load")
+        }
+        // Let controls auto-hide first, matching the reported scenario exactly
+        // ("after a few seconds... slider and control elements disappear").
+        Thread.sleep(forTimeInterval: 5)
+
+        let spuriousPause = XCTDarwinNotificationExpectation(notificationName: "com.void.smarttube.tosplayer.state.2")
+        // Tap mid-screen — well above the native controls bar (bottom ~12%).
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)).tap()
+
+        let result = XCTWaiter().wait(for: [spuriousPause], timeout: 2)
+        XCTAssertNotEqual(result, .completed,
+            "REPRO #111: tapping to reveal controls also paused the video — state.2 (paused) fired within 2s of the tap")
+    }
 }
 #endif // os(iOS)

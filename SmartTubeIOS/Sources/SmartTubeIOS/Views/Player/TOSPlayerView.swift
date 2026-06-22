@@ -186,7 +186,26 @@ public struct TOSPlayerView: View {
                 TOSSwipeNavigationOverlay(
                     onSwipeLeft: { vm.playNext() },
                     onSwipeRight: { vm.playPrevious() },
-                    onTap: { _ in showControls() }
+                    onTap: { _ in
+                        // #111: a tap to reveal controls can land on the SAME
+                        // physical touch YouTube's own embed uses to toggle
+                        // play/pause — our window-level gesture recognizer and
+                        // the WKWebView's native click handling both observe
+                        // it. Detect the resulting spurious pause and undo it;
+                        // a first tap should only ever reveal controls, never
+                        // stop playback (the user can still explicitly pause
+                        // via YouTube's own play/pause button once visible).
+                        let wasPlaying = vm.playerState == .playing || vm.playerState == .buffering
+                        showControls()
+                        guard wasPlaying else { return }
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(250))
+                            if vm.playerState == .paused {
+                                tosViewLog.notice("[tap] undoing spurious pause after tap-to-show-controls (#111)")
+                                vm.play()
+                            }
+                        }
+                    }
                 )
                 .ignoresSafeArea()
                 .accessibilityHidden(true)
