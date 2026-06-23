@@ -391,14 +391,20 @@ public struct TOSPlayerView: View {
     // "back button is too low and doesn't work" regression reported on-device.
     private func backButton(vm: TOSPlayerViewModel) -> some View {
         VStack {
-            HStack(spacing: 8) {
+            // Tighter spacing/padding than usual (4pt gaps, 9pt circle padding) —
+            // with 4 items in this row (back, speed, more, lock) the wider defaults
+            // pushed far enough right to crowd into the IFrame's own native
+            // top-right icons (volume/CC/settings gear), especially on narrower
+            // screens. This keeps the whole cluster more compact so there's a
+            // visible gap before YouTube's own controls start.
+            HStack(spacing: 4) {
                 Button {
                     tosState.minimize()
                 } label: {
                     Image(systemName: AppSymbol.chevronLeft)
                         .font(.title2)
                         .foregroundStyle(.white)
-                        .padding(12)
+                        .padding(9)
                         .background(.black.opacity(0.4))
                         .clipShape(Circle())
                 }
@@ -421,7 +427,7 @@ public struct TOSPlayerView: View {
                     Image(systemName: isLandscapeLocked ? "lock.rotation" : "lock.rotation.open")
                         .font(.title2)
                         .foregroundStyle(.white)
-                        .padding(12)
+                        .padding(9)
                         .background(.black.opacity(0.4))
                         .clipShape(Circle())
                 }
@@ -482,8 +488,8 @@ public struct TOSPlayerView: View {
             Text(speedLabel(for: store.settings.playbackSpeed))
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 7)
                 .background(.ultraThinMaterial, in: Capsule())
         }
         .menuStyle(.borderlessButton)
@@ -575,7 +581,7 @@ public struct TOSPlayerView: View {
             Image(systemName: "ellipsis")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white)
-                .padding(10)
+                .padding(9)
                 .background(.ultraThinMaterial, in: Circle())
         }
         .menuStyle(.borderlessButton)
