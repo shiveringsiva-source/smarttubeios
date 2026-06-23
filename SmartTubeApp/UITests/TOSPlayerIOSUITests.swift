@@ -374,5 +374,40 @@ final class TOSPlayerIOSUITests: XCTestCase {
         XCTAssertEqual(resumeResult, .completed,
             "Tap caused a spurious pause and playback never resumed — TOSPlayerView's detect-and-undo recovery did not fire")
     }
+
+    /// Regression test for GitHub #51/#78 follow-up: watch history still didn't
+    /// record after the auth-token-propagation fix landed. Live device log
+    /// showed why: `[watchtime] saveProgress skipped — historyState=enabled
+    /// duration=0.0s` — TOSPlayerViewModel.duration was captured once on the
+    /// very first poll ("ready", before video.duration had loaded) and never
+    /// refreshed, so WatchtimeTracker.checkpoint()'s `duration > 0` guard
+    /// always failed on dismiss. Fixed by also refreshing duration from each
+    /// "tick" message. This opens a video, waits long enough for several
+    /// ticks, and checks the bridge actually reports a non-zero duration via
+    /// the `tosplayer.duration.<seconds>` notification fired here for the test.
+    func testTOSPlayerDurationUpdatesFromZeroAfterTicks() throws {
+        launchApp()
+        guard let cards = waitForVideoCards() else {
+            throw XCTSkip("No video cards found — network unavailable or home feed empty")
+        }
+        guard let card = firstNonShortCard(from: cards) else {
+            throw XCTSkip("No non-short video card found in first 20 cards")
+        }
+        // Register BOTH expectations before opening the player — duration
+        // becomes known within ~1 tick of "playing" firing (confirmed live:
+        // ~280ms), so registering durationKnown only after waiting for
+        // playingNote loses the race almost every time.
+        let playingNote = XCTDarwinNotificationExpectation(notificationName: "com.void.smarttube.tosplayer.playing")
+        let durationKnown = XCTDarwinNotificationExpectation(notificationName: "com.void.smarttube.tosplayer.durationknown")
+        guard openTOSPlayer(from: card) != nil else {
+            throw XCTSkip("tosPlayer.stateLabel did not appear — TOS player was not opened")
+        }
+        guard XCTWaiter().wait(for: [playingNote], timeout: 20) == .completed else {
+            throw XCTSkip("playing notification never fired — IFrame embed failed to load")
+        }
+        let result = XCTWaiter().wait(for: [durationKnown], timeout: 10)
+        XCTAssertEqual(result, .completed,
+            "REGRESSION #51/#78: duration never became known from tick — watch history checkpoint would be skipped on dismiss")
+    }
 }
 #endif // os(iOS)

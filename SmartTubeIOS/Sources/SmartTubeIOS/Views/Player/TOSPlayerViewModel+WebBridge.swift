@@ -55,7 +55,8 @@ extension TOSPlayerViewModel {
                 tosLog.notice("[frame] captured embed iframe frameInfo — isMainFrame=\(frameInfo.isMainFrame, privacy: .public) url=\(frameInfo.request.url?.absoluteString ?? "nil", privacy: .public)")
             }
             isReady = true
-            duration = (json["duration"] as? Double) ?? 0
+            let readyDuration = (json["duration"] as? Double) ?? 0
+            if readyDuration > 0 { setDurationIfNewlyKnown(readyDuration) }
             tosLog.notice("[ytCallback] ready — duration=\(self.duration, format: .fixed(precision: 1))s")
             CFNotificationCenterPostNotification(
                 CFNotificationCenterGetDarwinNotifyCenter(),
@@ -120,6 +121,16 @@ extension TOSPlayerViewModel {
             let t = (json["t"] as? Double) ?? 0
             let s = (json["state"] as? Int) ?? 999
             currentTime = t
+            // "ready" fires on the very first poll, before video.duration has
+            // necessarily loaded (the video starts muted for autoplay-policy
+            // reasons, so metadata can lag a poll or two) — confirmed live:
+            // duration stuck at 0.0 for an entire session, which made
+            // saveProgress()'s `duration <= 0` guard skip the watch-history
+            // checkpoint on every dismiss, even with auth working correctly.
+            // Refresh from tick too, once a real value is available.
+            if let tickDuration = json["duration"] as? Double, tickDuration > 0 {
+                setDurationIfNewlyKnown(tickDuration)
+            }
             let newState = YTPlayerState(raw: s)
             if !hasReceivedFirstTick {
                 hasReceivedFirstTick = true
@@ -177,6 +188,22 @@ extension TOSPlayerViewModel {
         default:
             break
         }
+    }
+
+    /// Sets `duration` and fires `tosplayer.durationknown` the first time a
+    /// positive value becomes available — whether that happens on "ready"
+    /// (duration already known) or later via "tick" (the common case: "ready"
+    /// fires before video.duration has loaded, since the embed starts muted
+    /// for autoplay-policy reasons and metadata can lag a poll or two).
+    private func setDurationIfNewlyKnown(_ value: Double) {
+        let wasKnown = duration > 0
+        duration = value
+        guard !wasKnown else { return }
+        CFNotificationCenterPostNotification(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            CFNotificationName("com.void.smarttube.tosplayer.durationknown" as CFString),
+            nil, nil, true
+        )
     }
 }
 #endif // !os(tvOS)

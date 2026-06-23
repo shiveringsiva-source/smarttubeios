@@ -659,7 +659,7 @@ final class TOSPlayerViewModel: NSObject {
                 postMsg({type: 'autoUnmuted', t: t, muted: video.muted});
             }
 
-            postMsg({type: 'tick', t: t, state: s});
+            postMsg({type: 'tick', t: t, state: s, duration: video.duration || 0});
 
             if (s !== _prevState) {
                 _prevState = s;
