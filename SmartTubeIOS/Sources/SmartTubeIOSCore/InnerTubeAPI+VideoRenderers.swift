@@ -656,10 +656,6 @@ extension InnerTubeAPI {
         let watchEndpoint = innertubeCommand["watchEndpoint"] as? [String: Any]
         guard let videoId = reelEndpoint?["videoId"] as? String
                           ?? watchEndpoint?["videoId"] as? String else { return nil }
-        let isShort = reelEndpoint != nil
-        if isShort {
-            tubeLog.debug("lockupViewModel isShort=true id=\(videoId, privacy: .public) signal=reelWatchEndpoint")
-        }
 
         // title: metadata.lockupMetadataViewModel.title
         // The field may be a TextViewModel ({"content": "…"}) in newer API responses,
@@ -711,6 +707,34 @@ extension InnerTubeAPI {
         let thumbVM = (lockup["contentImage"] as? [String: Any])?["thumbnailViewModel"] as? [String: Any]
         let thumbnails = (thumbVM?["image"] as? [String: Any])?["thumbnails"] as? [[String: Any]]
         let thumbURL = thumbnails?.last.flatMap { $0["url"] as? String }.flatMap { URL(string: $0) }
+
+        // isShort: only one signal currently (reelWatchEndpoint) — unlike parseVideoRenderer's
+        // four signals. GitHub #41 ("Hide Shorts" still leaking through in Home/Subscriptions,
+        // confirmed on 4.7) is suspected to be Shorts arriving here via a regular watchEndpoint
+        // instead of reelWatchEndpoint, the same gap task #201/BUG-014 fixed for
+        // parseVideoRenderer — but parseVideoRenderer's extra signals (overlay style,
+        // ustreamerConfig, vertical thumbnail) all need a duration guard to avoid
+        // misclassifying landscape videos with portrait thumbnails (task #201), and
+        // lockupViewModel never exposes a parsed duration. Rather than ship an unguarded
+        // (and therefore riskier) heuristic without a live sample to verify against, log
+        // the cases that fall through so the next real occurrence gives a concrete renderer
+        // shape to fix precisely.
+        let isShort = reelEndpoint != nil
+        if isShort {
+            tubeLog.debug("lockupViewModel isShort=true id=\(videoId, privacy: .public) signal=reelWatchEndpoint")
+        } else {
+            // Only log the suspicious case (portrait thumbnail but not flagged as a
+            // Short) rather than every regular video — keeps this from flooding the
+            // log while still catching #41's likely failure mode.
+            let isVerticalThumbnail = thumbnails?.contains {
+                let w = ($0["width"] as? Int) ?? 0
+                let h = ($0["height"] as? Int) ?? 0
+                return h > w && w > 0
+            } ?? false
+            if isVerticalThumbnail {
+                tubeLog.notice("lockupViewModel isShort=false but has portrait thumbnail (#41 diagnostic) id=\(videoId, privacy: .public) thumbDims=\(thumbnails?.map { "\($0["width"] ?? 0)x\($0["height"] ?? 0)" }.joined(separator: ",") ?? "nil", privacy: .public)")
+            }
+        }
 
         let publishedAt: Date? = {
             for row in metaRows.dropFirst() {
