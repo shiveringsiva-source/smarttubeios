@@ -48,7 +48,17 @@ extension PlaybackViewModel {
                 // Ignore rate changes that we ourselves triggered (load/pause/resume/stop)
                 // by only acting when the player goes silent unexpectedly while we
                 // believed it was playing.
-                let playerWentSilent = newRate == 0 && self.isPlaying && !self.isSwappingItem && !self.isHandlingAudioInterruption
+                //
+                // Also ignore rate→0 when currentTime is within 1 s of the total
+                // duration: that's the video naturally reaching its end, not a stall.
+                // In that case AVFoundation will post didPlayToEndTimeNotification
+                // immediately after, which calls handlePlaybackEnd() correctly.
+                // Without this guard the recovery logic seeks back by ~1 s and fights
+                // the natural ending, causing repeated spurious stall reports and
+                // blocking the end-of-video / autoplay-next flow (crash log confirmed
+                // via Crashlytics: stall #1–4 at t=15s for a 15.3 s video).
+                let nearEnd = self.duration > 0 && self.currentTime >= self.duration - 1.0
+                let playerWentSilent = newRate == 0 && self.isPlaying && !self.isSwappingItem && !self.isHandlingAudioInterruption && !nearEnd
                 if playerWentSilent {
                     self.isPlaying = false
                     playerLog.notice("[rateObserver] player.rate→0 while isPlaying=true — syncing isPlaying=false")
