@@ -477,28 +477,42 @@ final class YouTubeWebViewHLSExtractor: NSObject {
         // Downloads the main player JS and uses the bundled EJS AST-based solver (jsc)
         // to solve `unsolvedN`. Returns the solved string, or null on failure.
         // `jsc` is defined by the solver WKUserScripts injected before this script.
-        async function solveNFromPlayerJS(unsolvedN) {
+        // knownPlayerID: pass the playerID already extracted from the HLS URL so we
+        // skip the script-element discovery step. That step searches the MAIN frame for
+        // a <script src="...player_ias..."> tag — it always fails in our embed context
+        // because the player script lives inside the cross-origin YouTube iframe, not
+        // in the example.com wrapper document. Passing knownPlayerID directly makes the
+        // in-JS solve succeed reliably, eliminating the need for the Swift JSC fallback
+        // (solveNChallengeViaNode) that was previously the only path that ever worked.
+        async function solveNFromPlayerJS(unsolvedN, knownPlayerID) {
             try {
                 // jsc must be available from the EJS solver scripts injected at document-start
                 if (typeof jsc !== 'function') return null;
 
-                // Locate the IAS player script to extract the player ID
-                var playerSrc = null;
-                var scripts = document.querySelectorAll('script[src]');
-                for (var si = 0; si < scripts.length; si++) {
-                    if (scripts[si].src && scripts[si].src.indexOf('player_ias') > -1) {
-                        playerSrc = scripts[si].src;
-                        break;
+                // Use the player ID passed from the caller (already in the HLS URL) rather
+                // than searching <script> tags — that search always fails in our embed context
+                // since the player script is inside the cross-origin YouTube iframe.
+                var pid = knownPlayerID;
+                if (!pid) {
+                    // Fallback: try the script-element search (works on a real YouTube page)
+                    var playerSrc = null;
+                    var scripts = document.querySelectorAll('script[src]');
+                    for (var si = 0; si < scripts.length; si++) {
+                        if (scripts[si].src && scripts[si].src.indexOf('player_ias') > -1) {
+                            playerSrc = scripts[si].src;
+                            break;
+                        }
                     }
+                    if (!playerSrc) return null;
+                    var pidMatch = playerSrc.match(/\/player\/([a-f0-9]+)\//);
+                    if (!pidMatch) return null;
+                    pid = pidMatch[1];
                 }
-                if (!playerSrc) return null;
 
                 // Build the main-variant URL (player_es6) from the player ID.
                 // yt-dlp forces the 'main' variant (player_es6.vflset/en_US/base.js)
                 // because only that variant contains the n-solver function.
-                var pidMatch = playerSrc.match(/\/player\/([a-f0-9]+)\//);
-                if (!pidMatch) return null;
-                var mainUrl = 'https://www.youtube.com/s/player/' + pidMatch[1] +
+                var mainUrl = 'https://www.youtube.com/s/player/' + pid +
                               '/player_es6.vflset/en_US/base.js';
 
                 // Fetch with cache:default so WKWebView serves from cache if available,
@@ -601,8 +615,9 @@ final class YouTubeWebViewHLSExtractor: NSObject {
                     } catch(e) {}
 
                     try {
-                        // Step 2: Try in-JS EJS solver (only works if jsc is defined).
-                        if (hlsN && typeof jsc === 'function') solvedN = await solveNFromPlayerJS(hlsN);
+                        // Step 2: In-JS EJS solver — pass playerID directly so it works
+                        // in our embed context (script-element discovery always fails there).
+                        if (hlsN && typeof jsc === 'function') solvedN = await solveNFromPlayerJS(hlsN, playerID);
                     } catch(e) {}
 
                     clearTimeout(fallbackTimer);
@@ -736,82 +751,6 @@ final class YouTubeWebViewHLSExtractor: NSObject {
         finish(url: url)
     }
 
-    /// Solves an HLS n-challenge using the bundled EJS solver evaluated in JavaScriptCore.
-    /// Downloads and caches the main player JS variant from YouTube's CDN, then runs the
-    /// yt-dlp EJS solver (lib + core) inside a JSContext — works on both simulator and
-    /// real iOS/tvOS devices (no Node.js required).
-    private static func solveNChallengeViaNode(playerID: String, unsolvedN: String) async -> String? {
-        guard let libURL  = Bundle.module.url(forResource: "yt.solver.lib.min",  withExtension: "js"),
-              let coreURL = Bundle.module.url(forResource: "yt.solver.core.min", withExtension: "js"),
-              let libCode  = try? String(contentsOf: libURL,  encoding: .utf8),
-              let coreCode = try? String(contentsOf: coreURL, encoding: .utf8) else {
-            extractLog.warning("⚠️ [solver] EJS scripts not found in bundle")
-            return nil
-        }
-
-        // Download or use cached copy of the main player JS variant.
-        // yt-dlp uses the `player_es6.vflset/en_US/base.js` variant because it is the
-        // only variant that contains the n-solver function.
-        // NSTemporaryDirectory() works correctly on both simulator and real device.
-        let tmpPlayerPath = NSTemporaryDirectory() + "yt_player_\(playerID).js"
-        let playerJS: String
-        if let cached = try? String(contentsOfFile: tmpPlayerPath, encoding: .utf8), !cached.isEmpty {
-            playerJS = cached
-        } else {
-            guard let playerURL = URL(string:
-                "https://www.youtube.com/s/player/\(playerID)/player_es6.vflset/en_US/base.js"
-            ) else { return nil }
-            extractLog.notice("⚠️ [solver] downloading player JS for \(playerID as NSString)")
-            guard let (data, _) = try? await URLSession.shared.data(from: playerURL),
-                  !data.isEmpty,
-                  let js = String(data: data, encoding: .utf8) else {
-                extractLog.warning("⚠️ [solver] player JS download failed")
-                return nil
-            }
-            try? js.write(toFile: tmpPlayerPath, atomically: true, encoding: .utf8)
-            playerJS = js
-        }
-        extractLog.notice("⚠️ [solver] running JSC EJS solver, n=\(unsolvedN as NSString)")
-
-        // Run the JSContext solver on a detached background task — JSContext is not
-        // Sendable and must be created and consumed on the same thread.
-        return await Task.detached(priority: .userInitiated) {
-            let context = JSContext()!
-            var jsError: String?
-            context.exceptionHandler = { _, e in jsError = e?.toString() }
-
-            // lib.min.js defines `var lib = {meriyah, astring}` (JS AST parser).
-            context.evaluateScript(libCode)
-            context.evaluateScript("var meriyah = lib.meriyah; var astring = lib.astring;")
-            // core.min.js defines `var jsc = function(e,n){...}(meriyah,astring)` (EJS solver).
-            context.evaluateScript(coreCode)
-
-            // Inject playerJS and unsolvedN as JS objects to avoid any escaping issues.
-            context.setObject(playerJS,   forKeyedSubscript: "playerJSContent" as NSString)
-            context.setObject(unsolvedN,  forKeyedSubscript: "unsolvedNValue"  as NSString)
-
-            let result = context.evaluateScript("""
-            (function() {
-                try {
-                    var r = jsc({type:'player', player:playerJSContent,
-                                 requests:[{type:'n', challenges:[unsolvedNValue]}]});
-                    return (r && r.responses && r.responses[0] && r.responses[0].data)
-                        ? r.responses[0].data[unsolvedNValue] : null;
-                } catch(e) { return null; }
-            })()
-            """)
-
-            if let err = jsError {
-                extractLog.error("❌ [solver/JSC] exception: \(err as NSString)")
-            }
-            let solved = result?.toString()
-            guard let s = solved, !s.isEmpty, s != "null", s != "undefined", s != unsolvedN else {
-                return nil
-            }
-            return s
-        }.value
-    }
-
     private func finish(url: URL?) {
         timeoutTask?.cancel()
         timeoutTask = nil
@@ -942,38 +881,17 @@ extension YouTubeWebViewHLSExtractor: WKScriptMessageHandler {
             return
         }
 
-        // JS solver was not available — try solving on the Swift side via Node.js.
-        if let playerID = playerIDValue, let unsolvedN = unsolvedNValue, !unsolvedN.isEmpty {
-                extractLog.notice("⚠️ [webView] JS solver unavailable; launching JSC solver for playerID=\(playerID as NSString) n=\(unsolvedN as NSString)")
-            let capturedURL    = url
-            let capturedPoToken = poToken
-            // fix239: capture generation so we can detect if a new extraction started
-            // while the JSC solver was running (~0.3 s). Without this guard, the stale
-            // Task resumes the NEW video's continuation with the OLD video's HLS URL.
-            let myGeneration = extractionGeneration
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                let solved = await Task.detached(priority: .userInitiated) {
-                    await Self.solveNChallengeViaNode(playerID: playerID, unsolvedN: unsolvedN)
-                }.value
-                // fix239: reject if a new extraction started while we were solving
-                guard self.extractionGeneration == myGeneration else {
-                    extractLog.warning("⚠️ [webView/fix239] stale JSC solver result discarded — generation was \(myGeneration) now \(self.extractionGeneration) n=\(unsolvedN as NSString)")
-                    return
-                }
-                if let s = solved, !s.isEmpty, s != unsolvedN {
-                    self.extractedNSolver = (unsolved: unsolvedN, solved: s)
-                    extractLog.notice("✅ [webView] n solved via JSC: \(unsolvedN as NSString) → \(s as NSString)")
-                } else {
-                    self.extractedNSolver = nil
-                    extractLog.notice("⚠️ [webView] JSC solver returned nil/same for n=\(unsolvedN as NSString)")
-                }
-                self.finishWithURL(capturedURL, poToken: capturedPoToken)
-            }
-            return
-        }
-
-        // No n-challenge found or no player ID available.
+        // No n-challenge found or player ID not available — proceed without n-rewrite.
+        // The in-JS solveNFromPlayerJS above now receives playerID directly (rather than
+        // scanning <script> elements in the main frame, which always failed in our embed
+        // context), so solvedN should be non-nil for any video that has an n-challenge.
+        // If it is still nil here, the JSC Swift fallback (solveNChallengeViaNode) was
+        // removed because: (a) it ran the exact same EJS solve via a new JSContext on
+        // every extraction — visible as the top energy hotspot in Apple's 4.8 report;
+        // (b) the in-JS path now handles it reliably; (c) the Swift path provided no
+        // additional capability. Proceed to finishWithURL — if n was not solved the HLS
+        // proxy will deliver the playlist with the unsolved n; the CDN may throttle but
+        // the video will still play.
         if let u = unsolvedNValue {
             extractedNSolver = nil
             extractLog.notice("⚠️ [webView] n NOT solved (no playerID available): unsolvedN=\(u as NSString)")
