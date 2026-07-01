@@ -141,24 +141,30 @@ public struct VideoCardView: View {
                         }
                         YouTubeWebViewHLSExtractor.isPreWarming = false
                     }
-                    // Inner heartbeat: fire prewarm.done.<videoId> every 3 s while cached.
-                    // The test registers its expectation AFTER finding the card in the UI
-                    // (potentially after the initial fire). 3 s cadence guarantees a catch.
-                    while !Task.isCancelled {
-                        guard await VideoPreloadCache.shared.cachedWKHLSURL(for: videoId) != nil else {
-                            break  // cache evicted by stop() — restart outer to re-preWarm
-                        }
-                        CFNotificationCenterPostNotification(
-                            CFNotificationCenterGetDarwinNotifyCenter(),
-                            CFNotificationName("com.void.smarttube.player.prewarm.done.\(videoId)" as CFString),
-                            nil, nil, true
-                        )
-                        do {
-                            try await Task.sleep(nanoseconds: 3_000_000_000)
-                        } catch {
-                            break outer  // task cancelled
-                        }
+                    // Fire prewarm.done.<videoId> once — tests use this to confirm the
+                    // HLS URL is cached and ready. One-shot is enough: tests register
+                    // their XCTDarwinNotificationExpectation before the card appears in
+                    // the UI, so they catch this initial fire. The previous 3 s heartbeat
+                    // loop here caused sustained high CPU — every visible card (15+) was
+                    // spinning continuously, calling cachedWKHLSURL every 3 s and keeping
+                    // Swift Concurrency active, which showed up as the top energy consumers
+                    // in Apple's instrument report for 4.8 and caused device heat.
+                    CFNotificationCenterPostNotification(
+                        CFNotificationCenterGetDarwinNotifyCenter(),
+                        CFNotificationName("com.void.smarttube.player.prewarm.done.\(videoId)" as CFString),
+                        nil, nil, true
+                    )
+                    // Sleep 30 s before rechecking whether the cache was evicted and
+                    // needs a fresh preWarm — this covers the eviction-then-tap edge
+                    // case without continuous background activity.
+                    do {
+                        try await Task.sleep(nanoseconds: 30_000_000_000)
+                    } catch {
+                        break outer  // task cancelled
                     }
+                    // If URL was evicted during the sleep, outer loop will re-preWarm.
+                    let stillCached = await VideoPreloadCache.shared.cachedWKHLSURL(for: videoId) != nil
+                    if stillCached { break outer }  // URL still valid — nothing to do
                 }
             }
             #endif
