@@ -104,7 +104,10 @@ public struct VideoCardView: View {
             // takes. fix17 (persistent WKWebView) means the 2nd+ extractions only
             // take ~2.5 s (warm), so the total wait is cold_time + ≤4 s + 2.5 s.
             #if canImport(WebKit)
-            if !video.isShort {
+            if !video.isShort &&
+               YouTubeWebViewHLSExtractor.activePreWarmLoops < YouTubeWebViewHLSExtractor.maxPreWarmLoops {
+                YouTubeWebViewHLSExtractor.activePreWarmLoops += 1
+                defer { YouTubeWebViewHLSExtractor.activePreWarmLoops -= 1 }
                 let videoId = video.id
                 // fix19: heartbeat loop — after the URL is cached, fire the video-ID-specific
                 // Darwin notification every 3 s so the regression test's

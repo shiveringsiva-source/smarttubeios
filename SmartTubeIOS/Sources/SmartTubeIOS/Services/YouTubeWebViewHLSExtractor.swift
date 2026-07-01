@@ -72,6 +72,16 @@ final class YouTubeWebViewHLSExtractor: NSObject {
     /// after the current extraction finishes, the next idle card (via retry) can start one.
     static var isPreWarming = false
 
+    /// Maximum number of card tasks that may enter the preWarm loop simultaneously.
+    /// Each loop iteration takes ~2.5 s (warm extraction). Limiting to 3 means at most
+    /// 3 cards queue up for preWarm at any time; cards beyond that skip the loop entirely
+    /// and rely on the tap-time extraction instead. Reduces background CPU when the home
+    /// feed has 15+ visible cards each spinning their own preWarm task.
+    static let maxPreWarmLoops: Int = 3
+    /// Current number of active VideoCardView preWarm loops. @MainActor-isolated — only
+    /// mutated from the card's .task modifier (which runs on MainActor).
+    static var activePreWarmLoops: Int = 0
+
     /// Pre-warms the WKWebView HLS extraction for `videoId` and stores the result in
     /// `VideoPreloadCache`. Called speculatively on card appear so that if the user taps,
     /// Phase -1a can play from the cached URL instead of waiting ~3 s for a live extraction.
