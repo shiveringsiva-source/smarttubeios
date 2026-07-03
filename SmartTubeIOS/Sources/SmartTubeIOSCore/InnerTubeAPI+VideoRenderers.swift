@@ -778,10 +778,17 @@ extension InnerTubeAPI {
         let thumbnails = (r["thumbnail"] as? [String: Any])?["thumbnails"] as? [[String: Any]]
         let thumbURL = thumbnails?.last.flatMap { $0["url"] as? String }.flatMap { URL(string: $0) }
 
-        // channelTitle: ownerText or shortBylineText
-        let channelTitle: String = (r["ownerText"] as? [String: Any]).flatMap { extractText($0) }
-            ?? (r["shortBylineText"] as? [String: Any]).flatMap { extractText($0) }
-            ?? ""
+        // channelTitle: ownerText or shortBylineText — for collab videos YouTube
+        // renders multiple runs ("Inequality Media and Robert Reich"). Take only the
+        // first run that has a navigationEndpoint (the primary/uploading channel) so
+        // video cards show the uploader name rather than the full collab string (#118).
+        let channelTitle: String = {
+            let ownerDict = (r["ownerText"] as? [String: Any]) ?? (r["shortBylineText"] as? [String: Any])
+            if let runs = ownerDict?["runs"] as? [[String: Any]],
+               let first = runs.first(where: { $0["navigationEndpoint"] != nil }),
+               let text = first["text"] as? String { return text }
+            return ownerDict.flatMap { extractText($0) } ?? ""
+        }()
 
         // channelId: navigationEndpoint.reelWatchEndpoint.channelId (primary)
         // or ownerText/shortBylineText runs[0].navigationEndpoint.browseEndpoint.browseId (fallback)

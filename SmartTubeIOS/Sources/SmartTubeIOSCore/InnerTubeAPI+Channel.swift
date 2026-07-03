@@ -442,7 +442,11 @@ extension InnerTubeAPI {
                       let lineItemRenderer = firstItem["lineItemRenderer"] as? [String: Any],
                       let text = lineItemRenderer["text"] as? [String: Any]
                 else { return "" }
-                return extractText(text) ?? ""
+                // For collab videos the author line contains multiple runs (e.g.
+                // "Inequality Media and Robert Reich"). Pick only the run whose
+                // browseId matches channelId so the subscribed channel name is
+                // shown instead of the joined collab string (#118).
+                return extractText(text, matchingChannelId: channelId) ?? ""
             }()
             return Channel(id: channelId, title: channelTitle)
         }
