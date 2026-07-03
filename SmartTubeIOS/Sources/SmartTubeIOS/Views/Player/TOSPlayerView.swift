@@ -187,29 +187,14 @@ public struct TOSPlayerView: View {
                     onSwipeLeft: { vm.playNext() },
                     onSwipeRight: { vm.playPrevious() },
                     onTap: { _ in
-                        // #111: a tap to reveal controls can land on the SAME
-                        // physical touch YouTube's own embed uses to toggle
-                        // play/pause — our window-level gesture recognizer and
-                        // the WKWebView's native click handling both observe
-                        // it. Detect the resulting spurious pause and undo it;
-                        // a first tap should only ever reveal controls, never
-                        // stop playback (the user can still explicitly pause
-                        // via YouTube's own play/pause button once visible).
-                        let wasPlaying = vm.playerState == .playing || vm.playerState == .buffering
+                        // #111 history: we tried to undo YouTube's tap-to-pause so that
+                        // tapping to reveal controls wouldn't also pause playback. But the
+                        // undo misfired on the user's first *intentional* pause (controls
+                        // were hidden, user tapped to both show controls and pause — our
+                        // code saw controlsWereVisible=false and undid it). Letting
+                        // YouTube's native tap = toggle-play/pause stand is the correct
+                        // behaviour: it matches YouTube's own app and is what users expect.
                         showControls()
-                        guard wasPlaying else { return }
-                        Task { @MainActor in
-                            // A single fixed-delay check raced the tick-polling
-                            // round-trip and missed the pause arriving slightly
-                            // late — poll repeatedly over a longer window instead.
-                            for _ in 0..<10 {
-                                try? await Task.sleep(for: .milliseconds(100))
-                                guard vm.playerState == .paused else { continue }
-                                tosViewLog.notice("[tap] undoing spurious pause after tap-to-show-controls (#111)")
-                                vm.play()
-                                break
-                            }
-                        }
                     }
                 )
                 .ignoresSafeArea()
