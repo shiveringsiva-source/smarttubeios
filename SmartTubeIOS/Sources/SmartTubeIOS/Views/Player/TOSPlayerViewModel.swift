@@ -353,6 +353,16 @@ final class TOSPlayerViewModel: NSObject {
         navigationTask?.cancel()
     }
 
+    /// Called when the app returns to the foreground (TOSPlayerView's scenePhase observer).
+    /// Lifts the OS-level media suspension so audio comes back without the user having
+    /// to toggle mute. The stateDetectionJS `visibilitychange` + `_bgRemutePollRetries`
+    /// loop handles the DOM-level `video.muted` reset from inside the iframe.
+    #if os(iOS)
+    func handleForeground() {
+        Task { await webView.setAllMediaPlaybackSuspended(false) }
+    }
+    #endif
+
     // MARK: - JS Commands (operating on YouTube embed page's <video> element)
 
     func play() {
@@ -558,6 +568,17 @@ final class TOSPlayerViewModel: NSObject {
         var _playAttempts = 0;
         var _autoUnmuted = false;
         var _pausedCandidate = false;
+        var _prevMuted = null;
+        // Set to true by visibilitychange when the page hides (app backgrounds).
+        // Cleared when we detect a mute→true transition caused by the hide, so the
+        // subsequent false→true mute is attributed to iOS, not to the user.
+        var _wasHidden = false;
+        // When > 0, pollVideo re-applies unmute each tick and decrements.
+        // Started when we detect iOS re-muted the video after a background event.
+        // Cap of 12 polls ≈ 3 seconds — enough for YouTube's player to finish
+        // re-initialising after setAllMediaPlaybackSuspended(false), but short enough
+        // that we don't fight a user-intentional mute forever.
+        var _bgRemutePollRetries = 0;
 
         function postMsg(obj) {
             try {
@@ -565,6 +586,19 @@ final class TOSPlayerViewModel: NSObject {
                 if (cb) cb.postMessage(JSON.stringify(obj));
             } catch(e) {}
         }
+
+        // Page Visibility API — fires when the app backgrounds (hidden=true) or
+        // returns to foreground (hidden=false). Used to distinguish iOS background
+        // re-muting from a user-intentional mute: if video.muted flips to true
+        // within a poll or two of becoming hidden, it's the OS, not the user.
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                _wasHidden = true;
+                postMsg({type: 'pageHidden'});
+            } else {
+                postMsg({type: 'pageVisible', wasHidden: _wasHidden});
+            }
+        }, false);
 
         // Watch for YouTube's error overlay appearing in the DOM. This fires when
         // the player shows "Error 153 - Video player configuration error" (or similar)
@@ -657,6 +691,35 @@ final class TOSPlayerViewModel: NSObject {
                 var ytPlayer = document.getElementById('movie_player');
                 if (ytPlayer && typeof ytPlayer.unMute === 'function') { ytPlayer.unMute(); }
                 postMsg({type: 'autoUnmuted', t: t, muted: video.muted});
+            }
+
+            // Track video.muted transitions. When we see false→true AFTER _autoUnmuted
+            // and the page was recently hidden, iOS re-muted the video during background.
+            // Start the retry cycle to fight it from inside the iframe (correct frame,
+            // always has access to movie_player) rather than from a Swift eval.
+            if (_prevMuted !== null && video.muted !== _prevMuted) {
+                if (video.muted && _autoUnmuted && _wasHidden) {
+                    // iOS re-muted after background — arm the retry loop.
+                    _wasHidden = false;
+                    _bgRemutePollRetries = 12;
+                    postMsg({type: 'bgRemute', t: t, retriesArmed: _bgRemutePollRetries});
+                } else if (video.muted && _autoUnmuted) {
+                    // Muted without a preceding background event — treat as user action.
+                    postMsg({type: 'userMute', t: t});
+                }
+                postMsg({type: 'muteChange', muted: video.muted, t: t, prevMuted: _prevMuted});
+            }
+            _prevMuted = video.muted;
+
+            // Self-healing unmute: re-apply every poll tick until the counter runs out.
+            // Runs entirely inside the iframe's document so movie_player is always
+            // reachable — no embedFrameInfo needed, no cross-origin issues.
+            if (_bgRemutePollRetries > 0) {
+                _bgRemutePollRetries--;
+                video.muted = false;
+                var ytp = document.getElementById('movie_player');
+                if (ytp && typeof ytp.unMute === 'function') { ytp.unMute(); }
+                postMsg({type: 'pollUnmuted', t: t, retriesLeft: _bgRemutePollRetries, muted: video.muted});
             }
 
             postMsg({type: 'tick', t: t, state: s, duration: video.duration || 0});

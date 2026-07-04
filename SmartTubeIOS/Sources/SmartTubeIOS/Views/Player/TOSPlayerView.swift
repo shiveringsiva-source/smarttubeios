@@ -47,6 +47,7 @@ public struct TOSPlayerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(SettingsStore.self) private var store
     @Environment(AuthService.self) private var authService
+    @Environment(\.scenePhase) private var scenePhase
     #if os(macOS)
     @Environment(BrowseViewModel.self) private var browseVM
     /// On macOS, the view owns the view model directly (no store — the player
@@ -351,6 +352,10 @@ public struct TOSPlayerView: View {
         }
         .onChange(of: isLandscapeLocked) { _, isLocked in
             OrientationManager.shared.playerIsActive = isLocked || store.settings.landscapeAlwaysPlay
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            vm.handleForeground()
         }
         #endif
         )

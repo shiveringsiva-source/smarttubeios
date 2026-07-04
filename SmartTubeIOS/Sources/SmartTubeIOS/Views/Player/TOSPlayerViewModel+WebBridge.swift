@@ -117,6 +117,34 @@ extension TOSPlayerViewModel {
             let stillMuted = (json["muted"] as? Bool) ?? true
             tosLog.notice("[ytCallback] 🔊 auto-unmuted at t=\(unmutedAt, format: .fixed(precision: 2))s — video.muted now \(stillMuted, privacy: .public)")
 
+        case "muteChange":
+            let nowMuted = (json["muted"] as? Bool) ?? false
+            let wasMuted = (json["prevMuted"] as? Bool) ?? !nowMuted
+            let muteT = (json["t"] as? Double) ?? 0
+            tosLog.notice("[ytCallback] 🔇 muteChange \(wasMuted, privacy: .public)→\(nowMuted, privacy: .public) at t=\(muteT, format: .fixed(precision: 2))s")
+
+        case "pageHidden":
+            tosLog.notice("[ytCallback] 📴 page hidden (app backgrounded)")
+
+        case "pageVisible":
+            let wasHidden = (json["wasHidden"] as? Bool) ?? false
+            tosLog.notice("[ytCallback] 📲 page visible (wasHidden=\(wasHidden, privacy: .public))")
+
+        case "bgRemute":
+            let bgrT = (json["t"] as? Double) ?? 0
+            let retries = (json["retriesArmed"] as? Int) ?? 0
+            tosLog.notice("[ytCallback] 🔇 bgRemute — iOS re-muted after background at t=\(bgrT, format: .fixed(precision: 2))s — arming \(retries, privacy: .public) retry polls")
+
+        case "userMute":
+            let umT = (json["t"] as? Double) ?? 0
+            tosLog.notice("[ytCallback] 🔇 userMute — video.muted=true without background event at t=\(umT, format: .fixed(precision: 2))s (treating as user action, no retry)")
+
+        case "pollUnmuted":
+            let puT = (json["t"] as? Double) ?? 0
+            let puRetries = (json["retriesLeft"] as? Int) ?? 0
+            let puMuted = (json["muted"] as? Bool) ?? true
+            tosLog.notice("[ytCallback] 🔊 pollUnmuted at t=\(puT, format: .fixed(precision: 2))s muted=\(puMuted, privacy: .public) retriesLeft=\(puRetries, privacy: .public)")
+
         case "tick":
             let t = (json["t"] as? Double) ?? 0
             let s = (json["state"] as? Int) ?? 999
