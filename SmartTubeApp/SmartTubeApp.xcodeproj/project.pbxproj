@@ -701,6 +701,7 @@
 			knownRegions = (
 				Base,
 				en,
+				"pt-BR",
 				sr,
 				hr,
 			);
