@@ -528,12 +528,21 @@ public actor VideoPreloadCache {
         // Pass the caller-supplied token directly — no dependency on api.authToken being set —
         // eliminating the actor-timing race that caused tracking=false on browse-phase prefetch.
         // This runs concurrently with the 5 child tasks above (all are in flight by this point).
-        let tracking: PlaybackTrackingURLs?
-        if let token = authToken {
-            tracking = await api.fetchAuthenticatedTrackingURLs(videoId: videoId, usingToken: token)
-        } else {
-            tracking = nil
-        }
+        //
+        // Tracking URLs: prefer the `playbackTracking` URLs from the iOS-client player
+        // response (which `getOrFetchPlayerInfo` already obtained) over a separate dedicated
+        // fetch. The previous approach (a separate `fetchAuthenticatedTrackingURLs` call hitting
+        // a separate endpoint) failed for device-code-signed-in users because YouTube's web
+        // client rejects the TV device-code Bearer with HTTP 400, and the cookie-exchange paths
+        // (OAuthLogin + Multilogin) are blocked by Google policy (INVALID_TOKENS / RECOVERABLE).
+        // The iOS client's response reliably includes `playbackTracking` URLs in
+        // `PlayerInfo.trackingURLs` — they are the right shape (full c=IOS, cver=, plid=, etc.
+        // params from a real YouTube response). Previously these URLs were thrown away
+        // (replaced by a nil from the failing dedicated call), forcing the pings onto the
+        // constructed fallback URLs which return 200 but are not credited. The dedicated
+        // `fetchAuthenticatedTrackingURLs` call is no longer used here; it remains in the API
+        // for callers that have a working web-session auth context (SAPISID or web OAuth
+        // Bearer) where it can return real account-bound URLs.
 
         let (next, cards, sponsor, dearrow) =
             await (nextResult, endCardsResult, sponsorResult, deArrowResult)
@@ -544,6 +553,7 @@ public actor VideoPreloadCache {
         let elapsed = String(format: "%.2fs", Date().timeIntervalSince(startedAt))
 
         if let player  { store(playerInfo: player,          for: videoId) }
+        let tracking: PlaybackTrackingURLs? = player?.trackingURLs
         store(trackingURLs: tracking,                        for: videoId)
         if let next    { store(nextInfo: next,               for: videoId) }
         if let cards   { store(endCards: cards,              for: videoId) }

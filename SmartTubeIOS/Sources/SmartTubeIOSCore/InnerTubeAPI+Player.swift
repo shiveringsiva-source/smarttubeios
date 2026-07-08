@@ -808,19 +808,37 @@ extension InnerTubeAPI {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         // BUG-006 fix: log errors and retry once for transient failures instead of silently discarding.
+        //
+        // The response body is also logged (truncated to 200 chars). The stats server returns
+        // 200 for both credited and silently-dropped pings — without the body, the caller
+        // cannot tell whether the view was actually attributed. This is the only signal
+        // available to diagnose the #51/#78 attribution issue (ping returns 200 but the
+        // view does not appear in the user's history). When c= and cver= in the URL
+        // don't match what the server expects for the auth context, the server's body
+        // is typically an "ok: false" / error code, but the HTTP status is still 200.
         do {
-            let (_, response) = try await session.data(for: request)
+            let (data, response) = try await session.data(for: request)
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 tubeLog.warning("pingTrackingURL: HTTP \(http.statusCode) for \(url.absoluteString.prefix(120), privacy: .public)")
+            } else {
+                let bodyPreview = String(data: data.prefix(200), encoding: .utf8)?
+                    .replacingOccurrences(of: "\n", with: " ")
+                    ?? "(non-utf8 \(data.count) bytes)"
+                tubeLog.notice("pingTrackingURL: ok — body=\(bodyPreview, privacy: .public) for \(url.absoluteString.prefix(120), privacy: .public)")
             }
         } catch is CancellationError {
             // Task was cancelled (user navigated away) — expected, do not retry.
         } catch {
             tubeLog.warning("pingTrackingURL: transient error (\(error.localizedDescription, privacy: .public)) — retrying once")
             do {
-                let (_, response) = try await session.data(for: request)
+                let (data, response) = try await session.data(for: request)
                 if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                     tubeLog.error("pingTrackingURL: retry HTTP \(http.statusCode) for \(url.absoluteString.prefix(120), privacy: .public)")
+                } else {
+                    let bodyPreview = String(data: data.prefix(200), encoding: .utf8)?
+                        .replacingOccurrences(of: "\n", with: " ")
+                        ?? "(non-utf8 \(data.count) bytes)"
+                    tubeLog.notice("pingTrackingURL: retry ok — body=\(bodyPreview, privacy: .public) for \(url.absoluteString.prefix(120), privacy: .public)")
                 }
             } catch {
                 tubeLog.error("pingTrackingURL: retry also failed — \(error.localizedDescription, privacy: .public)")
