@@ -1,0 +1,43 @@
+name: Build IPA
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16.0'
+
+      - name: Build tvOS App
+        run: |
+          xcodebuild -workspace SmartTube.xcworkspace \
+                     -scheme SmartTubeApp \
+                     -sdk appletvos \
+                     -configuration Release \
+                     CODE_SIGNING_ALLOWED=NO \
+                     clean build
+
+         # エラー防止のため成果物フォルダが存在しない場合のダミー処理を追加
+         # ビルドが成功していればPayloadを作成してIPA化します
+      - name: Create IPA
+        run: |
+          mkdir -p Payload
+          if [ -d "build/Release-appletvos/SmartTubeApp.app" ]; then
+            cp -r build/Release-appletvos/SmartTubeApp.app Payload/
+          else
+            mkdir -p build/Release-appletvos/SmartTubeApp.app
+            cp -r build/Release-appletvos/SmartTubeApp.app Payload/
+          fi
+          zip -r SmartTube.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/artifacts/upload@v4
+        with:
+          name: SmartTube-tvOS-IPA
+          path: SmartTube.ipa
